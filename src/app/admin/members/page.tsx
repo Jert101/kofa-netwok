@@ -107,11 +107,19 @@ export default function AdminMembersPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h1 className="text-lg font-semibold">Members</h1>
-        {members !== null ? (
-          <p className="text-sm text-[var(--muted)]" aria-live="polite">
-            Total: <span className="font-medium text-[var(--foreground)]">{members.length}</span>
-          </p>
-        ) : null}
+        <div className="flex items-center gap-2">
+          {members !== null ? (
+            <p className="text-sm text-[var(--muted)]" aria-live="polite">
+              Total: <span className="font-medium text-[var(--foreground)]">{members.length}</span>
+            </p>
+          ) : null}
+          <a
+            href="/api/admin/members/pdf"
+            className="min-h-10 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium text-[var(--accent)]"
+          >
+            Download active list (PDF)
+          </a>
+        </div>
       </div>
       <form onSubmit={add} className="space-y-2">
         <div className="flex gap-2">

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { format } from "date-fns";
 import { MonthCalendar } from "@/components/MonthCalendar";
 
 type Announcement = {
@@ -16,6 +17,7 @@ type Announcement = {
 export default function MemberHomePage() {
   const [month, setMonth] = useState(() => new Date());
   const [announcements, setAnnouncements] = useState<Announcement[] | null>(null);
+  const [sessionDates, setSessionDates] = useState<string[]>([]);
   const router = useRouter();
 
   useEffect(() => {
@@ -29,6 +31,21 @@ export default function MemberHomePage() {
       setAnnouncements(j.announcements ?? []);
     })();
   }, []);
+
+  useEffect(() => {
+    (async () => {
+      const monthKey = format(month, "yyyy-MM");
+      const res = await fetch(`/api/attendance/month-indicators?month=${monthKey}`, {
+        credentials: "same-origin",
+      });
+      if (!res.ok) {
+        setSessionDates([]);
+        return;
+      }
+      const j = (await res.json()) as { dates?: string[] };
+      setSessionDates(j.dates ?? []);
+    })();
+  }, [month]);
 
   return (
     <div className="space-y-4">
@@ -64,7 +81,10 @@ export default function MemberHomePage() {
         month={month}
         onMonthChange={setMonth}
         onSelectDate={(ymd) => router.push(`/member/day/${ymd}`)}
+        indicatorDates={sessionDates}
+        indicatorClassName="bg-[var(--accent)]"
       />
+      <p className="text-xs text-[var(--muted)]">Dot indicator: date has at least one mass/session.</p>
     </div>
   );
 }

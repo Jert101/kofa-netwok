@@ -1,12 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { format } from "date-fns";
 import { MonthCalendar } from "@/components/MonthCalendar";
 
 export default function SecretaryHomePage() {
   const [month, setMonth] = useState(() => new Date());
+  const [appealDates, setAppealDates] = useState<string[]>([]);
   const router = useRouter();
+
+  useEffect(() => {
+    (async () => {
+      const monthKey = format(month, "yyyy-MM");
+      const res = await fetch(`/api/attendance/appeals/month-indicators?month=${monthKey}`, {
+        credentials: "same-origin",
+      });
+      if (!res.ok) {
+        setAppealDates([]);
+        return;
+      }
+      const j = (await res.json()) as { dates?: string[] };
+      setAppealDates(j.dates ?? []);
+    })();
+  }, [month]);
 
   return (
     <div className="space-y-4">
@@ -15,7 +32,10 @@ export default function SecretaryHomePage() {
         month={month}
         onMonthChange={setMonth}
         onSelectDate={(ymd) => router.push(`/secretary/day/${ymd}`)}
+        indicatorDates={appealDates}
+        indicatorClassName="bg-[var(--danger)]"
       />
+      <p className="text-xs text-[var(--muted)]">Red dot indicator: date has pending attendance appeal(s).</p>
     </div>
   );
 }

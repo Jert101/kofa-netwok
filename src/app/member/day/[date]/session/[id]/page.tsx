@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { AttendanceAppealForm } from "@/components/AttendanceAppealForm";
 
 type MemberRow = { member_id: string; full_name: string };
 
@@ -70,6 +71,7 @@ export default function MemberSessionDetailPage() {
           <li className="px-4 py-6 text-center text-sm text-[var(--muted)]">No matches</li>
         ) : null}
       </ul>
+      {!loading ? <AttendanceAppealForm sessionId={id} /> : null}
     </div>
   );
 }

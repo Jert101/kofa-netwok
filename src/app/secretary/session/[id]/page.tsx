@@ -2,6 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { SecretaryAttendanceForm } from "@/components/SecretaryAttendanceForm";
+import { AttendanceAppealsReview } from "@/components/AttendanceAppealsReview";
 
 export default function SecretaryEditSessionPage() {
   const params = useParams();
@@ -24,6 +25,7 @@ export default function SecretaryEditSessionPage() {
       </button>
       <h1 className="mb-4 text-lg font-semibold">Edit attendance</h1>
       <SecretaryAttendanceForm mode="edit" sessionId={id} />
+      <AttendanceAppealsReview sessionId={id} />
     </div>
   );
 }

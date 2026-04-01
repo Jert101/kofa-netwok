@@ -4,7 +4,7 @@ import { requireRole } from "@/lib/api/guard";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export async function GET(req: NextRequest) {
-  const g = await requireRole(req.headers.get("cookie"), ["secretary", "admin"]);
+  const g = await requireRole(req.headers.get("cookie"), ["secretary", "admin", "member"]);
   if (!g.ok) return g.response;
 
   const url = new URL(req.url);
