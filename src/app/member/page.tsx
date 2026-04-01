@@ -1,16 +1,65 @@
 "use client";
 
 import { useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { MonthCalendar } from "@/components/MonthCalendar";
 
+type Announcement = {
+  id: string;
+  title: string;
+  body: string;
+  created_by: "admin" | "secretary";
+  created_at: string;
+};
+
 export default function MemberHomePage() {
   const [month, setMonth] = useState(() => new Date());
+  const [announcements, setAnnouncements] = useState<Announcement[] | null>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    (async () => {
+      const res = await fetch("/api/announcements", { credentials: "same-origin" });
+      if (!res.ok) {
+        setAnnouncements([]);
+        return;
+      }
+      const j = (await res.json()) as { announcements?: Announcement[] };
+      setAnnouncements(j.announcements ?? []);
+    })();
+  }, []);
 
   return (
     <div className="space-y-4">
       <h1 className="text-lg font-semibold sm:text-xl">Attendance</h1>
+      <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+        <h2 className="text-sm font-semibold text-[var(--accent)]">Announcements</h2>
+        {announcements === null ? (
+          <p className="mt-2 text-sm text-[var(--muted)]">Loading announcements...</p>
+        ) : announcements.length === 0 ? (
+          <p className="mt-2 text-sm text-[var(--muted)]">No announcements yet.</p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {announcements.map((a) => (
+              <li key={a.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)]">
+                <details className="group">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-3">
+                    <span className="font-medium text-[var(--text)]">{a.title}</span>
+                    <span className="text-xs text-[var(--muted)] group-open:rotate-180">▼</span>
+                  </summary>
+                  <div className="border-t border-[var(--border)] px-3 pb-3 pt-2">
+                    <p className="whitespace-pre-wrap text-sm text-[var(--muted)]">{a.body}</p>
+                    <p className="mt-2 text-xs text-[var(--muted)]">
+                      By {a.created_by} · {new Date(a.created_at).toLocaleString()}
+                    </p>
+                  </div>
+                </details>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
       <MonthCalendar
         month={month}
         onMonthChange={setMonth}
