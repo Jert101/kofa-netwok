@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useCallback } from "react";
 
 type AppealItem = {
   id: string;
@@ -18,7 +19,7 @@ export function AttendanceAppealsReview({ sessionId }: { sessionId: string }) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
-  async function load() {
+  const load = useCallback(async () => {
     const res = await fetch(`/api/attendance/session/${sessionId}/appeals`, { credentials: "same-origin" });
     if (!res.ok) {
       setItems([]);
@@ -26,11 +27,11 @@ export function AttendanceAppealsReview({ sessionId }: { sessionId: string }) {
     }
     const j = (await res.json()) as { appeals?: AppealItem[] };
     setItems(j.appeals ?? []);
-  }
+  }, [sessionId]);
 
   useEffect(() => {
     load();
-  }, [sessionId]);
+  }, [load]);
 
   async function review(id: string, action: "approve" | "reject") {
     setMsg(null);

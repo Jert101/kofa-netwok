@@ -31,8 +31,9 @@ export async function GET(req: NextRequest) {
     generatedAt: new Date(),
     names: (data ?? []).map((m) => (m.full_name as string) ?? "").filter(Boolean),
   });
+  const body = Buffer.from(pdf);
 
-  return new NextResponse(pdf, {
+  return new NextResponse(body, {
     status: 200,
     headers: {
       "Content-Type": "application/pdf",

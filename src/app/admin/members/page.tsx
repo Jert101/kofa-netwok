@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { formatMemberFullName } from "@/lib/members/name-format";
 
 type Member = { id: string; full_name: string; is_active: boolean };
@@ -113,12 +114,12 @@ export default function AdminMembersPage() {
               Total: <span className="font-medium text-[var(--foreground)]">{members.length}</span>
             </p>
           ) : null}
-          <a
+          <Link
             href="/api/admin/members/pdf"
             className="min-h-10 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium text-[var(--accent)]"
           >
             Download active list (PDF)
-          </a>
+          </Link>
         </div>
       </div>
       <form onSubmit={add} className="space-y-2">
