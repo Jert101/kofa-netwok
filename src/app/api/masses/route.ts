@@ -4,7 +4,7 @@ import { requireRole } from "@/lib/api/guard";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export async function GET(req: NextRequest) {
-  const g = await requireRole(req.headers.get("cookie"), ["secretary", "admin"]);
+  const g = await requireRole(req.headers.get("cookie"), ["secretary", "admin", "officer"]);
   if (!g.ok) return g.response;
 
   const sb = getSupabaseAdmin();
@@ -27,7 +27,7 @@ const postSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const g = await requireRole(req.headers.get("cookie"), ["admin"]);
+  const g = await requireRole(req.headers.get("cookie"), ["admin", "officer"]);
   if (!g.ok) return g.response;
 
   let json: unknown;

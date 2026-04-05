@@ -8,7 +8,7 @@ const qSchema = z.object({
 });
 
 export async function GET(req: NextRequest) {
-  const g = await requireRole(req.headers.get("cookie"), ["member", "secretary", "admin"]);
+  const g = await requireRole(req.headers.get("cookie"), ["member", "secretary", "admin", "officer"]);
   if (!g.ok) return g.response;
 
   const url = new URL(req.url);
@@ -54,6 +54,7 @@ export async function GET(req: NextRequest) {
   const list = (sessions ?? []).map((s) => ({
     id: s.id,
     session_date: s.session_date,
+    mass_id: s.mass_id as string,
     mass_name: (s.masses as { name?: string } | null)?.name ?? "Mass",
     server_count: counts[s.id] ?? 0,
   }));

@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/api/guard";
+import { deleteLiturgyLinkedAnnouncement } from "@/lib/attendance/liturgy-announcement";
 import { notifyAttendanceSessionUpdated } from "@/lib/push/attendance-notify";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(req: NextRequest, ctx: Ctx) {
-  const g = await requireRole(req.headers.get("cookie"), ["member", "secretary", "admin"]);
+  const g = await requireRole(req.headers.get("cookie"), ["member", "secretary", "admin", "officer"]);
   if (!g.ok) return g.response;
 
   const { id } = await ctx.params;
@@ -46,6 +47,43 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     return true;
   });
 
+  const { data: liturgyRows, error: lErr } = await sb
+    .from("session_liturgy_servers")
+    .select("id, position_label, member_id, free_text, sort_order, members(full_name)")
+    .eq("session_id", id)
+    .order("sort_order", { ascending: true });
+
+  let liturgy_servers =
+    !lErr && liturgyRows?.length
+      ? liturgyRows.map((row) => ({
+          id: row.id as string,
+          position_label: row.position_label as string,
+          member_id: (row.member_id as string | null) ?? null,
+          member_name: ((row.members as { full_name?: string } | null)?.full_name ?? "").trim() || null,
+          free_text: (row.free_text as string | null) ?? null,
+          sort_order: row.sort_order as number,
+        }))
+      : [];
+
+  if (liturgy_servers.length === 0) {
+    const { data: plannedRows, error: plErr } = await sb
+      .from("liturgy_planned")
+      .select("position_label, member_id, free_text, sort_order, members(full_name)")
+      .eq("session_date", session.session_date)
+      .eq("mass_id", session.mass_id as string)
+      .order("sort_order", { ascending: true });
+    if (!plErr && plannedRows?.length) {
+      liturgy_servers = plannedRows.map((row, i) => ({
+        id: `planned-${i}`,
+        position_label: row.position_label as string,
+        member_id: (row.member_id as string | null) ?? null,
+        member_name: ((row.members as { full_name?: string } | null)?.full_name ?? "").trim() || null,
+        free_text: (row.free_text as string | null) ?? null,
+        sort_order: (row.sort_order as number) ?? i,
+      }));
+    }
+  }
+
   const payload: Record<string, unknown> = {
     session: {
       id: session.id,
@@ -55,6 +93,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       notes: session.notes,
     },
     members,
+    liturgy_servers,
   };
 
   if (g.session.role === "member") {
@@ -130,6 +169,16 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
 
   const { id } = await ctx.params;
   const sb = getSupabaseAdmin();
+
+  const { data: sess } = await sb
+    .from("attendance_sessions")
+    .select("session_date, mass_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (sess) {
+    await deleteLiturgyLinkedAnnouncement(sb, String(sess.session_date), sess.mass_id as string);
+  }
+
   const { error } = await sb.from("attendance_sessions").delete().eq("id", id);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

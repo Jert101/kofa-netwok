@@ -2,20 +2,77 @@
 
 import { useEffect, useState } from "react";
 
+type PinRole = "admin" | "secretary" | "member" | "officer";
+
+function SinglePinForm({ role, label }: { role: PinRole; label: string }) {
+  const [pin, setPin] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setMsg(null);
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/pins", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ role, pin, confirm }),
+      });
+      const j = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        setMsg(j.error ?? "Could not update PIN");
+        return;
+      }
+      setMsg(`${label} PIN updated. Anyone using the old PIN must sign in again.`);
+      setPin("");
+      setConfirm("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4 space-y-2">
+      <h3 className="text-sm font-medium text-[var(--text)]">{label}</h3>
+      <input
+        type="password"
+        inputMode="numeric"
+        className="w-full min-h-12 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3"
+        placeholder="New PIN"
+        value={pin}
+        onChange={(e) => setPin(e.target.value)}
+        autoComplete="new-password"
+      />
+      <input
+        type="password"
+        inputMode="numeric"
+        className="w-full min-h-12 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3"
+        placeholder="Confirm new PIN"
+        value={confirm}
+        onChange={(e) => setConfirm(e.target.value)}
+        autoComplete="new-password"
+      />
+      <button
+        type="submit"
+        disabled={busy || pin.length < 4 || confirm.length < 4}
+        className="min-h-11 w-full rounded-xl bg-[var(--accent)] text-sm font-semibold text-white disabled:opacity-40"
+      >
+        {busy ? "Saving…" : `Update ${label} PIN`}
+      </button>
+      {msg ? <p className="text-xs text-[var(--muted)]">{msg}</p> : null}
+    </form>
+  );
+}
+
 export default function AdminSettingsPage() {
   const [church_name, setChurchName] = useState("");
   const [church_address, setChurchAddress] = useState("");
   const [report_title, setReportTitle] = useState("");
   const [report_timezone, setReportTimezone] = useState("Asia/Manila");
   const [saved, setSaved] = useState(false);
-
-  const [admin_pin, setAdminPin] = useState("");
-  const [admin_confirm, setAdminConfirm] = useState("");
-  const [secretary_pin, setSecretaryPin] = useState("");
-  const [secretary_confirm, setSecretaryConfirm] = useState("");
-  const [member_pin, setMemberPin] = useState("");
-  const [member_confirm, setMemberConfirm] = useState("");
-  const [pinMsg, setPinMsg] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -44,36 +101,6 @@ export default function AdminSettingsPage() {
       body: JSON.stringify({ church_name, church_address, report_title, report_timezone }),
     });
     setSaved(true);
-  }
-
-  async function savePins(e: React.FormEvent) {
-    e.preventDefault();
-    setPinMsg(null);
-    const res = await fetch("/api/admin/pins", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "same-origin",
-      body: JSON.stringify({
-        admin_pin,
-        admin_confirm,
-        secretary_pin,
-        secretary_confirm,
-        member_pin,
-        member_confirm,
-      }),
-    });
-    const j = (await res.json()) as { error?: string };
-    if (!res.ok) {
-      setPinMsg(j.error ?? "Could not update PINs");
-      return;
-    }
-    setPinMsg("PINs updated. Sign in again on other devices.");
-    setAdminPin("");
-    setAdminConfirm("");
-    setSecretaryPin("");
-    setSecretaryConfirm("");
-    setMemberPin("");
-    setMemberConfirm("");
   }
 
   return (
@@ -125,71 +152,14 @@ export default function AdminSettingsPage() {
       <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
         <h2 className="font-semibold">PIN management</h2>
         <p className="mt-2 text-sm text-[var(--muted)]">
-          Set all three PINs. Each must match its confirmation field. Stored hashed on the server.
+          Update one role at a time. PINs must be 4–12 characters and match confirmation. Stored hashed on the server.
         </p>
-        <form onSubmit={savePins} className="mt-4 space-y-4">
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-medium text-[var(--muted)]">Admin</legend>
-            <input
-              type="password"
-              inputMode="numeric"
-              className="w-full min-h-12 rounded-xl border border-[var(--border)] px-3"
-              placeholder="New PIN"
-              value={admin_pin}
-              onChange={(e) => setAdminPin(e.target.value)}
-            />
-            <input
-              type="password"
-              inputMode="numeric"
-              className="w-full min-h-12 rounded-xl border border-[var(--border)] px-3"
-              placeholder="Confirm"
-              value={admin_confirm}
-              onChange={(e) => setAdminConfirm(e.target.value)}
-            />
-          </fieldset>
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-medium text-[var(--muted)]">Secretary</legend>
-            <input
-              type="password"
-              inputMode="numeric"
-              className="w-full min-h-12 rounded-xl border border-[var(--border)] px-3"
-              placeholder="New PIN"
-              value={secretary_pin}
-              onChange={(e) => setSecretaryPin(e.target.value)}
-            />
-            <input
-              type="password"
-              inputMode="numeric"
-              className="w-full min-h-12 rounded-xl border border-[var(--border)] px-3"
-              placeholder="Confirm"
-              value={secretary_confirm}
-              onChange={(e) => setSecretaryConfirm(e.target.value)}
-            />
-          </fieldset>
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-medium text-[var(--muted)]">Member</legend>
-            <input
-              type="password"
-              inputMode="numeric"
-              className="w-full min-h-12 rounded-xl border border-[var(--border)] px-3"
-              placeholder="New PIN"
-              value={member_pin}
-              onChange={(e) => setMemberPin(e.target.value)}
-            />
-            <input
-              type="password"
-              inputMode="numeric"
-              className="w-full min-h-12 rounded-xl border border-[var(--border)] px-3"
-              placeholder="Confirm"
-              value={member_confirm}
-              onChange={(e) => setMemberConfirm(e.target.value)}
-            />
-          </fieldset>
-          <button type="submit" className="min-h-12 w-full rounded-xl border-2 border-[var(--danger)] font-semibold text-[var(--danger)]">
-            Update all PINs
-          </button>
-          {pinMsg ? <p className="text-sm text-[var(--muted)]">{pinMsg}</p> : null}
-        </form>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <SinglePinForm role="admin" label="Admin" />
+          <SinglePinForm role="secretary" label="Secretary" />
+          <SinglePinForm role="member" label="Member" />
+          <SinglePinForm role="officer" label="Officer" />
+        </div>
       </section>
     </div>
   );

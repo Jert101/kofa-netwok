@@ -11,7 +11,7 @@ const postSchema = z.object({
 });
 
 export async function GET(req: NextRequest) {
-  const g = await requireRole(req.headers.get("cookie"), ["admin", "secretary", "member"]);
+  const g = await requireRole(req.headers.get("cookie"), ["admin", "secretary", "member", "officer"]);
   if (!g.ok) return g.response;
 
   const sb = getSupabaseAdmin();
@@ -22,10 +22,11 @@ export async function GET(req: NextRequest) {
   let q = sb
     .from("announcements")
     .select("id, title, body, created_by, created_at, delete_at")
+    .is("liturgy_session_date", null)
     .order("created_at", { ascending: false })
     .limit(50);
 
-  if (mine && (g.session.role === "admin" || g.session.role === "secretary")) {
+  if (mine && (g.session.role === "admin" || g.session.role === "secretary" || g.session.role === "officer")) {
     q = q.eq("created_by", g.session.role);
   } else {
     q = q.or(`delete_at.is.null,delete_at.gt.${nowIso}`);
@@ -38,7 +39,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const g = await requireRole(req.headers.get("cookie"), ["admin", "secretary"]);
+  const g = await requireRole(req.headers.get("cookie"), ["admin", "secretary", "officer"]);
   if (!g.ok) return g.response;
 
   let json: unknown;
@@ -61,9 +62,13 @@ export async function POST(req: NextRequest) {
 
   const preview =
     parsed.data.body.length > 160 ? `${parsed.data.body.slice(0, 157)}…` : parsed.data.body;
+  const body =
+    g.session.role === "officer"
+      ? `[Officer] ${preview}`
+      : preview;
   void broadcastPush({
     title: parsed.data.title,
-    body: preview,
+    body,
     url: "/member",
   });
 

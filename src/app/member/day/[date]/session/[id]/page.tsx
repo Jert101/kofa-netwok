@@ -6,12 +6,19 @@ import { AttendanceAppealForm } from "@/components/AttendanceAppealForm";
 
 type MemberRow = { member_id: string; full_name: string };
 
+type LiturgyLine = {
+  position_label: string;
+  member_name: string | null;
+  free_text: string | null;
+};
+
 export default function MemberSessionDetailPage() {
   const params = useParams();
   const id = String(params.id ?? "");
   const router = useRouter();
   const [massName, setMassName] = useState("");
   const [members, setMembers] = useState<MemberRow[]>([]);
+  const [liturgy, setLiturgy] = useState<LiturgyLine[]>([]);
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
   const [rosterVersion, setRosterVersion] = useState(0);
@@ -28,10 +35,18 @@ export default function MemberSessionDetailPage() {
       const j = (await res.json()) as {
         session: { mass_name: string };
         members: MemberRow[];
+        liturgy_servers?: LiturgyLine[];
       };
       if (!cancelled) {
         setMassName(j.session.mass_name);
         setMembers(j.members);
+        setLiturgy(
+          (j.liturgy_servers ?? []).map((r) => ({
+            position_label: r.position_label,
+            member_name: r.member_name,
+            free_text: r.free_text,
+          }))
+        );
         setLoading(false);
       }
     })();
@@ -46,8 +61,17 @@ export default function MemberSessionDetailPage() {
     (async () => {
       const res = await fetch(`/api/attendance/session/${id}`, { credentials: "same-origin" });
       if (!res.ok) return;
-      const j = (await res.json()) as { members: MemberRow[] };
-      if (!cancelled) setMembers(j.members);
+      const j = (await res.json()) as { members: MemberRow[]; liturgy_servers?: LiturgyLine[] };
+      if (!cancelled) {
+        setMembers(j.members);
+        setLiturgy(
+          (j.liturgy_servers ?? []).map((r) => ({
+            position_label: r.position_label,
+            member_name: r.member_name,
+            free_text: r.free_text,
+          }))
+        );
+      }
     })();
     return () => {
       cancelled = true;
@@ -70,6 +94,23 @@ export default function MemberSessionDetailPage() {
         ← Back
       </button>
       <h1 className="text-lg font-semibold">{loading ? "…" : massName}</h1>
+      {!loading && liturgy.length > 0 ? (
+        <section className="mt-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+          <h2 className="text-sm font-semibold text-[var(--accent)]">Liturgy servers</h2>
+          <ul className="mt-2 space-y-2">
+            {liturgy.map((row, i) => {
+              const parts = [row.member_name, row.free_text].filter(Boolean);
+              const who = parts.length ? parts.join(" · ") : "—";
+              return (
+                <li key={i} className="flex flex-col gap-0.5 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
+                  <span className="text-sm font-medium text-[var(--text)]">{row.position_label}</span>
+                  <span className="text-sm text-[var(--muted)]">{who}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
       <input
         type="search"
         placeholder="Search names"

@@ -66,6 +66,13 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  if (need("/officer")) {
+    if (session?.role !== "officer") {
+      return NextResponse.redirect(loginUrl(req));
+    }
+    return NextResponse.next();
+  }
+
   return NextResponse.redirect(loginUrl(req));
 }
 

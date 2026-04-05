@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/api/guard";
+import { copyPlannedLiturgyToSession } from "@/lib/attendance/copy-planned-liturgy";
 import { notifyAttendanceSessionUpdated } from "@/lib/push/attendance-notify";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -47,6 +48,8 @@ export async function POST(req: NextRequest) {
   }
 
   const id = created.id as string;
+
+  await copyPlannedLiturgyToSession(sb, id, parsed.data.session_date, parsed.data.mass_id);
 
   if (unique.length) {
     const rows = unique.map((member_id) => ({ session_id: id, member_id }));

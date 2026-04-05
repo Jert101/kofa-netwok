@@ -9,7 +9,7 @@ const qSchema = z.object({
 });
 
 export async function GET(req: NextRequest) {
-  const g = await requireRole(req.headers.get("cookie"), ["member", "secretary", "admin"]);
+  const g = await requireRole(req.headers.get("cookie"), ["member", "secretary", "admin", "officer"]);
   if (!g.ok) return g.response;
 
   const url = new URL(req.url);

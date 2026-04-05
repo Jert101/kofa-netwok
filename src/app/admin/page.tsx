@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { AssignedServersSection } from "@/components/AssignedServersSection";
 import { MonthCalendar } from "@/components/MonthCalendar";
 
 export default function AdminDashboardPage() {
@@ -50,6 +51,8 @@ export default function AdminDashboardPage() {
       ) : (
         <p className="text-sm text-[var(--muted)]">Loading…</p>
       )}
+
+      <AssignedServersSection memberBasePath="/admin/day" />
 
       <section>
         <h2 className="mb-2 text-sm font-semibold text-[var(--muted)]">Calendar</h2>

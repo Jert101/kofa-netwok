@@ -2,25 +2,25 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { requireRole } from "@/lib/api/guard";
+import type { SettingKey } from "@/lib/settings/keys";
 import { upsertSettings } from "@/lib/settings/store";
 
 const pinField = z.string().min(4).max(12);
 
 const bodySchema = z
   .object({
-    admin_pin: pinField,
-    admin_confirm: pinField,
-    secretary_pin: pinField,
-    secretary_confirm: pinField,
-    member_pin: pinField,
-    member_confirm: pinField,
+    role: z.enum(["admin", "secretary", "member", "officer"]),
+    pin: pinField,
+    confirm: pinField,
   })
-  .refine((d) => d.admin_pin === d.admin_confirm, { message: "Admin PIN mismatch", path: ["admin_confirm"] })
-  .refine((d) => d.secretary_pin === d.secretary_confirm, {
-    message: "Secretary PIN mismatch",
-    path: ["secretary_confirm"],
-  })
-  .refine((d) => d.member_pin === d.member_confirm, { message: "Member PIN mismatch", path: ["member_confirm"] });
+  .refine((d) => d.pin === d.confirm, { message: "PIN does not match confirmation", path: ["confirm"] });
+
+const PIN_HASH_KEY: Record<z.infer<typeof bodySchema>["role"], SettingKey> = {
+  admin: "pin_admin_hash",
+  secretary: "pin_secretary_hash",
+  member: "pin_member_hash",
+  officer: "pin_officer_hash",
+};
 
 export async function POST(req: NextRequest) {
   const g = await requireRole(req.headers.get("cookie"), ["admin"]);
@@ -34,15 +34,15 @@ export async function POST(req: NextRequest) {
   }
   const parsed = bodySchema.safeParse(json);
   if (!parsed.success) {
-    const msg = parsed.error.flatten().formErrors[0] ?? "Invalid PINs";
+    const flat = parsed.error.flatten();
+    const msg = flat.fieldErrors.confirm?.[0] ?? flat.formErrors[0] ?? "Invalid PIN request";
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 
   const salt = 10;
+  const key = PIN_HASH_KEY[parsed.data.role];
   await upsertSettings({
-    pin_admin_hash: bcrypt.hashSync(parsed.data.admin_pin, salt),
-    pin_secretary_hash: bcrypt.hashSync(parsed.data.secretary_pin, salt),
-    pin_member_hash: bcrypt.hashSync(parsed.data.member_pin, salt),
+    [key]: bcrypt.hashSync(parsed.data.pin, salt),
   });
 
   return NextResponse.json({ ok: true });

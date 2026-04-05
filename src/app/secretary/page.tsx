@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
+import { AssignedServersSection } from "@/components/AssignedServersSection";
 import { MonthCalendar } from "@/components/MonthCalendar";
 
 export default function SecretaryHomePage() {
@@ -28,6 +29,7 @@ export default function SecretaryHomePage() {
   return (
     <div className="space-y-4">
       <h1 className="text-lg font-semibold sm:text-xl">Encoding</h1>
+      <AssignedServersSection memberBasePath="/secretary/day" />
       <MonthCalendar
         month={month}
         onMonthChange={setMonth}

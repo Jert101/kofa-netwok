@@ -148,7 +148,9 @@ export function PwaHub() {
         return;
       }
       setSubscribed(true);
-      setPushMsg("You will get notified for new announcements and attendance updates.");
+      setPushMsg(
+        "You will get notified for announcements (including officer posts), attendance updates, and high-mass server assignment updates (push only)."
+      );
     } catch (e) {
       setPushMsg(e instanceof Error ? e.message : "Something went wrong.");
     } finally {

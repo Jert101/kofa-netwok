@@ -12,7 +12,7 @@ const patchSchema = z.object({
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function PATCH(req: NextRequest, ctx: Ctx) {
-  const g = await requireRole(req.headers.get("cookie"), ["admin", "secretary"]);
+  const g = await requireRole(req.headers.get("cookie"), ["admin", "secretary", "officer"]);
   if (!g.ok) return g.response;
   const { id } = await ctx.params;
 
@@ -49,7 +49,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 }
 
 export async function DELETE(req: NextRequest, ctx: Ctx) {
-  const g = await requireRole(req.headers.get("cookie"), ["admin", "secretary"]);
+  const g = await requireRole(req.headers.get("cookie"), ["admin", "secretary", "officer"]);
   if (!g.ok) return g.response;
   const { id } = await ctx.params;
 

@@ -4,13 +4,14 @@ import { useState } from "react";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
+import { AssignedServersSection } from "@/components/AssignedServersSection";
 import { MonthCalendar } from "@/components/MonthCalendar";
 
 type Announcement = {
   id: string;
   title: string;
   body: string;
-  created_by: "admin" | "secretary";
+  created_by: "admin" | "secretary" | "officer";
   created_at: string;
 };
 
@@ -77,6 +78,7 @@ export default function MemberHomePage() {
           </ul>
         )}
       </section>
+      <AssignedServersSection memberBasePath="/member/day" />
       <MonthCalendar
         month={month}
         onMonthChange={setMonth}
