@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { AnnouncementsFeed } from "@/components/AnnouncementsFeed";
 import { AssignedServersSection } from "@/components/AssignedServersSection";
 import { MonthCalendar } from "@/components/MonthCalendar";
 
@@ -26,6 +27,7 @@ export default function AdminDashboardPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-lg font-semibold sm:text-xl">Dashboard</h1>
+      <AnnouncementsFeed />
       {dash ? (
         <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5">
           <p className="text-sm text-[var(--muted)]">Today · {dash.today}</p>

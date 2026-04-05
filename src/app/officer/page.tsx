@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
+import { AnnouncementsFeed } from "@/components/AnnouncementsFeed";
 import { AssignedServersSection } from "@/components/AssignedServersSection";
 import { MonthCalendar } from "@/components/MonthCalendar";
 
@@ -30,9 +31,10 @@ export default function OfficerHomePage() {
     <div className="space-y-4">
       <h1 className="text-lg font-semibold sm:text-xl">Officer</h1>
       <p className="text-sm text-[var(--muted)]">
-        Choose a date, pick a mass from the list, then assign roles (Crucifix, candles, etc.). Saving posts an
-        announcement and sends a push notification. Use <strong>Announcements</strong> for other posts.
+        Choose a date, pick a mass, then assign roles (Crucifix, candles, etc.). Saving notifies subscribers with push
+        enabled. Post general notices below or in <strong>Announcements</strong> in the menu.
       </p>
+      <AnnouncementsFeed />
       <AssignedServersSection memberBasePath="/officer/day" />
       <MonthCalendar
         month={month}
