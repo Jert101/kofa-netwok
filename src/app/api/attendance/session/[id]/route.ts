@@ -34,12 +34,18 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     return NextResponse.json({ error: rErr.message }, { status: 500 });
   }
 
-  const members = (records ?? []).map((r) => ({
+  const rawMembers = (records ?? []).map((r) => ({
     member_id: r.member_id as string,
     full_name: (r.members as { full_name?: string } | null)?.full_name ?? "",
   }));
+  const seen = new Set<string>();
+  const members = rawMembers.filter((m) => {
+    if (!m.member_id || seen.has(m.member_id)) return false;
+    seen.add(m.member_id);
+    return true;
+  });
 
-  return NextResponse.json({
+  const payload: Record<string, unknown> = {
     session: {
       id: session.id,
       session_date: session.session_date,
@@ -48,7 +54,24 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       notes: session.notes,
     },
     members,
-  });
+  };
+
+  if (g.session.role === "member") {
+    const cannotAppeal = new Set(members.map((m) => m.member_id));
+    const { data: pendingRows, error: pErr } = await sb
+      .from("attendance_appeal_items")
+      .select("member_id, attendance_appeals!inner(session_id)")
+      .eq("attendance_appeals.session_id", id)
+      .eq("status", "pending");
+    if (!pErr && pendingRows?.length) {
+      for (const row of pendingRows) {
+        cannotAppeal.add(row.member_id as string);
+      }
+    }
+    payload.member_ids_cannot_appeal = [...cannotAppeal];
+  }
+
+  return NextResponse.json(payload);
 }
 
 const patchSchema = z.object({

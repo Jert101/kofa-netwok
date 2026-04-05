@@ -14,6 +14,8 @@ type Props =
   | {
       mode: "edit";
       sessionId: string;
+      /** Increment when server-side attendance changes (e.g. appeal approved) so Selected list stays in sync. */
+      sessionDataVersion?: number;
     };
 
 export function SecretaryAttendanceForm(props: Props) {
@@ -36,6 +38,7 @@ export function SecretaryAttendanceForm(props: Props) {
   }, [props.mode]);
 
   const editSessionId = props.mode === "edit" ? props.sessionId : null;
+  const sessionDataVersion = props.mode === "edit" ? (props.sessionDataVersion ?? 0) : 0;
 
   useEffect(() => {
     if (!editSessionId) return;
@@ -59,7 +62,7 @@ export function SecretaryAttendanceForm(props: Props) {
     return () => {
       cancelled = true;
     };
-  }, [editSessionId]);
+  }, [editSessionId, sessionDataVersion]);
 
   useEffect(() => {
     const q = term.trim();

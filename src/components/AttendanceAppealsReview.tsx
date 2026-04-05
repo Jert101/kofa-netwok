@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 type AppealItem = {
   id: string;
@@ -14,7 +13,14 @@ type AppealItem = {
   submitted_at: string | null;
 };
 
-export function AttendanceAppealsReview({ sessionId }: { sessionId: string }) {
+export function AttendanceAppealsReview({
+  sessionId,
+  onAppealApproved,
+}: {
+  sessionId: string;
+  /** Called after a successful approve so attendance UIs can reload from the server. */
+  onAppealApproved?: () => void;
+}) {
   const [items, setItems] = useState<AppealItem[] | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -49,6 +55,7 @@ export function AttendanceAppealsReview({ sessionId }: { sessionId: string }) {
         return;
       }
       setMsg(action === "approve" ? "Appeal approved." : "Appeal rejected.");
+      if (action === "approve") onAppealApproved?.();
       load();
     } finally {
       setBusyId(null);

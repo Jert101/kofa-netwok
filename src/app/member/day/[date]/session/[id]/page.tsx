@@ -14,10 +14,12 @@ export default function MemberSessionDetailPage() {
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
+  const [rosterVersion, setRosterVersion] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      setLoading(true);
       const res = await fetch(`/api/attendance/session/${id}`, { credentials: "same-origin" });
       if (!res.ok) {
         router.replace("/member");
@@ -37,6 +39,20 @@ export default function MemberSessionDetailPage() {
       cancelled = true;
     };
   }, [id, router]);
+
+  useEffect(() => {
+    if (rosterVersion === 0 || !id) return;
+    let cancelled = false;
+    (async () => {
+      const res = await fetch(`/api/attendance/session/${id}`, { credentials: "same-origin" });
+      if (!res.ok) return;
+      const j = (await res.json()) as { members: MemberRow[] };
+      if (!cancelled) setMembers(j.members);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [id, rosterVersion]);
 
   const filtered = useMemo(() => {
     const t = q.trim().toLowerCase();
@@ -71,7 +87,9 @@ export default function MemberSessionDetailPage() {
           <li className="px-4 py-6 text-center text-sm text-[var(--muted)]">No matches</li>
         ) : null}
       </ul>
-      {!loading ? <AttendanceAppealForm sessionId={id} /> : null}
+      {!loading ? (
+        <AttendanceAppealForm sessionId={id} onAppealSubmitted={() => setRosterVersion((v) => v + 1)} />
+      ) : null}
     </div>
   );
 }

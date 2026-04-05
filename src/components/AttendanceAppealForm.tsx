@@ -1,15 +1,34 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 type Member = { id: string; full_name: string };
 
-export function AttendanceAppealForm({ sessionId }: { sessionId: string }) {
+export function AttendanceAppealForm({
+  sessionId,
+  onAppealSubmitted,
+}: {
+  sessionId: string;
+  /** Called after a successful submit so the parent can refresh roster from the server. */
+  onAppealSubmitted?: () => void;
+}) {
   const [term, setTerm] = useState("");
   const [results, setResults] = useState<Member[]>([]);
   const [selected, setSelected] = useState<Map<string, string>>(new Map());
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [cannotAppealIds, setCannotAppealIds] = useState<Set<string>>(new Set());
+
+  const loadAppealRestrictions = useCallback(async () => {
+    const res = await fetch(`/api/attendance/session/${sessionId}`, { credentials: "same-origin" });
+    if (!res.ok) return;
+    const j = (await res.json()) as { member_ids_cannot_appeal?: string[] };
+    setCannotAppealIds(new Set(j.member_ids_cannot_appeal ?? []));
+  }, [sessionId]);
+
+  useEffect(() => {
+    loadAppealRestrictions();
+  }, [loadAppealRestrictions]);
 
   useEffect(() => {
     const q = term.trim();
@@ -53,6 +72,8 @@ export function AttendanceAppealForm({ sessionId }: { sessionId: string }) {
       setTerm("");
       setResults([]);
       setMsg("Appeal submitted. Admin/Secretary will review each name.");
+      await loadAppealRestrictions();
+      onAppealSubmitted?.();
     } finally {
       setSaving(false);
     }
@@ -62,7 +83,9 @@ export function AttendanceAppealForm({ sessionId }: { sessionId: string }) {
     <section className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
       <h2 className="text-sm font-semibold text-[var(--accent)]">Attendance appeal</h2>
       <p className="mt-1 text-xs text-[var(--muted)]">
-        If a server is missing in this attendance, add one or more names and submit for review.
+        If a server is missing in this attendance, add one or more names and submit for review. You cannot appeal
+        for someone already on the list or who already has a pending appeal for this Mass. Approved names appear in
+        the attendance list above.
       </p>
 
       <input
@@ -77,6 +100,11 @@ export function AttendanceAppealForm({ sessionId }: { sessionId: string }) {
             <button
               type="button"
               onClick={() => {
+                if (cannotAppealIds.has(m.id)) {
+                  setMsg("This name is already on attendance or already has a pending appeal for this Mass.");
+                  return;
+                }
+                setMsg(null);
                 setSelected((prev) => {
                   const n = new Map(prev);
                   n.set(m.id, m.full_name);

@@ -32,13 +32,22 @@ export async function GET(req: NextRequest) {
   const ids = (sessions ?? []).map((s) => s.id);
   const counts: Record<string, number> = {};
   if (ids.length) {
-    const { data: recs, error: e2 } = await sb.from("attendance_records").select("session_id").in("session_id", ids);
+    const { data: recs, error: e2 } = await sb
+      .from("attendance_records")
+      .select("session_id, member_id")
+      .in("session_id", ids);
     if (e2) {
       return NextResponse.json({ error: e2.message }, { status: 500 });
     }
+    const uniquePerSession = new Map<string, Set<string>>();
     for (const r of recs ?? []) {
       const sid = r.session_id as string;
-      counts[sid] = (counts[sid] ?? 0) + 1;
+      const mid = r.member_id as string;
+      if (!uniquePerSession.has(sid)) uniquePerSession.set(sid, new Set());
+      uniquePerSession.get(sid)!.add(mid);
+    }
+    for (const sid of ids) {
+      counts[sid] = uniquePerSession.get(sid)?.size ?? 0;
     }
   }
 

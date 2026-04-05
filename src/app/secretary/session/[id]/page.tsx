@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { SecretaryAttendanceForm } from "@/components/SecretaryAttendanceForm";
 import { AttendanceAppealsReview } from "@/components/AttendanceAppealsReview";
@@ -8,6 +9,7 @@ export default function SecretaryEditSessionPage() {
   const params = useParams();
   const id = String(params.id ?? "");
   const router = useRouter();
+  const [sessionDataVersion, setSessionDataVersion] = useState(0);
 
   if (!id) {
     router.replace("/secretary");
@@ -24,8 +26,8 @@ export default function SecretaryEditSessionPage() {
         ← Back
       </button>
       <h1 className="mb-4 text-lg font-semibold">Edit attendance</h1>
-      <SecretaryAttendanceForm mode="edit" sessionId={id} />
-      <AttendanceAppealsReview sessionId={id} />
+      <SecretaryAttendanceForm mode="edit" sessionId={id} sessionDataVersion={sessionDataVersion} />
+      <AttendanceAppealsReview sessionId={id} onAppealApproved={() => setSessionDataVersion((v) => v + 1)} />
     </div>
   );
 }

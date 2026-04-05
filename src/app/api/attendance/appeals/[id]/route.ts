@@ -39,12 +39,33 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     ((item.attendance_appeals as { session_id?: string } | null)?.session_id as string | undefined) ?? null;
   if (!sessionId) return NextResponse.json({ error: "Missing session context" }, { status: 500 });
 
+  const reviewedAt = new Date().toISOString();
+
   if (parsed.data.action === "approve") {
     const { error: upErr } = await sb.from("attendance_records").upsert(
       [{ session_id: sessionId, member_id: item.member_id as string }],
       { onConflict: "session_id,member_id", ignoreDuplicates: true }
     );
     if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
+
+    const { data: sessionAppeals, error: saErr } = await sb
+      .from("attendance_appeals")
+      .select("id")
+      .eq("session_id", sessionId);
+    if (!saErr && sessionAppeals?.length) {
+      const appealIds = sessionAppeals.map((r) => r.id as string);
+      await sb
+        .from("attendance_appeal_items")
+        .update({
+          status: "rejected",
+          reviewed_by_role: g.session.role,
+          reviewed_at: reviewedAt,
+        })
+        .in("appeal_id", appealIds)
+        .eq("member_id", item.member_id as string)
+        .eq("status", "pending")
+        .neq("id", id);
+    }
   }
 
   const { error: uErr } = await sb
@@ -52,7 +73,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     .update({
       status: parsed.data.action === "approve" ? "approved" : "rejected",
       reviewed_by_role: g.session.role,
-      reviewed_at: new Date().toISOString(),
+      reviewed_at: reviewedAt,
     })
     .eq("id", id);
 
