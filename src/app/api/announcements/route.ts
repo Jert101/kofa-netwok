@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/api/guard";
+import { broadcastPush } from "@/lib/push/broadcast";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const postSchema = z.object({
@@ -57,5 +58,14 @@ export async function POST(req: NextRequest) {
     delete_at: parsed.data.delete_at ?? null,
   });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const preview =
+    parsed.data.body.length > 160 ? `${parsed.data.body.slice(0, 157)}…` : parsed.data.body;
+  void broadcastPush({
+    title: parsed.data.title,
+    body: preview,
+    url: "/member",
+  });
+
   return NextResponse.json({ ok: true });
 }

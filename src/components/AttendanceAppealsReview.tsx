@@ -6,9 +6,6 @@ type AppealItem = {
   id: string;
   member_id: string;
   member_name: string;
-  status: "pending" | "approved" | "rejected";
-  reviewed_by_role: "admin" | "secretary" | null;
-  reviewed_at: string | null;
   created_at: string;
   submitted_at: string | null;
 };
@@ -65,12 +62,14 @@ export function AttendanceAppealsReview({
   return (
     <section className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
       <h2 className="text-sm font-semibold text-[var(--accent)]">Attendance appeals</h2>
-      <p className="mt-1 text-xs text-[var(--muted)]">Review appealed names and approve/reject individually.</p>
+      <p className="mt-1 text-xs text-[var(--muted)]">
+        Pending appeals only; resolved appeals are removed to keep the list and database lean.
+      </p>
 
       {items === null ? (
         <p className="mt-3 text-sm text-[var(--muted)]">Loading...</p>
       ) : items.length === 0 ? (
-        <p className="mt-3 text-sm text-[var(--muted)]">No appeals yet for this session.</p>
+        <p className="mt-3 text-sm text-[var(--muted)]">No pending appeals for this session.</p>
       ) : (
         <ul className="mt-3 space-y-2">
           {items.map((a) => (
@@ -79,32 +78,24 @@ export function AttendanceAppealsReview({
               <p className="mt-1 text-xs text-[var(--muted)]">
                 Submitted {new Date(a.submitted_at ?? a.created_at).toLocaleString()}
               </p>
-              <p className="mt-1 text-xs text-[var(--muted)]">
-                Status: {a.status}
-                {a.reviewed_by_role && a.reviewed_at
-                  ? ` by ${a.reviewed_by_role} on ${new Date(a.reviewed_at).toLocaleString()}`
-                  : ""}
-              </p>
-              {a.status === "pending" ? (
-                <div className="mt-2 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => review(a.id, "approve")}
-                    disabled={busyId === a.id}
-                    className="min-h-10 rounded-lg bg-[var(--accent)] px-3 text-sm font-medium text-white disabled:opacity-40"
-                  >
-                    Approve
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => review(a.id, "reject")}
-                    disabled={busyId === a.id}
-                    className="min-h-10 rounded-lg border border-[var(--danger)] px-3 text-sm font-medium text-[var(--danger)] disabled:opacity-40"
-                  >
-                    Reject
-                  </button>
-                </div>
-              ) : null}
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => review(a.id, "approve")}
+                  disabled={busyId === a.id}
+                  className="min-h-10 rounded-lg bg-[var(--accent)] px-3 text-sm font-medium text-white disabled:opacity-40"
+                >
+                  Approve
+                </button>
+                <button
+                  type="button"
+                  onClick={() => review(a.id, "reject")}
+                  disabled={busyId === a.id}
+                  className="min-h-10 rounded-lg border border-[var(--danger)] px-3 text-sm font-medium text-[var(--danger)] disabled:opacity-40"
+                >
+                  Reject
+                </button>
+              </div>
             </li>
           ))}
         </ul>

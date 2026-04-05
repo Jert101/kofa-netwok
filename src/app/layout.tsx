@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { PwaHub } from "@/components/PwaHub";
 import { RegisterPWA } from "@/components/RegisterPWA";
 
 export const metadata: Metadata = {
@@ -30,6 +31,7 @@ export default function RootLayout({
     <html lang="en">
       <body className="antialiased">
         <RegisterPWA />
+        <PwaHub />
         {children}
       </body>
     </html>

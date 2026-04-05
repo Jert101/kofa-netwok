@@ -18,9 +18,10 @@ export async function GET(req: NextRequest, ctx: Ctx) {
   const { data, error } = await sb
     .from("attendance_appeal_items")
     .select(
-      "id, member_id, status, reviewed_by_role, reviewed_at, created_at, members(full_name), attendance_appeals!inner(session_id, submitted_at)"
+      "id, member_id, created_at, members(full_name), attendance_appeals!inner(session_id, submitted_at)"
     )
     .eq("attendance_appeals.session_id", sessionId)
+    .eq("status", "pending")
     .order("created_at", { ascending: false })
     .limit(200);
 
@@ -30,9 +31,6 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     id: row.id as string,
     member_id: row.member_id as string,
     member_name: ((row.members as { full_name?: string } | null)?.full_name ?? "").trim(),
-    status: (row.status as "pending" | "approved" | "rejected") ?? "pending",
-    reviewed_by_role: (row.reviewed_by_role as "admin" | "secretary" | null) ?? null,
-    reviewed_at: (row.reviewed_at as string | null) ?? null,
     created_at: row.created_at as string,
     submitted_at:
       ((row.attendance_appeals as { submitted_at?: string } | null)?.submitted_at as string | undefined) ?? null,
@@ -43,14 +41,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
   );
   const byMember = new Map<string, (typeof appealsRaw)[0]>();
   for (const x of sorted) {
-    if (x.status === "pending" && !byMember.has(x.member_id)) {
-      byMember.set(x.member_id, x);
-    }
-  }
-  for (const x of sorted) {
-    if (!byMember.has(x.member_id)) {
-      byMember.set(x.member_id, x);
-    }
+    if (!byMember.has(x.member_id)) byMember.set(x.member_id, x);
   }
   const appeals = Array.from(byMember.values()).sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()

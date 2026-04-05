@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/api/guard";
+import { notifyAttendanceSessionUpdated } from "@/lib/push/attendance-notify";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const postSchema = z.object({
@@ -55,6 +56,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: iErr.message }, { status: 400 });
     }
   }
+
+  void notifyAttendanceSessionUpdated(id);
 
   return NextResponse.json({ id });
 }

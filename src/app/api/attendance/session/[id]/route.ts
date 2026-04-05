@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/api/guard";
+import { notifyAttendanceSessionUpdated } from "@/lib/push/attendance-notify";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -117,6 +118,8 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       return NextResponse.json({ error: iErr.message }, { status: 400 });
     }
   }
+
+  void notifyAttendanceSessionUpdated(id);
 
   return NextResponse.json({ ok: true });
 }
