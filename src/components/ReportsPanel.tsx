@@ -18,6 +18,9 @@ type GateState = {
   schedule_allowed: boolean;
   report_exists: boolean;
   month_start: string | null;
+  previous_month_start: string | null;
+  previous_report_exists: boolean;
+  can_generate_previous_month: boolean;
 };
 
 type MonthSessionRow = {
@@ -79,6 +82,7 @@ export function ReportsPanel({ showAdminScheduleBypass = false, showArchiveToggl
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [archiveAfterGenerate, setArchiveAfterGenerate] = useState(true);
   const [archivingReportId, setArchivingReportId] = useState<string | null>(null);
+  const [activeMonthStart, setActiveMonthStart] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const [rList, rGate] = await Promise.all([
@@ -92,13 +96,24 @@ export function ReportsPanel({ showAdminScheduleBypass = false, showArchiveToggl
       schedule_allowed?: boolean;
       report_exists?: boolean;
       month_start?: string;
+      previous_month_start?: string;
+      previous_report_exists?: boolean;
+      can_generate_previous_month?: boolean;
     };
-    setGate({
+    const nextGate: GateState = {
       allowed: Boolean(g.allowed),
       reason: g.reason ?? null,
       schedule_allowed: g.schedule_allowed !== false,
       report_exists: g.report_exists === true,
       month_start: typeof g.month_start === "string" ? g.month_start : null,
+      previous_month_start: typeof g.previous_month_start === "string" ? g.previous_month_start : null,
+      previous_report_exists: g.previous_report_exists === true,
+      can_generate_previous_month: g.can_generate_previous_month === true,
+    };
+    setGate(nextGate);
+    setActiveMonthStart((prev) => {
+      if (prev === nextGate.previous_month_start && !nextGate.previous_report_exists) return prev;
+      return nextGate.month_start;
     });
   }, []);
 
@@ -106,37 +121,50 @@ export function ReportsPanel({ showAdminScheduleBypass = false, showArchiveToggl
     load();
   }, [load]);
 
-  const fetchMonthSessions = useCallback(async () => {
-    if (!gate?.month_start || gate.report_exists) return;
-    setSessionsLoading(true);
-    try {
-      const res = await fetch(
-        `/api/reports/month-sessions?month_start=${encodeURIComponent(gate.month_start)}`,
-        { credentials: "same-origin" }
-      );
-      const j = (await res.json()) as { sessions?: MonthSessionRow[]; error?: string };
-      if (!res.ok) {
-        setMsg(j.error ?? "Could not load sessions");
-        setMonthSessions([]);
-        setSelectedIds(new Set());
-        return;
+  const fetchMonthSessions = useCallback(
+    async (monthStart: string) => {
+      if (!monthStart) return;
+      const isCurrentMonth = monthStart === gate?.month_start;
+      const hasReport = isCurrentMonth ? gate?.report_exists : gate?.previous_report_exists;
+      if (hasReport) return;
+      setSessionsLoading(true);
+      try {
+        const res = await fetch(
+          `/api/reports/month-sessions?month_start=${encodeURIComponent(monthStart)}`,
+          { credentials: "same-origin" }
+        );
+        const j = (await res.json()) as { sessions?: MonthSessionRow[]; error?: string };
+        if (!res.ok) {
+          setMsg(j.error ?? "Could not load sessions");
+          setMonthSessions([]);
+          setSelectedIds(new Set());
+          return;
+        }
+        const rows = j.sessions ?? [];
+        setMonthSessions(rows);
+        setSelectedIds(new Set(rows.map((s) => s.id)));
+      } finally {
+        setSessionsLoading(false);
       }
-      const rows = j.sessions ?? [];
-      setMonthSessions(rows);
-      setSelectedIds(new Set(rows.map((s) => s.id)));
-    } finally {
-      setSessionsLoading(false);
-    }
-  }, [gate?.month_start, gate?.report_exists]);
+    },
+    [gate?.month_start, gate?.report_exists, gate?.previous_report_exists]
+  );
 
   useEffect(() => {
-    if (!gate?.month_start || gate.report_exists) {
+    if (!activeMonthStart || !gate) {
       setMonthSessions(null);
       setSelectedIds(new Set());
       return;
     }
-    fetchMonthSessions();
-  }, [gate?.month_start, gate?.report_exists, fetchMonthSessions]);
+    const isCurrentMonth = activeMonthStart === gate.month_start;
+    const hasReport = isCurrentMonth ? gate.report_exists : gate.previous_report_exists;
+    if (hasReport) {
+      setMonthSessions(null);
+      setSelectedIds(new Set());
+      return;
+    }
+    fetchMonthSessions(activeMonthStart);
+  }, [activeMonthStart, gate, fetchMonthSessions]);
 
   function toggleSession(id: string, checked: boolean) {
     setSelectedIds((prev) => {
@@ -156,7 +184,11 @@ export function ReportsPanel({ showAdminScheduleBypass = false, showArchiveToggl
     setSelectedIds(new Set());
   }
 
-  async function generate(bypass_schedule: boolean) {
+  async function generate(bypass_schedule: boolean, monthStart: string | null) {
+    if (!monthStart) {
+      setMsg("Could not determine which month to generate.");
+      return;
+    }
     const ids = [...selectedIds];
     if (ids.length === 0) {
       setMsg("Select at least one Mass session to include in the report.");
@@ -172,6 +204,7 @@ export function ReportsPanel({ showAdminScheduleBypass = false, showArchiveToggl
         body: JSON.stringify({
           session_ids: ids,
           ...(bypass_schedule ? { bypass_schedule: true } : {}),
+          month_start: monthStart,
           ...(showArchiveToggle ? { archive_data: archiveAfterGenerate } : {}),
         }),
       });
@@ -202,13 +235,24 @@ export function ReportsPanel({ showAdminScheduleBypass = false, showArchiveToggl
   }
 
   const showBypass =
-    showAdminScheduleBypass && gate && !gate.report_exists && !gate.schedule_allowed;
+    showAdminScheduleBypass &&
+    gate &&
+    activeMonthStart === gate.month_start &&
+    !gate.report_exists &&
+    !gate.schedule_allowed;
+
+  const activeMonthHasReport =
+    gate && activeMonthStart
+      ? activeMonthStart === gate.month_start
+        ? gate.report_exists
+        : gate.previous_report_exists
+      : false;
 
   const selectedCount = selectedIds.size;
   const canGenerate =
     gate &&
-    !gate.report_exists &&
-    (gate.allowed || showAdminScheduleBypass) &&
+    !activeMonthHasReport &&
+    (activeMonthStart === gate.month_start ? gate.allowed || showAdminScheduleBypass : gate.can_generate_previous_month) &&
     selectedCount > 0 &&
     !sessionsLoading;
 
@@ -241,6 +285,11 @@ export function ReportsPanel({ showAdminScheduleBypass = false, showArchiveToggl
     }
   }
 
+  const isPreviousMonthActive =
+    Boolean(gate?.previous_month_start) && activeMonthStart === gate?.previous_month_start;
+  const canSwitchToPrevious =
+    showAdminScheduleBypass && Boolean(gate?.can_generate_previous_month && gate?.previous_month_start);
+
   return (
     <div className="space-y-8">
       <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
@@ -256,9 +305,13 @@ export function ReportsPanel({ showAdminScheduleBypass = false, showArchiveToggl
           {gate ? (
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">Status</span>
-              {gate.report_exists ? (
+              {activeMonthHasReport ? (
                 <span className="rounded-full bg-[var(--surface-2)] px-3 py-1 text-xs font-medium text-[var(--muted)]">
-                  Report already exists for this month
+                  Report already exists for selected month
+                </span>
+              ) : isPreviousMonthActive ? (
+                <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-medium text-[var(--accent)]">
+                  Previous month report (admin)
                 </span>
               ) : gate.allowed ? (
                 <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-medium text-[var(--accent)]">
@@ -272,19 +325,49 @@ export function ReportsPanel({ showAdminScheduleBypass = false, showArchiveToggl
             </div>
           ) : null}
 
-          {gate && !gate.allowed && !showBypass ? (
+          {gate && !gate.allowed && !showBypass && !isPreviousMonthActive ? (
             <p className="rounded-xl bg-[var(--surface-2)] px-3 py-2.5 text-sm text-[var(--text)]">{gate.reason}</p>
           ) : null}
 
-          {!gate?.report_exists ? (
+          {canSwitchToPrevious ? (
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Report month</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveMonthStart(gate?.month_start ?? null)}
+                  className={`min-h-10 rounded-lg px-3 text-sm font-medium ${
+                    !isPreviousMonthActive
+                      ? "bg-[var(--accent)] text-white"
+                      : "border border-[var(--border)] bg-[var(--surface)] text-[var(--text)]"
+                  }`}
+                >
+                  Current month
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveMonthStart(gate?.previous_month_start ?? null)}
+                  className={`min-h-10 rounded-lg px-3 text-sm font-medium ${
+                    isPreviousMonthActive
+                      ? "bg-[var(--accent)] text-white"
+                      : "border border-[var(--border)] bg-[var(--surface)] text-[var(--text)]"
+                  }`}
+                >
+                  Previous month (missing)
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {!activeMonthHasReport ? (
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <button
                 type="button"
                 onClick={() => {
                   setPreviewOpen(true);
-                  if (!monthSessions && gate?.month_start) fetchMonthSessions();
+                  if (!monthSessions && activeMonthStart) fetchMonthSessions(activeMonthStart);
                 }}
-                disabled={!gate?.month_start || sessionsLoading}
+                disabled={!activeMonthStart || sessionsLoading}
                 className="min-h-12 flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] text-sm font-semibold text-[var(--text)] disabled:opacity-40"
               >
                 {sessionsLoading ? "Loading sessions…" : "Preview & select Masses"}
@@ -297,7 +380,7 @@ export function ReportsPanel({ showAdminScheduleBypass = false, showArchiveToggl
             </div>
           ) : null}
 
-          {showArchiveToggle && !gate?.report_exists ? (
+          {showArchiveToggle && !activeMonthHasReport ? (
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
@@ -305,8 +388,9 @@ export function ReportsPanel({ showAdminScheduleBypass = false, showArchiveToggl
                     Put data in archive?
                   </p>
                   <p className="mt-1 text-xs leading-relaxed text-[var(--muted)]">
-                    When on, generating moves this month&apos;s Mass sessions and attendance into the archive and clears
-                    them from daily entry. When off, the PDF is still saved and you can archive later from Past reports.
+                    When on, generating moves the selected month&apos;s Mass sessions and attendance into the archive and
+                    clears them from daily entry. When off, the PDF is still saved and you can archive later from Past
+                    reports.
                   </p>
                 </div>
                 <ArchiveSwitch
@@ -320,11 +404,11 @@ export function ReportsPanel({ showAdminScheduleBypass = false, showArchiveToggl
 
           <button
             type="button"
-            onClick={() => generate(false)}
-            disabled={busy || !canGenerate || !gate?.allowed}
+            onClick={() => generate(false, activeMonthStart)}
+            disabled={busy || !canGenerate || (!isPreviousMonthActive && !gate?.allowed)}
             className="min-h-12 w-full rounded-xl bg-[var(--accent)] text-sm font-semibold text-white shadow-sm transition active:scale-[0.99] disabled:pointer-events-none disabled:opacity-40"
           >
-            {busy ? "Working…" : "Generate report"}
+            {busy ? "Working…" : isPreviousMonthActive ? "Generate previous month report" : "Generate report"}
           </button>
 
           {showBypass ? (
@@ -373,7 +457,7 @@ export function ReportsPanel({ showAdminScheduleBypass = false, showArchiveToggl
                 <p className="py-8 text-center text-sm text-[var(--muted)]">Loading…</p>
               ) : !monthSessions?.length ? (
                 <p className="py-8 text-center text-sm text-[var(--muted)]">
-                  No Mass sessions with attendance recorded for this month yet.
+                  No Mass sessions with attendance recorded for the selected month yet.
                 </p>
               ) : (
                 <ul className="space-y-1">
@@ -449,7 +533,7 @@ export function ReportsPanel({ showAdminScheduleBypass = false, showArchiveToggl
               </button>
               <button
                 type="button"
-                onClick={() => generate(true)}
+                onClick={() => generate(true, activeMonthStart)}
                 disabled={busy || selectedCount === 0}
                 className="min-h-12 flex-1 rounded-xl bg-[var(--accent)] text-sm font-semibold text-white"
               >

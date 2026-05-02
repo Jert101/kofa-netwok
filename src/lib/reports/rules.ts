@@ -1,4 +1,4 @@
-import { addDays, endOfMonth, format, startOfMonth } from "date-fns";
+import { addDays, addMonths, endOfMonth, format, startOfMonth } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 
 /** True if this local calendar date is the final Sunday of its month. */
@@ -24,6 +24,12 @@ export function canGenerateMonthlyReport(now: Date, timeZone: string): boolean {
 export function reportMonthStartForNow(now: Date, timeZone: string): string {
   const z = toZonedTime(now, timeZone);
   return format(startOfMonth(z), "yyyy-MM-dd");
+}
+
+/** First day (YYYY-MM-DD) of the previous calendar month in TZ for `now`. */
+export function previousReportMonthStartForNow(now: Date, timeZone: string): string {
+  const z = toZonedTime(now, timeZone);
+  return format(startOfMonth(addMonths(z, -1)), "yyyy-MM-dd");
 }
 
 /** Inclusive month bounds for SQL filtering on `session_date`. */

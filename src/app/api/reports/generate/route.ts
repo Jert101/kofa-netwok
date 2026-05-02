@@ -9,6 +9,7 @@ const bodySchema = z.object({
   bypass_schedule: z.boolean().optional(),
   /** Default true. Only admins may set false (live data stays until they archive from Past reports). */
   archive_data: z.boolean().optional(),
+  month_start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   session_ids: z.array(z.string().uuid()).min(1, "Select at least one Mass session"),
 });
 
@@ -50,6 +51,7 @@ export async function POST(req: NextRequest) {
     now: new Date(),
     generatedBy: g.session.role as "admin" | "secretary",
     bypassSchedule: bypass_schedule,
+    targetMonthStart: parsed.data.month_start,
     includedSessionIds: parsed.data.session_ids,
     archiveAfterGenerate,
   });

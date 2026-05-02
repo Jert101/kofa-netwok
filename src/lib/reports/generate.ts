@@ -6,6 +6,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getAllSettings } from "@/lib/settings/store";
 import {
   canGenerateMonthlyReport,
+  previousReportMonthStartForNow,
   reportMonthStartForNow,
   monthBoundsFromStart,
 } from "@/lib/reports/rules";
@@ -31,6 +32,8 @@ export async function generateMonthlyReport(params: {
   bypassSchedule?: boolean;
   /** Sessions to show as columns in the PDF (must all belong to the report month). */
   includedSessionIds: string[];
+  /** Optional target month (YYYY-MM-DD). Admins may target previous month if still missing. */
+  targetMonthStart?: string;
   /** When true (default), live attendance for the month is copied to archive tables and removed from live tables. */
   archiveAfterGenerate?: boolean;
 }): Promise<GenerateReportResult> {
@@ -52,7 +55,24 @@ export async function generateMonthlyReport(params: {
   }
 
   const tz = settings.report_timezone || "UTC";
-  if (!params.bypassSchedule && !canGenerateMonthlyReport(params.now, tz)) {
+  const currentMonthStart = reportMonthStartForNow(params.now, tz);
+  const previousMonthStart = previousReportMonthStartForNow(params.now, tz);
+  const requestedMonthStart = params.targetMonthStart ?? currentMonthStart;
+  const isCurrentMonth = requestedMonthStart === currentMonthStart;
+  const isPreviousMonth = requestedMonthStart === previousMonthStart;
+
+  if (requestedMonthStart !== currentMonthStart) {
+    if (params.generatedBy !== "admin" || !isPreviousMonth) {
+      return {
+        ok: false,
+        code: "NOT_ALLOWED_WINDOW",
+        message: "Only administrators can generate a missing report for the previous month.",
+      };
+    }
+  }
+
+  const requiresScheduleWindow = isCurrentMonth && !params.bypassSchedule;
+  if (requiresScheduleWindow && !canGenerateMonthlyReport(params.now, tz)) {
     return {
       ok: false,
       code: "NOT_ALLOWED_WINDOW",
@@ -60,7 +80,7 @@ export async function generateMonthlyReport(params: {
     };
   }
 
-  const monthStart = reportMonthStartForNow(params.now, tz);
+  const monthStart = requestedMonthStart;
   const { start, end } = monthBoundsFromStart(monthStart);
 
   const { data: existing } = await sb.from("reports").select("id").eq("report_month", monthStart).maybeSingle();
