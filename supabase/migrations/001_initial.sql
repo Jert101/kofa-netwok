@@ -118,6 +118,7 @@ INSERT INTO system_settings (key, value) VALUES
   ('church_address', ''),
   ('report_title', 'Monthly Attendance Report'),
   ('report_timezone', 'Asia/Manila'),
+  ('attendance_auto_approve_appeals', 'false'),
   ('pin_admin_hash', '$2b$10$7yrGhMdqjtQKIOf08ElX.uZI0PWlqdPG7dmpoLNkU6QCVVEMPaqD.'),
   ('pin_secretary_hash', '$2b$10$7yrGhMdqjtQKIOf08ElX.uZI0PWlqdPG7dmpoLNkU6QCVVEMPaqD.'),
   ('pin_member_hash', '$2b$10$7yrGhMdqjtQKIOf08ElX.uZI0PWlqdPG7dmpoLNkU6QCVVEMPaqD.')

@@ -72,6 +72,7 @@ export default function AdminSettingsPage() {
   const [church_address, setChurchAddress] = useState("");
   const [report_title, setReportTitle] = useState("");
   const [report_timezone, setReportTimezone] = useState("Asia/Manila");
+  const [attendance_auto_approve_appeals, setAttendanceAutoApproveAppeals] = useState(false);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -83,11 +84,13 @@ export default function AdminSettingsPage() {
         church_address: string;
         report_title: string;
         report_timezone: string;
+        attendance_auto_approve_appeals?: boolean;
       };
       setChurchName(j.church_name);
       setChurchAddress(j.church_address);
       setReportTitle(j.report_title);
       setReportTimezone(j.report_timezone);
+      setAttendanceAutoApproveAppeals(j.attendance_auto_approve_appeals === true);
     })();
   }, []);
 
@@ -98,7 +101,13 @@ export default function AdminSettingsPage() {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       credentials: "same-origin",
-      body: JSON.stringify({ church_name, church_address, report_title, report_timezone }),
+      body: JSON.stringify({
+        church_name,
+        church_address,
+        report_title,
+        report_timezone,
+        attendance_auto_approve_appeals,
+      }),
     });
     setSaved(true);
   }
@@ -141,6 +150,20 @@ export default function AdminSettingsPage() {
               value={report_timezone}
               onChange={(e) => setReportTimezone(e.target.value)}
             />
+          </label>
+          <label className="flex items-start gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3">
+            <input
+              type="checkbox"
+              className="mt-1 h-5 w-5 rounded border-[var(--border)]"
+              checked={attendance_auto_approve_appeals}
+              onChange={(e) => setAttendanceAutoApproveAppeals(e.target.checked)}
+            />
+            <span className="text-sm text-[var(--text)]">
+              Auto-approve attendance appeals
+              <span className="mt-0.5 block text-xs text-[var(--muted)]">
+                When enabled, submitted attendance appeals are added directly to attendance without manual approval.
+              </span>
+            </span>
           </label>
           <button type="submit" className="min-h-12 w-full rounded-xl bg-[var(--accent)] font-semibold text-white">
             Save header

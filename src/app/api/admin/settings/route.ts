@@ -8,6 +8,7 @@ const patchSchema = z.object({
   church_address: z.string().max(500).optional(),
   report_title: z.string().min(1).max(200).optional(),
   report_timezone: z.string().min(1).max(80).optional(),
+  attendance_auto_approve_appeals: z.boolean().optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -20,6 +21,7 @@ export async function GET(req: NextRequest) {
     church_address: all.church_address ?? "",
     report_title: all.report_title ?? "",
     report_timezone: all.report_timezone ?? "UTC",
+    attendance_auto_approve_appeals: all.attendance_auto_approve_appeals === "true",
   });
 }
 
@@ -43,6 +45,9 @@ export async function PATCH(req: NextRequest) {
   if (parsed.data.church_address !== undefined) payload.church_address = parsed.data.church_address;
   if (parsed.data.report_title !== undefined) payload.report_title = parsed.data.report_title;
   if (parsed.data.report_timezone !== undefined) payload.report_timezone = parsed.data.report_timezone;
+  if (parsed.data.attendance_auto_approve_appeals !== undefined) {
+    payload.attendance_auto_approve_appeals = parsed.data.attendance_auto_approve_appeals ? "true" : "false";
+  }
 
   await upsertSettings(payload as Parameters<typeof upsertSettings>[0]);
   return NextResponse.json({ ok: true });

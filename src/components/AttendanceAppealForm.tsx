@@ -63,7 +63,7 @@ export function AttendanceAppealForm({
         credentials: "same-origin",
         body: JSON.stringify({ member_ids }),
       });
-      const j = (await res.json()) as { error?: string };
+      const j = (await res.json()) as { error?: string; auto_approved?: boolean; approved_count?: number };
       if (!res.ok) {
         setMsg(j.error ?? "Could not submit appeal.");
         return;
@@ -71,7 +71,15 @@ export function AttendanceAppealForm({
       setSelected(new Map());
       setTerm("");
       setResults([]);
-      setMsg("Appeal submitted. Admin/Secretary will review each name.");
+      if (j.auto_approved) {
+        setMsg(
+          `Auto-approved: ${j.approved_count ?? member_ids.length} name${
+            (j.approved_count ?? member_ids.length) === 1 ? "" : "s"
+          } added to attendance.`
+        );
+      } else {
+        setMsg("Appeal submitted. Admin/Secretary will review each name.");
+      }
       await loadAppealRestrictions();
       onAppealSubmitted?.();
     } finally {

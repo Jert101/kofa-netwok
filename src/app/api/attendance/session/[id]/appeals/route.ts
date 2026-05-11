@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/api/guard";
+import { getSetting } from "@/lib/settings/store";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { notifyAttendanceSessionUpdated } from "@/lib/push/attendance-notify";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -96,6 +98,23 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       },
       { status: 400 }
     );
+  }
+
+  const autoApprove = (await getSetting("attendance_auto_approve_appeals")) === "true";
+  if (autoApprove) {
+    const { error: upErr } = await sb
+      .from("attendance_records")
+      .upsert(
+        toAppeal.map((memberId) => ({ session_id: sessionId, member_id: memberId })),
+        { onConflict: "session_id,member_id", ignoreDuplicates: true }
+      );
+    if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
+    void notifyAttendanceSessionUpdated(sessionId);
+    return NextResponse.json({
+      ok: true,
+      auto_approved: true,
+      approved_count: toAppeal.length,
+    });
   }
 
   const { data: appeal, error: aErr } = await sb
