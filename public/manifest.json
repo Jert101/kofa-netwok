@@ -1,0 +1,22 @@
+{
+  "name": "Knights of the Altar AMS",
+  "short_name": "KofA AMS",
+  "description": "Attendance monitoring for Knights of the Altar",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fff8ef",
+  "theme_color": "#aa1f2a",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/apple-icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
