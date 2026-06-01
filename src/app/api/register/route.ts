@@ -26,8 +26,42 @@ export async function POST(req: NextRequest) {
   }
 
   const { first_name, last_name, middle_initial, date_of_birth, gender, contact_number } = parsed.data;
+  const mi = middle_initial?.trim() || null;
 
   const sb = getSupabaseAdmin();
+
+  let reqQuery = sb
+    .from("registration_requests")
+    .select("id, status")
+    .eq("first_name", first_name)
+    .eq("last_name", last_name)
+    .eq("date_of_birth", date_of_birth)
+    .neq("status", "rejected");
+
+  reqQuery = mi ? reqQuery.eq("middle_initial", mi) : reqQuery.is("middle_initial", null);
+
+  const { data: existing } = await reqQuery.maybeSingle();
+
+  if (existing) {
+    return NextResponse.json({ error: "This name is already registered and is under review." }, { status: 409 });
+  }
+
+  const fullMi = mi ? ` ${mi}.` : "";
+  const full_name = `${first_name}${fullMi} ${last_name}`;
+
+  let memQuery = sb
+    .from("members")
+    .select("id")
+    .eq("full_name", full_name);
+
+  memQuery = date_of_birth ? memQuery.eq("date_of_birth", date_of_birth) : memQuery.is("date_of_birth", null);
+
+  const { data: memberMatch } = await memQuery.maybeSingle();
+
+  if (memberMatch) {
+    return NextResponse.json({ error: "This name is already a member." }, { status: 409 });
+  }
+
   const { error } = await sb.from("registration_requests").insert({
     first_name,
     last_name,
