@@ -85,9 +85,54 @@ export default function AdminRegistrationsPage() {
 
   const allSelected = Boolean(requests && requests.length > 0 && selected.size === requests.length);
 
+  function downloadCsv() {
+    if (!requests || requests.length === 0) return;
+    const headers = ["Name", "Gender", "Date of Birth", "Contact Number", "Status", "Submitted", "Reviewed"];
+    const rows = requests.map((r) => {
+      const mi = r.middle_initial ? ` ${r.middle_initial}.` : "";
+      return [
+        `${r.first_name}${mi} ${r.last_name}`,
+        r.gender,
+        r.date_of_birth,
+        r.contact_number,
+        r.status,
+        new Date(r.created_at).toLocaleString(),
+        r.reviewed_at ? new Date(r.reviewed_at).toLocaleString() : "",
+      ];
+    });
+    const csv = [headers.join(","), ...rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `registration-requests-${tab}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="space-y-6">
-      <h1 className="text-lg font-semibold">Registration requests</h1>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h1 className="text-lg font-semibold">Registration requests</h1>
+        {requests !== null ? (
+          <div className="flex gap-2">
+            <a
+              href={`/api/admin/registration-requests/pdf?status=${tab}`}
+              className="min-h-10 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium text-[var(--accent)]"
+            >
+              Download PDF
+            </a>
+            <button
+              type="button"
+              onClick={downloadCsv}
+              disabled={requests.length === 0}
+              className="min-h-10 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium text-[var(--accent)] disabled:opacity-40"
+            >
+              Download CSV
+            </button>
+          </div>
+        ) : null}
+      </div>
 
       <div className="flex gap-2 border-b border-[var(--border)] pb-2">
         {(["pending", "approved", "rejected"] as const).map((t) => (
