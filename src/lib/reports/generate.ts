@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "fs";
 import path from "path";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getAllSettings } from "@/lib/settings/store";
+import { formatNameLastFirst } from "@/lib/members/name-format";
 import {
   canGenerateMonthlyReport,
   previousReportMonthStartForNow,
@@ -167,7 +168,7 @@ export async function generateMonthlyReport(params: {
     const n = servedCountForSessions(id, records, includedSet);
     return {
       memberId: id,
-      fullName: m.full_name as string,
+      fullName: formatNameLastFirst(m.full_name as string),
       cells,
       remarks: remarksForServedCount(n),
       servedInMonth: n,

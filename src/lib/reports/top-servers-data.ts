@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { formatNameLastFirst } from "@/lib/members/name-format";
 
 export type TopServerCount = {
   member_id: string;
@@ -22,7 +23,7 @@ export async function fetchTopServersData(): Promise<TopServerCount[]> {
   for (const row of liveResult.data ?? []) {
     const mid = row.member_id as string;
     const m = row.members as { full_name?: string } | null;
-    const name = m?.full_name ?? "Unknown";
+    const name = formatNameLastFirst(m?.full_name ?? "Unknown");
     const entry = countMap.get(mid);
     if (entry) {
       entry.count++;
@@ -33,7 +34,7 @@ export async function fetchTopServersData(): Promise<TopServerCount[]> {
 
   for (const row of archiveResult.data ?? []) {
     const mid = row.member_id as string;
-    const name = (row.member_name as string) || "Unknown";
+    const name = formatNameLastFirst((row.member_name as string) || "Unknown");
     const entry = countMap.get(mid);
     if (entry) {
       entry.count++;

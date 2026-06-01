@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { formatNameLastFirst } from "@/lib/members/name-format";
 
 type Member = {
   id: string;
@@ -370,7 +371,7 @@ export default function AdminMembersPage() {
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
                     <span className={m.is_active ? "font-medium" : "font-medium text-[var(--muted)] line-through"}>
-                      {m.full_name}
+                      {formatNameLastFirst(m.full_name)}
                     </span>
                     {(m.date_of_birth || m.gender || m.contact_number) ? (
                       <div className="mt-1 space-y-0.5 text-xs text-[var(--muted)]">

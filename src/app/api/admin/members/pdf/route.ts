@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/api/guard";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getAllSettings } from "@/lib/settings/store";
+import { formatNameLastFirst } from "@/lib/members/name-format";
 import { buildActiveMembersPdf } from "@/lib/reports/members-pdf";
 
 export async function GET(req: NextRequest) {
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest) {
     churchName,
     title: "Active Members List",
     generatedAt: new Date(),
-    names: (data ?? []).map((m) => (m.full_name as string) ?? "").filter(Boolean),
+    names: (data ?? []).map((m) => formatNameLastFirst((m.full_name as string) ?? "")).filter(Boolean),
   });
   const body = Buffer.from(pdf);
 

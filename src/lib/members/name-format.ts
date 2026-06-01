@@ -10,3 +10,13 @@ export function formatMemberFullName(raw: string): string {
     })
     .join(" ");
 }
+
+/** Convert "First M. Last" → "Last, First M." */
+export function formatNameLastFirst(raw: string): string {
+  const parts = raw.trim().split(/\s+/);
+  if (parts.length <= 1) return raw.trim();
+
+  const last = parts[parts.length - 1];
+  const rest = parts.slice(0, -1).join(" ");
+  return `${last}, ${rest}`;
+}
