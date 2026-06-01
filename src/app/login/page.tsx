@@ -67,6 +67,12 @@ export default function LoginPage() {
             {loading ? "Signing in…" : "Continue"}
           </button>
         </form>
+        <p className="mt-6 text-center text-sm text-[var(--muted)]">
+          Not yet a member?{" "}
+          <a href="/register" className="font-medium text-[var(--accent)] underline underline-offset-2">
+            Register here
+          </a>
+        </p>
       </div>
     </main>
   );
