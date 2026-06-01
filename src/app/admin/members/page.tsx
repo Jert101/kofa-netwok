@@ -32,15 +32,12 @@ function parseName(full: string): NameParts {
   const last = parts[parts.length - 1];
   const rest = parts.slice(0, -1);
 
-  const middleCandidates = rest.filter((p) => p.endsWith("."));
-  const nonMiddle = rest.filter((p) => !p.endsWith("."));
+  const miIndex = rest.findIndex((p) => p.endsWith("."));
 
-  if (middleCandidates.length === 1 && nonMiddle.length === 1) {
-    return {
-      first: nonMiddle[0],
-      middle: middleCandidates[0].replace(".", ""),
-      last,
-    };
+  if (miIndex !== -1) {
+    const first = rest.slice(0, miIndex).join(" ");
+    const middle = rest[miIndex].replace(".", "");
+    return { first, middle, last };
   }
 
   return { first: rest.join(" "), middle: "", last };
