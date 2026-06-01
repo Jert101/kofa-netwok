@@ -147,8 +147,7 @@ export async function generateMonthlyReport(params: {
 
   const { data: memberRowsDb, error: memErr } = await sb
     .from("members")
-    .select("id, full_name")
-    .order("full_name", { ascending: true });
+    .select("id, full_name");
 
   if (memErr) {
     return { ok: false, code: "SERVER", message: memErr.message };
@@ -162,18 +161,20 @@ export async function generateMonthlyReport(params: {
     attended.add(`${r.member_id}:${r.session_id}`);
   }
 
-  const memberRows = (memberRowsDb ?? []).map((m) => {
-    const id = m.id as string;
-    const cells = sessionOrder.map((sessionId) => cellKindForSession(sessionId, id, attended));
-    const n = servedCountForSessions(id, records, includedSet);
-    return {
-      memberId: id,
-      fullName: formatNameLastFirst(m.full_name as string),
-      cells,
-      remarks: remarksForServedCount(n),
-      servedInMonth: n,
-    };
-  });
+  const memberRows = (memberRowsDb ?? [])
+    .map((m) => {
+      const id = m.id as string;
+      const cells = sessionOrder.map((sessionId) => cellKindForSession(sessionId, id, attended));
+      const n = servedCountForSessions(id, records, includedSet);
+      return {
+        memberId: id,
+        fullName: formatNameLastFirst(m.full_name as string),
+        cells,
+        remarks: remarksForServedCount(n),
+        servedInMonth: n,
+      };
+    })
+    .sort((a, b) => a.fullName.localeCompare(b.fullName));
 
   const summaryJson = {
     version: 4,

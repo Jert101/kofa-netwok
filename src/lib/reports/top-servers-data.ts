@@ -50,5 +50,6 @@ export async function fetchTopServersData(): Promise<TopServerCount[]> {
       member_id: memberId,
       full_name: name,
       total_served: count,
-    }));
+    }))
+    .sort((a, b) => a.full_name.localeCompare(b.full_name));
 }
