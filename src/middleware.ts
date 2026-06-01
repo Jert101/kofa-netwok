@@ -26,7 +26,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  if (pathname === "/login") {
+  if (pathname === "/login" || pathname === "/register") {
     return NextResponse.next();
   }
 
