@@ -165,6 +165,8 @@ export default function AdminMembersPage() {
   const [editing, setEditing] = useState<string | null>(null);
   const [editParts, setEditParts] = useState<NameParts>({ first: "", middle: "", last: "" });
   const [editDetails, setEditDetails] = useState<MemberDetails>({ ...emptyDetails });
+  const [page, setPage] = useState(1);
+  const perPage = 20;
 
   const load = useCallback(async () => {
     const res = await fetch("/api/admin/members?all=1", { credentials: "same-origin" });
@@ -182,6 +184,23 @@ export default function AdminMembersPage() {
     if (!t) return members;
     return members.filter((m) => m.full_name.toLowerCase().includes(t));
   }, [members, search]);
+
+  const totalPages = Math.max(1, Math.ceil((filteredMembers?.length ?? 0) / perPage));
+  const safePage = Math.min(page, totalPages);
+  const paginatedMembers = useMemo(() => {
+    if (filteredMembers.length === 0) return filteredMembers;
+    const start = (safePage - 1) * perPage;
+    return filteredMembers.slice(start, start + perPage);
+  }, [filteredMembers, safePage]);
+
+  function goToPage(p: number) {
+    setPage(Math.max(1, Math.min(p, totalPages)));
+  }
+
+  function onSearch(value: string) {
+    setSearch(value);
+    setPage(1);
+  }
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
@@ -313,7 +332,7 @@ export default function AdminMembersPage() {
           className="min-h-12 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3"
           placeholder="Search members"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => onSearch(e.target.value)}
           autoComplete="off"
         />
         {members !== null && search.trim() !== "" ? (
@@ -331,7 +350,7 @@ export default function AdminMembersPage() {
         </p>
       ) : (
         <ul className="space-y-2">
-          {filteredMembers.map((m) => (
+          {paginatedMembers.map((m) => (
             <li key={m.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
               {editing === m.id ? (
                 <div className="flex flex-col gap-2">
@@ -403,6 +422,60 @@ export default function AdminMembersPage() {
           ))}
         </ul>
       )}
+      {members !== null && totalPages > 1 ? (
+        <div className="flex items-center justify-center gap-2 pt-2">
+          <button
+            type="button"
+            disabled={safePage <= 1}
+            className="min-h-9 min-w-9 rounded-lg border border-[var(--border)] px-2 text-sm disabled:opacity-40"
+            onClick={() => goToPage(safePage - 1)}
+          >
+            ‹
+          </button>
+          {(() => {
+            const pages: (number | "ellipsis")[] = [];
+            const startPage = Math.max(1, safePage - 2);
+            const endPage = Math.min(totalPages, safePage + 2);
+            if (startPage > 1) {
+              pages.push(1);
+              if (startPage > 2) pages.push("ellipsis");
+            }
+            for (let i = startPage; i <= endPage; i++) pages.push(i);
+            if (endPage < totalPages) {
+              if (endPage < totalPages - 1) pages.push("ellipsis");
+              pages.push(totalPages);
+            }
+            return pages.map((p, idx) =>
+              p === "ellipsis" ? (
+                <span key={`e-${idx}`} className="px-1 text-[var(--muted)]">
+                  …
+                </span>
+              ) : (
+                <button
+                  key={p}
+                  type="button"
+                  className={`min-h-9 min-w-9 rounded-lg border px-2 text-sm ${
+                    p === safePage
+                      ? "border-[var(--accent)] bg-[var(--accent)] text-white"
+                      : "border-[var(--border)]"
+                  }`}
+                  onClick={() => goToPage(p)}
+                >
+                  {p}
+                </button>
+              ),
+            );
+          })()}
+          <button
+            type="button"
+            disabled={safePage >= totalPages}
+            className="min-h-9 min-w-9 rounded-lg border border-[var(--border)] px-2 text-sm disabled:opacity-40"
+            onClick={() => goToPage(safePage + 1)}
+          >
+            ›
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
