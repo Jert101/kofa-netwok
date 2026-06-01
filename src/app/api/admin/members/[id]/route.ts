@@ -9,6 +9,9 @@ type Ctx = { params: Promise<{ id: string }> };
 const patchSchema = z.object({
   full_name: z.string().min(1).max(160).trim().optional(),
   is_active: z.boolean().optional(),
+  date_of_birth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  gender: z.enum(["male", "female"]).optional().nullable(),
+  contact_number: z.string().max(20).trim().optional().nullable(),
 });
 
 export async function PATCH(req: NextRequest, ctx: Ctx) {
@@ -27,19 +30,26 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   }
 
-  const payload = { ...parsed.data };
-  if (payload.full_name !== undefined) {
-    const formatted = formatMemberFullName(payload.full_name);
+  const { full_name, is_active, date_of_birth, gender, contact_number } = parsed.data;
+
+  const updatePayload: Record<string, unknown> = {};
+  if (full_name !== undefined) {
+    const formatted = formatMemberFullName(full_name);
     if (!formatted) {
       return NextResponse.json({ error: "Invalid name" }, { status: 400 });
     }
-    payload.full_name = formatted;
+    updatePayload.full_name = formatted;
   }
+  if (is_active !== undefined) updatePayload.is_active = is_active;
+  if (date_of_birth !== undefined) updatePayload.date_of_birth = date_of_birth || null;
+  if (gender !== undefined) updatePayload.gender = gender || null;
+  if (contact_number !== undefined) updatePayload.contact_number = contact_number || null;
+  updatePayload.updated_at = new Date().toISOString();
 
   const sb = getSupabaseAdmin();
   const { error } = await sb
     .from("members")
-    .update({ ...payload, updated_at: new Date().toISOString() })
+    .update(updatePayload)
     .eq("id", id);
 
   if (error) {

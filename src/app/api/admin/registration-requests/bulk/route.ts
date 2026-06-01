@@ -44,7 +44,12 @@ export async function POST(req: NextRequest) {
     const memberInserts = pending.map((r) => {
       const mi = r.middle_initial ? ` ${r.middle_initial}.` : "";
       const full_name = `${r.first_name}${mi} ${r.last_name}`;
-      return { full_name };
+      return {
+        full_name,
+        date_of_birth: r.date_of_birth,
+        gender: r.gender,
+        contact_number: r.contact_number,
+      };
     });
 
     const { error: insertErr } = await sb.from("members").insert(memberInserts);

@@ -3,12 +3,25 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
-type Member = { id: string; full_name: string; is_active: boolean };
+type Member = {
+  id: string;
+  full_name: string;
+  is_active: boolean;
+  date_of_birth: string | null;
+  gender: string | null;
+  contact_number: string | null;
+};
 
 type NameParts = {
   first: string;
   middle: string;
   last: string;
+};
+
+type MemberDetails = {
+  date_of_birth: string;
+  gender: string;
+  contact_number: string;
 };
 
 function parseName(full: string): NameParts {
@@ -59,6 +72,55 @@ function nameExists(members: Member[], fullName: string, opts?: { excludeId?: st
   );
 }
 
+const emptyDetails: MemberDetails = { date_of_birth: "", gender: "", contact_number: "" };
+
+function DetailsFields({
+  details,
+  onChange,
+}: {
+  details: MemberDetails;
+  onChange: (next: MemberDetails) => void;
+}) {
+  function update(field: keyof MemberDetails, value: string) {
+    onChange({ ...details, [field]: value });
+  }
+
+  const yearNow = new Date().getFullYear();
+  const minYear = yearNow - 100;
+  const maxYear = yearNow - 10;
+
+  return (
+    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+      <input
+        type="date"
+        min={`${minYear}-01-01`}
+        max={`${maxYear}-12-31`}
+        className="min-h-11 flex-1 rounded-lg border border-[var(--border)] px-2"
+        title="Date of birth"
+        value={details.date_of_birth}
+        onChange={(e) => update("date_of_birth", e.target.value)}
+      />
+      <select
+        className="min-h-11 w-28 rounded-lg border border-[var(--border)] px-2"
+        title="Gender"
+        value={details.gender}
+        onChange={(e) => update("gender", e.target.value)}
+      >
+        <option value="">Gender</option>
+        <option value="male">Male</option>
+        <option value="female">Female</option>
+      </select>
+      <input
+        type="tel"
+        className="min-h-11 flex-1 rounded-lg border border-[var(--border)] px-2"
+        placeholder="Contact number"
+        value={details.contact_number}
+        onChange={(e) => update("contact_number", e.target.value)}
+      />
+    </div>
+  );
+}
+
 function NameFormFields({
   parts,
   onChange,
@@ -98,11 +160,13 @@ function NameFormFields({
 export default function AdminMembersPage() {
   const [members, setMembers] = useState<Member[] | null>(null);
   const [addParts, setAddParts] = useState<NameParts>({ first: "", middle: "", last: "" });
+  const [addDetails, setAddDetails] = useState<MemberDetails>({ ...emptyDetails });
   const [search, setSearch] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [editParts, setEditParts] = useState<NameParts>({ first: "", middle: "", last: "" });
+  const [editDetails, setEditDetails] = useState<MemberDetails>({ ...emptyDetails });
 
   const load = useCallback(async () => {
     const res = await fetch("/api/admin/members?all=1", { credentials: "same-origin" });
@@ -134,7 +198,12 @@ export default function AdminMembersPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "same-origin",
-      body: JSON.stringify({ full_name: fullName }),
+      body: JSON.stringify({
+        full_name: fullName,
+        date_of_birth: addDetails.date_of_birth || null,
+        gender: addDetails.gender || null,
+        contact_number: addDetails.contact_number || null,
+      }),
     });
     const j = (await res.json()) as { error?: string };
     if (!res.ok) {
@@ -142,6 +211,7 @@ export default function AdminMembersPage() {
       return;
     }
     setAddParts({ first: "", middle: "", last: "" });
+    setAddDetails({ ...emptyDetails });
     load();
   }
 
@@ -157,7 +227,12 @@ export default function AdminMembersPage() {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       credentials: "same-origin",
-      body: JSON.stringify({ full_name: fullName }),
+      body: JSON.stringify({
+        full_name: fullName,
+        date_of_birth: editDetails.date_of_birth || null,
+        gender: editDetails.gender || null,
+        contact_number: editDetails.contact_number || null,
+      }),
     });
     const j = (await res.json()) as { error?: string };
     if (!res.ok) {
@@ -181,6 +256,11 @@ export default function AdminMembersPage() {
   function startEdit(m: Member) {
     const parts = parseName(m.full_name);
     setEditParts(parts);
+    setEditDetails({
+      date_of_birth: m.date_of_birth ?? "",
+      gender: m.gender ?? "",
+      contact_number: m.contact_number ?? "",
+    });
     setEditing(m.id);
     setEditError(null);
   }
@@ -206,8 +286,10 @@ export default function AdminMembersPage() {
         </div>
       </div>
 
-      <form onSubmit={add} className="space-y-2">
+      <form onSubmit={add} className="space-y-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+        <p className="text-sm font-semibold text-[var(--text)]">Add member</p>
         <NameFormFields parts={addParts} onChange={setAddParts} />
+        <DetailsFields details={addDetails} onChange={setAddDetails} />
         <div className="flex items-center gap-3">
           <button type="submit" className="min-h-12 rounded-xl bg-[var(--accent)] px-4 font-medium text-white">
             Add
@@ -256,6 +338,7 @@ export default function AdminMembersPage() {
               {editing === m.id ? (
                 <div className="flex flex-col gap-2">
                   <NameFormFields parts={editParts} onChange={setEditParts} />
+                  <DetailsFields details={editDetails} onChange={setEditDetails} />
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
@@ -287,9 +370,20 @@ export default function AdminMembersPage() {
                   ) : null}
                 </div>
               ) : (
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className={m.is_active ? "" : "text-[var(--muted)] line-through"}>{m.full_name}</span>
-                  <div className="flex gap-2">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <span className={m.is_active ? "font-medium" : "font-medium text-[var(--muted)] line-through"}>
+                      {m.full_name}
+                    </span>
+                    {(m.date_of_birth || m.gender || m.contact_number) ? (
+                      <div className="mt-1 space-y-0.5 text-xs text-[var(--muted)]">
+                        {m.date_of_birth ? <span>DOB: {m.date_of_birth}</span> : null}
+                        {m.gender ? <span> · {m.gender}</span> : null}
+                        {m.contact_number ? <span> · {m.contact_number}</span> : null}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="flex gap-2 shrink-0">
                     <button
                       type="button"
                       className="text-sm text-[var(--accent)]"

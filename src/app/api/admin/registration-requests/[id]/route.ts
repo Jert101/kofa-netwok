@@ -42,7 +42,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const mi = request.middle_initial ? ` ${request.middle_initial}.` : "";
     const full_name = `${request.first_name}${mi} ${request.last_name}`;
 
-    const { error: insertErr } = await sb.from("members").insert({ full_name });
+    const { error: insertErr } = await sb.from("members").insert({
+      full_name,
+      date_of_birth: request.date_of_birth,
+      gender: request.gender,
+      contact_number: request.contact_number,
+    });
 
     if (insertErr) {
       if (insertErr.code === "23505") {

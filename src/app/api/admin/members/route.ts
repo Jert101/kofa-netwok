@@ -12,7 +12,10 @@ export async function GET(req: NextRequest) {
   const includeInactive = url.searchParams.get("all") === "1";
 
   const sb = getSupabaseAdmin();
-  let q = sb.from("members").select("id, full_name, is_active, created_at").order("full_name", { ascending: true });
+  let q = sb
+    .from("members")
+    .select("id, full_name, is_active, date_of_birth, gender, contact_number, created_at")
+    .order("full_name", { ascending: true });
   if (!includeInactive) {
     q = q.eq("is_active", true);
   }
@@ -26,6 +29,9 @@ export async function GET(req: NextRequest) {
 
 const postSchema = z.object({
   full_name: z.string().min(1).max(160).trim(),
+  date_of_birth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  gender: z.enum(["male", "female"]).optional().nullable(),
+  contact_number: z.string().max(20).trim().optional().nullable(),
 });
 
 export async function POST(req: NextRequest) {
@@ -40,7 +46,7 @@ export async function POST(req: NextRequest) {
   }
   const parsed = postSchema.safeParse(json);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid name" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid input" }, { status: 400 });
   }
 
   const full_name = formatMemberFullName(parsed.data.full_name);
@@ -51,7 +57,12 @@ export async function POST(req: NextRequest) {
   const sb = getSupabaseAdmin();
   const { data, error } = await sb
     .from("members")
-    .insert({ full_name })
+    .insert({
+      full_name,
+      date_of_birth: parsed.data.date_of_birth || null,
+      gender: parsed.data.gender || null,
+      contact_number: parsed.data.contact_number || null,
+    })
     .select("id")
     .single();
 
