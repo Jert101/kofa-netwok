@@ -83,7 +83,7 @@ export default function AdminRegistrationsPage() {
     }
   }
 
-  const allSelected = requests && requests.length > 0 && selected.size === requests.length;
+  const allSelected = Boolean(requests && requests.length > 0 && selected.size === requests.length);
 
   return (
     <div className="space-y-6">
