@@ -1,4 +1,5 @@
 import { ReportsPanel } from "@/components/ReportsPanel";
+import { TopServersCard } from "@/components/TopServersCard";
 import Image from "next/image";
 
 export default function AdminReportsPage() {
@@ -9,6 +10,7 @@ export default function AdminReportsPage() {
         <h1 className="text-lg font-semibold">Reports</h1>
       </div>
       <ReportsPanel showAdminScheduleBypass showArchiveToggle />
+      <TopServersCard />
     </div>
   );
 }
