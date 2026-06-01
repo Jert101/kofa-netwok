@@ -61,10 +61,12 @@ export async function GET(req: NextRequest) {
     const fullName = m.full_name as string;
     const body = randomMessage(fullName);
 
+    const deleteAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     const { error: insErr } = await sb.from("announcements").insert({
       title: "Birthday Greeting",
       body,
       created_by: "system",
+      delete_at: deleteAt,
     });
 
     if (insErr) {
