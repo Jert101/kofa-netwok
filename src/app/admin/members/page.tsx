@@ -2,9 +2,47 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { formatMemberFullName } from "@/lib/members/name-format";
 
 type Member = { id: string; full_name: string; is_active: boolean };
+
+type NameParts = {
+  first: string;
+  middle: string;
+  last: string;
+};
+
+function parseName(full: string): NameParts {
+  const parts = full.trim().split(/\s+/);
+  if (parts.length === 0) return { first: "", middle: "", last: "" };
+  if (parts.length === 1) return { first: parts[0], middle: "", last: "" };
+
+  const last = parts[parts.length - 1];
+  const rest = parts.slice(0, -1);
+
+  const middleCandidates = rest.filter((p) => p.endsWith("."));
+  const nonMiddle = rest.filter((p) => !p.endsWith("."));
+
+  if (middleCandidates.length === 1 && nonMiddle.length === 1) {
+    return {
+      first: nonMiddle[0],
+      middle: middleCandidates[0].replace(".", ""),
+      last,
+    };
+  }
+
+  return { first: rest.join(" "), middle: "", last };
+}
+
+function composeName(parts: NameParts): string {
+  const { first, middle, last } = parts;
+  const trimmed = [first.trim(), middle.trim() ? `${middle.trim()}.` : "", last.trim()]
+    .filter(Boolean)
+    .join(" ");
+  return trimmed
+    .split(/\s+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
 
 function normalizeName(s: string) {
   return s.trim().toLowerCase();
@@ -21,14 +59,50 @@ function nameExists(members: Member[], fullName: string, opts?: { excludeId?: st
   );
 }
 
+function NameFormFields({
+  parts,
+  onChange,
+}: {
+  parts: NameParts;
+  onChange: (next: NameParts) => void;
+}) {
+  function update(field: keyof NameParts, value: string) {
+    onChange({ ...parts, [field]: value });
+  }
+
+  return (
+    <div className="flex flex-col gap-2 sm:flex-row">
+      <input
+        className="min-h-11 flex-1 rounded-lg border border-[var(--border)] px-2"
+        placeholder="First name"
+        value={parts.first}
+        onChange={(e) => update("first", e.target.value)}
+      />
+      <input
+        className="min-h-11 w-20 rounded-lg border border-[var(--border)] px-2 text-center"
+        placeholder="MI"
+        maxLength={2}
+        value={parts.middle}
+        onChange={(e) => update("middle", e.target.value)}
+      />
+      <input
+        className="min-h-11 flex-1 rounded-lg border border-[var(--border)] px-2"
+        placeholder="Last name"
+        value={parts.last}
+        onChange={(e) => update("last", e.target.value)}
+      />
+    </div>
+  );
+}
+
 export default function AdminMembersPage() {
   const [members, setMembers] = useState<Member[] | null>(null);
-  const [name, setName] = useState("");
+  const [addParts, setAddParts] = useState<NameParts>({ first: "", middle: "", last: "" });
   const [search, setSearch] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
-  const [editName, setEditName] = useState("");
+  const [editParts, setEditParts] = useState<NameParts>({ first: "", middle: "", last: "" });
 
   const load = useCallback(async () => {
     const res = await fetch("/api/admin/members?all=1", { credentials: "same-origin" });
@@ -50,9 +124,9 @@ export default function AdminMembersPage() {
   async function add(e: React.FormEvent) {
     e.preventDefault();
     setAddError(null);
-    const formatted = formatMemberFullName(name);
-    if (!formatted) return;
-    if (members && nameExists(members, formatted)) {
+    const fullName = composeName(addParts);
+    if (!fullName) return;
+    if (members && nameExists(members, fullName)) {
       setAddError("This name already exists.");
       return;
     }
@@ -60,22 +134,22 @@ export default function AdminMembersPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "same-origin",
-      body: JSON.stringify({ full_name: formatted }),
+      body: JSON.stringify({ full_name: fullName }),
     });
     const j = (await res.json()) as { error?: string };
     if (!res.ok) {
       setAddError(res.status === 409 ? "This name already exists." : j.error ?? "Could not add member.");
       return;
     }
-    setName("");
+    setAddParts({ first: "", middle: "", last: "" });
     load();
   }
 
   async function save(id: string) {
     setEditError(null);
-    const formatted = formatMemberFullName(editName);
-    if (!formatted) return;
-    if (members && nameExists(members, formatted, { excludeId: id })) {
+    const fullName = composeName(editParts);
+    if (!fullName) return;
+    if (members && nameExists(members, fullName, { excludeId: id })) {
       setEditError("This name already exists.");
       return;
     }
@@ -83,7 +157,7 @@ export default function AdminMembersPage() {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       credentials: "same-origin",
-      body: JSON.stringify({ full_name: formatted }),
+      body: JSON.stringify({ full_name: fullName }),
     });
     const j = (await res.json()) as { error?: string };
     if (!res.ok) {
@@ -104,6 +178,15 @@ export default function AdminMembersPage() {
     load();
   }
 
+  function startEdit(m: Member) {
+    const parts = parseName(m.full_name);
+    setEditParts(parts);
+    setEditing(m.id);
+    setEditError(null);
+  }
+
+  const addFull = composeName(addParts);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -122,29 +205,24 @@ export default function AdminMembersPage() {
           </Link>
         </div>
       </div>
+
       <form onSubmit={add} className="space-y-2">
-        <div className="flex gap-2">
-          <input
-            className="min-h-12 flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3"
-            placeholder="Full name"
-            value={name}
-            onChange={(e) => {
-              setName(e.target.value);
-              setAddError(null);
-            }}
-            aria-invalid={addError ? true : undefined}
-            aria-describedby={addError ? "add-name-error" : undefined}
-          />
+        <NameFormFields parts={addParts} onChange={setAddParts} />
+        <div className="flex items-center gap-3">
           <button type="submit" className="min-h-12 rounded-xl bg-[var(--accent)] px-4 font-medium text-white">
             Add
           </button>
+          {addFull ? (
+            <span className="text-sm text-[var(--muted)]">Preview: {addFull}</span>
+          ) : null}
         </div>
         {addError ? (
-          <p id="add-name-error" className="text-sm text-red-600 dark:text-red-400" role="alert">
+          <p className="text-sm text-red-600 dark:text-red-400" role="alert">
             {addError}
           </p>
         ) : null}
       </form>
+
       <div>
         <label htmlFor="member-search" className="sr-only">
           Search members
@@ -164,6 +242,7 @@ export default function AdminMembersPage() {
           </p>
         ) : null}
       </div>
+
       {members === null ? (
         <p className="text-sm text-[var(--muted)]">Loading…</p>
       ) : filteredMembers.length === 0 ? (
@@ -173,23 +252,11 @@ export default function AdminMembersPage() {
       ) : (
         <ul className="space-y-2">
           {filteredMembers.map((m) => (
-            <li
-              key={m.id}
-              className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3"
-            >
+            <li key={m.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
               {editing === m.id ? (
                 <div className="flex flex-col gap-2">
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <input
-                      className="min-h-11 flex-1 rounded-lg border border-[var(--border)] px-2"
-                      value={editName}
-                      onChange={(e) => {
-                        setEditName(e.target.value);
-                        setEditError(null);
-                      }}
-                      aria-invalid={editError ? true : undefined}
-                      aria-describedby={editError ? `edit-name-error-${m.id}` : undefined}
-                    />
+                  <NameFormFields parts={editParts} onChange={setEditParts} />
+                  <div className="flex items-center gap-3">
                     <button
                       type="button"
                       className="min-h-11 rounded-lg bg-[var(--accent)] px-3 text-white"
@@ -207,9 +274,14 @@ export default function AdminMembersPage() {
                     >
                       Cancel
                     </button>
+                    {composeName(editParts) ? (
+                      <span className="text-sm text-[var(--muted)]">
+                        Preview: {composeName(editParts)}
+                      </span>
+                    ) : null}
                   </div>
                   {editError ? (
-                    <p id={`edit-name-error-${m.id}`} className="text-sm text-red-600 dark:text-red-400" role="alert">
+                    <p className="text-sm text-red-600 dark:text-red-400" role="alert">
                       {editError}
                     </p>
                   ) : null}
@@ -221,11 +293,7 @@ export default function AdminMembersPage() {
                     <button
                       type="button"
                       className="text-sm text-[var(--accent)]"
-                      onClick={() => {
-                        setEditing(m.id);
-                        setEditName(m.full_name);
-                        setEditError(null);
-                      }}
+                      onClick={() => startEdit(m)}
                     >
                       Edit
                     </button>
