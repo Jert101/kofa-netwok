@@ -32,10 +32,9 @@ export async function POST(req: NextRequest) {
 
   let reqQuery = sb
     .from("registration_requests")
-    .select("id, status")
+    .select("id")
     .eq("first_name", first_name)
     .eq("last_name", last_name)
-    .eq("date_of_birth", date_of_birth)
     .neq("status", "rejected");
 
   reqQuery = mi ? reqQuery.eq("middle_initial", mi) : reqQuery.is("middle_initial", null);
@@ -49,14 +48,11 @@ export async function POST(req: NextRequest) {
   const fullMi = mi ? ` ${mi}.` : "";
   const full_name = `${first_name}${fullMi} ${last_name}`;
 
-  let memQuery = sb
+  const { data: memberMatch } = await sb
     .from("members")
     .select("id")
-    .eq("full_name", full_name);
-
-  memQuery = date_of_birth ? memQuery.eq("date_of_birth", date_of_birth) : memQuery.is("date_of_birth", null);
-
-  const { data: memberMatch } = await memQuery.maybeSingle();
+    .eq("full_name", full_name)
+    .maybeSingle();
 
   if (memberMatch) {
     return NextResponse.json({ error: "This name is already a member." }, { status: 409 });
