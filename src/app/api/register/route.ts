@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
 
   const parsed = schema.safeParse(json);
   if (!parsed.success) {
-    const first = parsed.error.errors[0];
+    const first = parsed.error.issues[0];
     return NextResponse.json({ error: first?.message ?? "Invalid input" }, { status: 400 });
   }
 
