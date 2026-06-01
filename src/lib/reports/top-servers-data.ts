@@ -44,12 +44,11 @@ export async function fetchTopServersData(): Promise<TopServerCount[]> {
   }
 
   return [...countMap.entries()]
-    .sort((a, b) => b[1].count - a[1].count)
+    .sort((a, b) => b[1].count - a[1].count || a[1].name.localeCompare(b[1].name))
     .slice(0, 20)
     .map(([memberId, { name, count }]) => ({
       member_id: memberId,
       full_name: name,
       total_served: count,
-    }))
-    .sort((a, b) => a.full_name.localeCompare(b.full_name));
+    }));
 }

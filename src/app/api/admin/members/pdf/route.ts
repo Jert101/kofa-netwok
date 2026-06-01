@@ -13,10 +13,14 @@ export async function GET(req: NextRequest) {
   const { data, error } = await sb
     .from("members")
     .select("full_name")
-    .eq("is_active", true)
-    .order("full_name", { ascending: true });
+    .eq("is_active", true);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const names = (data ?? [])
+    .map((m) => formatNameLastFirst((m.full_name as string) ?? ""))
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
 
   let churchName = "Knights of the Altar";
   try {
@@ -30,7 +34,7 @@ export async function GET(req: NextRequest) {
     churchName,
     title: "Active Members List",
     generatedAt: new Date(),
-    names: (data ?? []).map((m) => formatNameLastFirst((m.full_name as string) ?? "")).filter(Boolean),
+    names,
   });
   const body = Buffer.from(pdf);
 
