@@ -98,10 +98,10 @@ export default function RegisterPage() {
           <label className="block">
             <span className="text-sm font-medium text-[var(--muted)]">Middle initial (optional)</span>
             <input
-              maxLength={2}
-              className="mt-1 w-full min-h-11 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3"
+              maxLength={1}
+              className="mt-1 w-full min-h-11 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-center"
               value={form.middle_initial}
-              onChange={(e) => update("middle_initial", e.target.value)}
+              onChange={(e) => update("middle_initial", e.target.value.replace(".", ""))}
             />
           </label>
 

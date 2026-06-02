@@ -141,9 +141,9 @@ function NameFormFields({
       <input
         className="min-h-11 w-20 rounded-lg border border-[var(--border)] px-2 text-center"
         placeholder="MI"
-        maxLength={2}
+        maxLength={1}
         value={parts.middle}
-        onChange={(e) => update("middle", e.target.value)}
+        onChange={(e) => update("middle", e.target.value.replace(".", ""))}
       />
       <input
         className="min-h-11 flex-1 rounded-lg border border-[var(--border)] px-2"

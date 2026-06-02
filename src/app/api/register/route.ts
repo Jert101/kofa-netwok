@@ -5,7 +5,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 const schema = z.object({
   first_name: z.string().min(1).max(100).trim(),
   last_name: z.string().min(1).max(100).trim(),
-  middle_initial: z.string().max(2).trim().optional().default(""),
+  middle_initial: z.string().max(1).trim().optional().default(""),
   date_of_birth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format"),
   gender: z.enum(["male", "female"]),
   contact_number: z.string().min(7).max(20).trim(),
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { first_name, last_name, middle_initial, date_of_birth, gender, contact_number } = parsed.data;
-  const mi = middle_initial?.trim() || null;
+  const mi = middle_initial?.replace(".", "").trim() || null;
 
   const sb = getSupabaseAdmin();
 
