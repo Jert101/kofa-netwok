@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/api/guard";
 import { getSetting } from "@/lib/settings/store";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { notifyAttendanceSessionUpdated } from "@/lib/push/attendance-notify";
+import { guardReportNotGenerated } from "@/lib/reports/check-report-lock";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -67,9 +68,12 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid body" }, { status: 400 });
 
   const sb = getSupabaseAdmin();
-  const { data: session, error: sErr } = await sb.from("attendance_sessions").select("id").eq("id", sessionId).maybeSingle();
+  const { data: session, error: sErr } = await sb.from("attendance_sessions").select("id, session_date").eq("id", sessionId).maybeSingle();
   if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 });
   if (!session) return NextResponse.json({ error: "Session not found" }, { status: 404 });
+
+  const guard = await guardReportNotGenerated(sb, session.session_date as string);
+  if (guard.blocked) return NextResponse.json({ error: guard.message }, { status: 409 });
 
   const uniqueMemberIds = [...new Set(parsed.data.member_ids)];
   const { data: existingRecords, error: rErr } = await sb

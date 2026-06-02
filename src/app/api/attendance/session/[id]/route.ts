@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/api/guard";
 import { deleteLiturgyLinkedAnnouncement } from "@/lib/attendance/liturgy-announcement";
 import { notifyAttendanceSessionUpdated } from "@/lib/push/attendance-notify";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { guardReportNotGenerated } from "@/lib/reports/check-report-lock";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -137,13 +138,16 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   const unique = [...new Set(parsed.data.member_ids)];
   const sb = getSupabaseAdmin();
 
-  const { data: session, error: sErr } = await sb.from("attendance_sessions").select("id").eq("id", id).maybeSingle();
+  const { data: session, error: sErr } = await sb.from("attendance_sessions").select("id, session_date").eq("id", id).maybeSingle();
   if (sErr) {
     return NextResponse.json({ error: sErr.message }, { status: 500 });
   }
   if (!session) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+
+  const guard = await guardReportNotGenerated(sb, session.session_date as string);
+  if (guard.blocked) return NextResponse.json({ error: guard.message }, { status: 409 });
 
   await sb.from("attendance_records").delete().eq("session_id", id);
 
@@ -176,6 +180,8 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
     .eq("id", id)
     .maybeSingle();
   if (sess) {
+    const guard = await guardReportNotGenerated(sb, sess.session_date as string);
+    if (guard.blocked) return NextResponse.json({ error: guard.message }, { status: 409 });
     await deleteLiturgyLinkedAnnouncement(sb, String(sess.session_date), sess.mass_id as string);
   }
 

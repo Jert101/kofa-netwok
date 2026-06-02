@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireRole } from "@/lib/api/guard";
 import { notifyAttendanceSessionUpdated } from "@/lib/push/attendance-notify";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { guardReportNotGenerated } from "@/lib/reports/check-report-lock";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -58,6 +59,12 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   const appealId = item.appeal_id as string;
 
   if (parsed.data.action === "approve") {
+    const { data: sess } = await sb.from("attendance_sessions").select("session_date").eq("id", sessionId).maybeSingle();
+    if (sess) {
+      const guard = await guardReportNotGenerated(sb, sess.session_date as string);
+      if (guard.blocked) return NextResponse.json({ error: guard.message }, { status: 409 });
+    }
+
     const { error: upErr } = await sb.from("attendance_records").upsert(
       [{ session_id: sessionId, member_id: item.member_id as string }],
       { onConflict: "session_id,member_id", ignoreDuplicates: true }

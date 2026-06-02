@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/api/guard";
 import { copyPlannedLiturgyToSession } from "@/lib/attendance/copy-planned-liturgy";
 import { notifyAttendanceSessionUpdated } from "@/lib/push/attendance-notify";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { guardReportNotGenerated } from "@/lib/reports/check-report-lock";
 
 const postSchema = z.object({
   session_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -26,8 +27,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   }
 
-  const unique = [...new Set(parsed.data.member_ids)];
   const sb = getSupabaseAdmin();
+
+  const guard = await guardReportNotGenerated(sb, parsed.data.session_date);
+  if (guard.blocked) return NextResponse.json({ error: guard.message }, { status: 409 });
+
+  const unique = [...new Set(parsed.data.member_ids)];
 
   const { data: mass, error: mErr } = await sb.from("masses").select("id").eq("id", parsed.data.mass_id).maybeSingle();
   if (mErr || !mass) {
