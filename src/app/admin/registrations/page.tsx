@@ -115,7 +115,10 @@ export default function AdminRegistrationsPage() {
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h1 className="text-lg font-semibold">Registration requests</h1>
         {requests !== null ? (
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            <p className="text-sm text-[var(--muted)]">
+              Total: <span className="font-medium text-[var(--foreground)]">{requests.length}</span>
+            </p>
             <a
               href={`/api/admin/registration-requests/pdf?status=${tab}`}
               className="min-h-10 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium text-[var(--accent)]"
