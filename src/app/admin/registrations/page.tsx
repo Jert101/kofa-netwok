@@ -41,6 +41,17 @@ export default function AdminRegistrationsPage() {
   const [editError, setEditError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
+  const load = useCallback(async () => {
+    const res = await fetch(`/api/admin/registration-requests?status=${tab}`, { credentials: "same-origin" });
+    const j = (await res.json()) as { requests?: Request[] };
+    setRequests(j.requests ?? []);
+    setSelected(new Set());
+  }, [tab]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
   const filteredRequests = useMemo(() => {
     if (requests === null) return [];
     const t = search.trim().toLowerCase();
