@@ -56,6 +56,9 @@ export default function RegisterPage() {
             Your application is pending approval. An admin will review it shortly.
           </p>
         </div>
+        <p className="mt-8 text-center text-xs text-[var(--muted)]">
+          Knights of the Altar Attendance Monitoring System&trade; &middot; Created by Jerson Catadman &middot; {new Date().getFullYear()}
+        </p>
       </main>
     );
   }
@@ -168,6 +171,9 @@ export default function RegisterPage() {
           </button>
         </form>
       </div>
+      <p className="mt-8 text-center text-xs text-[var(--muted)]">
+        Knights of the Altar Attendance Monitoring System&trade; &middot; Created by Jerson Catadman &middot; {new Date().getFullYear()}
+      </p>
     </main>
   );
 }
