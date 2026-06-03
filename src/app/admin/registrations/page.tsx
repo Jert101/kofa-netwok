@@ -83,7 +83,6 @@ export default function AdminRegistrationsPage() {
     if (editForm.last_name.trim()) body.last_name = editForm.last_name.trim();
     const mi = editForm.middle_initial.replace(".", "").trim();
     if (mi) body.middle_initial = mi;
-    else body.middle_initial = null;
     if (editForm.date_of_birth) body.date_of_birth = editForm.date_of_birth;
     if (editForm.gender) body.gender = editForm.gender;
     if (editForm.contact_number.trim()) body.contact_number = editForm.contact_number.trim();
