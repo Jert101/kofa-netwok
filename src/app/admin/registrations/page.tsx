@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type Request = {
   id: string;
@@ -39,17 +39,18 @@ export default function AdminRegistrationsPage() {
     contact_number: "",
   });
   const [editError, setEditError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
-  const load = useCallback(async () => {
-    const res = await fetch(`/api/admin/registration-requests?status=${tab}`, { credentials: "same-origin" });
-    const j = (await res.json()) as { requests?: Request[] };
-    setRequests(j.requests ?? []);
-    setSelected(new Set());
-  }, [tab]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const filteredRequests = useMemo(() => {
+    if (requests === null) return [];
+    const t = search.trim().toLowerCase();
+    if (!t) return requests;
+    return requests.filter((r) => {
+      const mi = r.middle_initial ? ` ${r.middle_initial}.` : "";
+      const name = `${r.first_name}${mi} ${r.last_name}`.toLowerCase();
+      return name.includes(t);
+    });
+  }, [requests, search]);
 
   function startEdit(r: Request) {
     setEditForm({
@@ -251,9 +252,13 @@ export default function AdminRegistrationsPage() {
 
       {requests === null ? (
         <p className="text-sm text-[var(--muted)]">Loading…</p>
-      ) : requests.length === 0 ? (
+      ) : filteredRequests.length === 0 && requests.length === 0 ? (
         <p className="rounded-xl border border-dashed border-[var(--border)] py-10 text-center text-sm text-[var(--muted)]">
           No {tab} requests.
+        </p>
+      ) : filteredRequests.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-[var(--border)] py-10 text-center text-sm text-[var(--muted)]">
+          No requests match your search.
         </p>
       ) : (
         <>
@@ -268,8 +273,25 @@ export default function AdminRegistrationsPage() {
               Select all
             </label>
           ) : null}
+          <div>
+            <label htmlFor="reg-search" className="sr-only">Search registration requests</label>
+            <input
+              id="reg-search"
+              type="search"
+              className="min-h-12 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3"
+              placeholder="Search by name"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              autoComplete="off"
+            />
+            {search.trim() !== "" ? (
+              <p className="mt-1 text-sm text-[var(--muted)]">
+                Showing {filteredRequests.length} of {requests.length}
+              </p>
+            ) : null}
+          </div>
           <ul className="space-y-3">
-            {requests.map((r) => {
+            {filteredRequests.map((r) => {
               const mi = r.middle_initial ? ` ${r.middle_initial}.` : "";
               const name = `${r.first_name}${mi} ${r.last_name}`;
               return (
