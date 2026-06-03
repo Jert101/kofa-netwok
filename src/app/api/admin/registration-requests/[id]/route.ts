@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/api/guard";
+import { capitalizeName } from "@/lib/members/name-format";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const updateSchema = z.object({
@@ -46,7 +47,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
     const updates: Record<string, unknown> = {};
     for (const [key, val] of Object.entries(parsed.data)) {
-      if (val !== undefined) updates[key] = val;
+      if (val === undefined) continue;
+      if (key === "first_name" || key === "last_name") updates[key] = capitalizeName(val as string);
+      else if (key === "middle_initial") updates[key] = (val as string).toUpperCase();
+      else updates[key] = val;
     }
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: "No fields to update" }, { status: 400 });

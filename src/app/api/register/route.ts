@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { capitalizeName } from "@/lib/members/name-format";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const schema = z.object({
@@ -25,8 +26,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: first?.message ?? "Invalid input" }, { status: 400 });
   }
 
-  const { first_name, last_name, middle_initial, date_of_birth, gender, contact_number } = parsed.data;
-  const mi = middle_initial?.replace(".", "").trim() || null;
+  let { first_name, last_name, middle_initial, date_of_birth, gender, contact_number } = parsed.data;
+  first_name = capitalizeName(first_name);
+  last_name = capitalizeName(last_name);
+  const mi = middle_initial?.replace(".", "").trim().toUpperCase() || null;
 
   const sb = getSupabaseAdmin();
 
@@ -61,7 +64,7 @@ export async function POST(req: NextRequest) {
   const { error } = await sb.from("registration_requests").insert({
     first_name,
     last_name,
-    middle_initial: middle_initial || null,
+    middle_initial: mi,
     date_of_birth,
     gender,
     contact_number,

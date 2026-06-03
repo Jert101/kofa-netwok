@@ -1,4 +1,13 @@
-/** Each space-separated word: first letter uppercase, rest lowercase (e.g. "Jerson L. Catadman"). */
+/** Capitalize each word in a name part (e.g. "john" → "John", "de la cruz" → "De La Cruz"). */
+export function capitalizeName(raw: string): string {
+  return raw
+    .trim()
+    .split(/\s+/)
+    .map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w))
+    .join(" ");
+}
+
+/** Capitalize each space-separated word (e.g. "Jerson L. Catadman"). */
 export function formatMemberFullName(raw: string): string {
   const collapsed = raw.trim().replace(/\s+/g, " ");
   if (!collapsed) return "";
