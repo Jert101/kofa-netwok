@@ -81,8 +81,7 @@ export default function AdminRegistrationsPage() {
     const body: Record<string, unknown> = { action: "update" };
     if (editForm.first_name.trim()) body.first_name = editForm.first_name.trim();
     if (editForm.last_name.trim()) body.last_name = editForm.last_name.trim();
-    const mi = editForm.middle_initial.replace(".", "").trim();
-    if (mi) body.middle_initial = mi;
+    body.middle_initial = editForm.middle_initial.replace(".", "").trim();
     if (editForm.date_of_birth) body.date_of_birth = editForm.date_of_birth;
     if (editForm.gender) body.gender = editForm.gender;
     if (editForm.contact_number.trim()) body.contact_number = editForm.contact_number.trim();
