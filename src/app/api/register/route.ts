@@ -26,7 +26,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: first?.message ?? "Invalid input" }, { status: 400 });
   }
 
-  let { first_name, last_name, middle_initial, date_of_birth, gender, contact_number } = parsed.data;
+  const { date_of_birth, gender, contact_number } = parsed.data;
+  let { first_name, last_name, middle_initial } = parsed.data;
   first_name = capitalizeName(first_name);
   last_name = capitalizeName(last_name);
   const mi = middle_initial?.replace(".", "").trim().toUpperCase() || null;
