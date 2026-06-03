@@ -278,27 +278,8 @@ export default function AdminRegistrationsPage() {
 
       {requests === null ? (
         <p className="text-sm text-[var(--muted)]">Loading…</p>
-      ) : filteredRequests.length === 0 && requests.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-[var(--border)] py-10 text-center text-sm text-[var(--muted)]">
-          No {tab} requests.
-        </p>
-      ) : filteredRequests.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-[var(--border)] py-10 text-center text-sm text-[var(--muted)]">
-          No requests match your search.
-        </p>
       ) : (
         <>
-          {tab === "pending" ? (
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={allSelected}
-                onChange={toggleSelectAll}
-                className="h-5 w-5 rounded border-[var(--border)]"
-              />
-              Select all
-            </label>
-          ) : null}
           <div>
             <label htmlFor="reg-search" className="sr-only">Search registration requests</label>
             <input
@@ -316,8 +297,29 @@ export default function AdminRegistrationsPage() {
               </p>
             ) : null}
           </div>
-          <ul className="space-y-3">
-            {filteredRequests.map((r) => {
+          {filteredRequests.length === 0 && requests.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-[var(--border)] py-10 text-center text-sm text-[var(--muted)]">
+              No {tab} requests.
+            </p>
+          ) : filteredRequests.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-[var(--border)] py-10 text-center text-sm text-[var(--muted)]">
+              No requests match your search.
+            </p>
+          ) : (
+            <>
+              {tab === "pending" ? (
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleSelectAll}
+                    className="h-5 w-5 rounded border-[var(--border)]"
+                  />
+                  Select all
+                </label>
+              ) : null}
+              <ul className="space-y-3">
+                {filteredRequests.map((r) => {
               const mi = r.middle_initial ? ` ${r.middle_initial}.` : "";
               const name = `${r.first_name}${mi} ${r.last_name}`;
               return (
@@ -473,6 +475,8 @@ export default function AdminRegistrationsPage() {
               );
             })}
           </ul>
+        </>
+          )}
         </>
       )}
     </div>
