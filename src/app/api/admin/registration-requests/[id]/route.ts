@@ -56,8 +56,49 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ ok: true });
   }
 
+  if (action === "change-status") {
+    const newStatus = typeof fields.new_status === "string" ? fields.new_status : null;
+    if (!newStatus || !["pending", "approved", "rejected"].includes(newStatus)) {
+      return NextResponse.json({ error: "new_status must be 'pending', 'approved', or 'rejected'" }, { status: 400 });
+    }
+
+    if (newStatus === request.status) {
+      return NextResponse.json({ error: "Status is already " + newStatus }, { status: 400 });
+    }
+
+    if (request.status === "approved") {
+      const mi = request.middle_initial ? ` ${request.middle_initial}.` : "";
+      const fullName = `${request.first_name}${mi} ${request.last_name}`;
+      await sb.from("members").delete().eq("full_name", fullName).eq("date_of_birth", request.date_of_birth);
+    }
+
+    if (newStatus === "approved") {
+      const mi = request.middle_initial ? ` ${request.middle_initial}.` : "";
+      const full_name = `${request.first_name}${mi} ${request.last_name}`;
+      const { error: insertErr } = await sb.from("members").insert({
+        full_name,
+        date_of_birth: request.date_of_birth,
+        gender: request.gender,
+        contact_number: request.contact_number,
+      });
+      if (insertErr) {
+        if (insertErr.code === "23505") {
+          return NextResponse.json({ error: "A member with this name already exists" }, { status: 409 });
+        }
+        return NextResponse.json({ error: insertErr.message }, { status: 500 });
+      }
+    }
+
+    const updates: Record<string, unknown> = { status: newStatus };
+    if (newStatus !== "pending") updates.reviewed_at = new Date().toISOString();
+    else updates.reviewed_at = null;
+    const { error: upErr } = await sb.from("registration_requests").update(updates).eq("id", id);
+    if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  }
+
   if (typeof action !== "string" || !["approve", "reject", "update"].includes(action)) {
-    return NextResponse.json({ error: "action must be 'approve', 'reject', or 'update'" }, { status: 400 });
+    return NextResponse.json({ error: "action must be 'approve', 'reject', 'update', or 'change-status'" }, { status: 400 });
   }
 
   if (request.status !== "pending") {

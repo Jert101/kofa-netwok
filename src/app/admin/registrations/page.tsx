@@ -102,6 +102,21 @@ export default function AdminRegistrationsPage() {
     load();
   }
 
+  async function changeStatus(id: string, newStatus: string) {
+    setBusy(true);
+    try {
+      await fetch(`/api/admin/registration-requests/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ action: "change-status", new_status: newStatus }),
+      });
+      load();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function reviewSingle(id: string, action: "approve" | "reject") {
     setBusy(true);
     try {
@@ -406,7 +421,7 @@ export default function AdminRegistrationsPage() {
                       )}
                     </div>
                     </div>
-                    <div className="flex gap-2 sm:shrink-0">
+                    <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
                       {editingId === r.id ? null : (
                         <>
                           <button
@@ -416,6 +431,20 @@ export default function AdminRegistrationsPage() {
                           >
                             Edit
                           </button>
+                          <select
+                            value=""
+                            onChange={(e) => {
+                              if (e.target.value) changeStatus(r.id, e.target.value);
+                              e.target.value = "";
+                            }}
+                            disabled={busy}
+                            className="min-h-8 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 text-xs"
+                          >
+                            <option value="">Change status</option>
+                            {r.status !== "pending" ? <option value="pending">Pending</option> : null}
+                            {r.status !== "approved" ? <option value="approved">Approved</option> : null}
+                            {r.status !== "rejected" ? <option value="rejected">Rejected</option> : null}
+                          </select>
                           {tab === "pending" ? (
                             <>
                               <button
