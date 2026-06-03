@@ -15,11 +15,30 @@ type Request = {
   reviewed_at: string | null;
 };
 
+type EditForm = {
+  first_name: string;
+  middle_initial: string;
+  last_name: string;
+  date_of_birth: string;
+  gender: string;
+  contact_number: string;
+};
+
 export default function AdminRegistrationsPage() {
   const [requests, setRequests] = useState<Request[] | null>(null);
   const [tab, setTab] = useState<"pending" | "approved" | "rejected">("pending");
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<EditForm>({
+    first_name: "",
+    middle_initial: "",
+    last_name: "",
+    date_of_birth: "",
+    gender: "",
+    contact_number: "",
+  });
+  const [editError, setEditError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/admin/registration-requests?status=${tab}`, { credentials: "same-origin" });
@@ -31,6 +50,45 @@ export default function AdminRegistrationsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  function startEdit(r: Request) {
+    setEditForm({
+      first_name: r.first_name,
+      middle_initial: r.middle_initial ?? "",
+      last_name: r.last_name,
+      date_of_birth: r.date_of_birth,
+      gender: r.gender,
+      contact_number: r.contact_number,
+    });
+    setEditingId(r.id);
+    setEditError(null);
+  }
+
+  async function saveEdit(id: string) {
+    setEditError(null);
+    const body: Record<string, unknown> = { action: "update" };
+    if (editForm.first_name.trim()) body.first_name = editForm.first_name.trim();
+    if (editForm.last_name.trim()) body.last_name = editForm.last_name.trim();
+    const mi = editForm.middle_initial.replace(".", "").trim();
+    if (mi) body.middle_initial = mi;
+    else body.middle_initial = null;
+    if (editForm.date_of_birth) body.date_of_birth = editForm.date_of_birth;
+    if (editForm.gender) body.gender = editForm.gender;
+    if (editForm.contact_number.trim()) body.contact_number = editForm.contact_number.trim();
+    const res = await fetch(`/api/admin/registration-requests/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const j = (await res.json()) as { error?: string };
+      setEditError(j.error ?? "Could not save");
+      return;
+    }
+    setEditingId(null);
+    load();
+  }
 
   async function reviewSingle(id: string, action: "approve" | "reject") {
     setBusy(true);
@@ -230,38 +288,124 @@ export default function AdminRegistrationsPage() {
                         />
                       ) : null}
                       <div>
-                        <p className="font-medium text-[var(--text)]">{name}</p>
-                        <div className="mt-1 space-y-0.5 text-sm text-[var(--muted)]">
-                          <p>Gender: {r.gender}</p>
-                          <p>DOB: {r.date_of_birth}</p>
-                          <p>Contact: {r.contact_number}</p>
-                          <p>Submitted: {new Date(r.created_at).toLocaleString()}</p>
-                          {r.reviewed_at ? (
-                            <p>Reviewed: {new Date(r.reviewed_at).toLocaleString()}</p>
+                      {editingId === r.id ? (
+                        <div className="flex flex-col gap-2">
+                          <div className="flex flex-col gap-2 sm:flex-row">
+                            <input
+                              className="min-h-10 flex-1 rounded-lg border border-[var(--border)] px-2 text-sm"
+                              placeholder="First name"
+                              value={editForm.first_name}
+                              onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })}
+                            />
+                            <input
+                              className="min-h-10 w-16 rounded-lg border border-[var(--border)] px-2 text-center text-sm"
+                              placeholder="MI"
+                              maxLength={1}
+                              value={editForm.middle_initial}
+                              onChange={(e) => setEditForm({ ...editForm, middle_initial: e.target.value.replace(".", "") })}
+                            />
+                            <input
+                              className="min-h-10 flex-1 rounded-lg border border-[var(--border)] px-2 text-sm"
+                              placeholder="Last name"
+                              value={editForm.last_name}
+                              onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })}
+                            />
+                          </div>
+                          <div className="flex flex-col gap-2 sm:flex-row">
+                            <input
+                              type="date"
+                              className="min-h-10 flex-1 rounded-lg border border-[var(--border)] px-2 text-sm"
+                              title="Date of birth"
+                              value={editForm.date_of_birth}
+                              onChange={(e) => setEditForm({ ...editForm, date_of_birth: e.target.value })}
+                            />
+                            <select
+                              className="min-h-10 w-28 rounded-lg border border-[var(--border)] px-2 text-sm"
+                              title="Gender"
+                              value={editForm.gender}
+                              onChange={(e) => setEditForm({ ...editForm, gender: e.target.value })}
+                            >
+                              <option value="">Gender</option>
+                              <option value="male">Male</option>
+                              <option value="female">Female</option>
+                            </select>
+                            <input
+                              type="tel"
+                              className="min-h-10 flex-1 rounded-lg border border-[var(--border)] px-2 text-sm"
+                              placeholder="Contact number"
+                              value={editForm.contact_number}
+                              onChange={(e) => setEditForm({ ...editForm, contact_number: e.target.value })}
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => saveEdit(r.id)}
+                              className="min-h-9 rounded-lg bg-[var(--accent)] px-3 text-sm text-white"
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setEditingId(null); setEditError(null); }}
+                              className="min-h-9 text-sm"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                          {editError ? (
+                            <p className="text-sm text-red-600 dark:text-red-400" role="alert">{editError}</p>
                           ) : null}
                         </div>
-                      </div>
+                      ) : (
+                        <>
+                          <p className="font-medium text-[var(--text)]">{name}</p>
+                          <div className="mt-1 space-y-0.5 text-sm text-[var(--muted)]">
+                            <p>Gender: {r.gender}</p>
+                            <p>DOB: {r.date_of_birth}</p>
+                            <p>Contact: {r.contact_number}</p>
+                            <p>Submitted: {new Date(r.created_at).toLocaleString()}</p>
+                            {r.reviewed_at ? (
+                              <p>Reviewed: {new Date(r.reviewed_at).toLocaleString()}</p>
+                            ) : null}
+                          </div>
+                        </>
+                      )}
                     </div>
-                    {tab === "pending" ? (
-                      <div className="flex gap-2 sm:shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => reviewSingle(r.id, "approve")}
-                          disabled={busy}
-                          className="min-h-10 rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white disabled:opacity-40"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => reviewSingle(r.id, "reject")}
-                          disabled={busy}
-                          className="min-h-10 rounded-xl border border-[var(--border)] px-4 text-sm font-semibold text-[var(--muted)] disabled:opacity-40"
-                        >
-                          Reject
-                        </button>
-                      </div>
-                    ) : null}
+                    </div>
+                    <div className="flex gap-2 sm:shrink-0">
+                      {editingId === r.id ? null : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => startEdit(r)}
+                            className="text-sm text-[var(--accent)]"
+                          >
+                            Edit
+                          </button>
+                          {tab === "pending" ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => reviewSingle(r.id, "approve")}
+                                disabled={busy}
+                                className="min-h-10 rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white disabled:opacity-40"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => reviewSingle(r.id, "reject")}
+                                disabled={busy}
+                                className="min-h-10 rounded-xl border border-[var(--border)] px-4 text-sm font-semibold text-[var(--muted)] disabled:opacity-40"
+                              >
+                                Reject
+                              </button>
+                            </>
+                          ) : null}
+                        </>
+                      )}
+                    </div>
                   </div>
                 </li>
               );
