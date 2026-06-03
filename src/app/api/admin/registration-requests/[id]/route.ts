@@ -56,7 +56,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ ok: true });
   }
 
-  if (!action || !["approve", "reject"].includes(action)) {
+  if (typeof action !== "string" || !["approve", "reject", "update"].includes(action)) {
     return NextResponse.json({ error: "action must be 'approve', 'reject', or 'update'" }, { status: 400 });
   }
 
