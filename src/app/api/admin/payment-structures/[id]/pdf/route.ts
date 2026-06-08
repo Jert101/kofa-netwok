@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/api/guard";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { formatNameLastFirst } from "@/lib/members/name-format";
 import { getAllSettings } from "@/lib/settings/store";
 import {
   buildPaymentStructurePdf,
@@ -31,7 +32,8 @@ export async function GET(req: NextRequest, ctx: Ctx) {
   const { data: payments } = await sb
     .from("payments")
     .select("member_id, amount_paid, paid_at")
-    .eq("payment_structure_id", id);
+    .eq("payment_structure_id", id)
+    .eq("voided", false);
 
   const isForAll = structure.for_all !== false;
   let membersQuery = sb
@@ -94,7 +96,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       }
     }
     return {
-      memberName: m.full_name,
+      memberName: formatNameLastFirst(m.full_name),
       totalAmount,
       totalPaid,
       remaining: totalAmount - totalPaid,

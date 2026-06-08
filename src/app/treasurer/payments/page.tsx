@@ -25,6 +25,7 @@ interface Payment {
   amount_paid: number;
   paid_at: string;
   notes?: string | null;
+  voided?: boolean;
   members: { full_name: string } | null;
   payment_structures: { name: string; amount: number } | null;
 }
@@ -91,7 +92,7 @@ export default function PaymentsPage() {
 
   useEffect(() => {
     (async () => {
-      const res = await fetch("/api/admin/payments", { credentials: "same-origin" });
+      const res = await fetch("/api/admin/payments?include_voided=1", { credentials: "same-origin" });
       if (!res.ok) return;
       const j = (await res.json()) as { payments: Payment[] };
       setAllPayments(j.payments ?? []);
@@ -170,7 +171,7 @@ export default function PaymentsPage() {
       setAmountPaid("");
       setPaidAt("");
       setNotes("");
-      const refreshRes = await fetch("/api/admin/payments", { credentials: "same-origin" });
+      const refreshRes = await fetch("/api/admin/payments?include_voided=1", { credentials: "same-origin" });
       if (refreshRes.ok) {
         const rj = (await refreshRes.json()) as { payments: Payment[] };
         setAllPayments(rj.payments ?? []);
@@ -340,24 +341,31 @@ export default function PaymentsPage() {
         ) : (
           <div className="space-y-2">
             {allPayments.map((p) => (
-              <div key={p.id} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
+              <div key={p.id} className={`rounded-2xl border p-4 text-sm ${p.voided ? "border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950" : "border-[var(--border)] bg-[var(--surface)]"}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="font-medium">{p.members?.full_name ?? "Unknown"}</p>
                     <p className="text-[var(--muted)]">{p.payment_structures?.name ?? "Unknown"} — {formatPeso(Number(p.amount_paid))}</p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <span className="text-xs text-[var(--muted)]">{p.paid_at}</span>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmVoid(p.id)}
-                      className="min-h-8 rounded-lg border border-[var(--danger)] px-3 text-xs font-medium text-[var(--danger)]"
-                    >
-                      Void
-                    </button>
+                    {p.voided ? (
+                      <span className="rounded bg-[var(--danger)] px-2 py-0.5 text-xs font-semibold text-white">VOIDED</span>
+                    ) : (
+                      <>
+                        <span className="text-xs text-[var(--muted)]">{p.paid_at}</span>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmVoid(p.id)}
+                          className="min-h-8 rounded-lg border border-[var(--danger)] px-3 text-xs font-medium text-[var(--danger)]"
+                        >
+                          Void
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
                 {p.notes ? <p className="mt-1 text-xs text-[var(--muted)]">Note: {p.notes}</p> : null}
+                {p.voided ? <p className="mt-1 text-xs text-[var(--muted)]">{p.paid_at}</p> : null}
               </div>
             ))}
           </div>

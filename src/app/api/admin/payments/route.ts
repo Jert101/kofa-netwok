@@ -18,15 +18,16 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const member_id = url.searchParams.get("member_id");
   const structure_id = url.searchParams.get("structure_id");
+  const includeVoided = url.searchParams.get("include_voided") === "1";
 
   const sb = getSupabaseAdmin();
   let q = sb
     .from("payments")
-    .select("*, payment_structures(name, amount), members(full_name)")
-    .eq("voided", false)
+    .select("id, amount_paid, paid_at, notes, voided, payment_structures(name, amount), members(full_name)")
     .order("paid_at", { ascending: false })
     .order("created_at", { ascending: false });
 
+  if (!includeVoided) q = q.eq("voided", false);
   if (member_id) q = q.eq("member_id", member_id);
   if (structure_id) q = q.eq("payment_structure_id", structure_id);
 
