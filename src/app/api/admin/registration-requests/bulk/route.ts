@@ -44,18 +44,26 @@ export async function POST(req: NextRequest) {
   let approveTargets = pending;
 
   if (action === "approve") {
-    const { data: existingMembers } = await sb.from("members").select("full_name");
-    const existingNames = new Set((existingMembers ?? []).map((m) => m.full_name));
+    const { data: existingMembers } = await sb
+      .from("members")
+      .select("full_name")
+      .eq("is_active", true);
+    const existingNames = new Set(
+      (existingMembers ?? []).map((m) => m.full_name.trim().toLowerCase())
+    );
 
     const memberInserts: Record<string, unknown>[] = [];
     const kept: typeof pending = [];
+    const seenInBatch = new Set<string>();
     for (const r of pending) {
       const mi = r.middle_initial ? ` ${r.middle_initial}.` : "";
       const full_name = `${r.first_name}${mi} ${r.last_name}`;
-      if (existingNames.has(full_name)) {
+      const key = full_name.trim().toLowerCase();
+      if (existingNames.has(key) || seenInBatch.has(key)) {
         skipped++;
         continue;
       }
+      seenInBatch.add(key);
       kept.push(r);
       memberInserts.push({
         full_name,
