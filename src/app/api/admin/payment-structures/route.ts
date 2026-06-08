@@ -16,16 +16,12 @@ export async function GET(req: NextRequest) {
   const g = await requireRole(req.headers.get("cookie"), ["admin", "treasurer", "member", "officer", "secretary"]);
   if (!g.ok) return g.response;
 
-  const isAdminOrTreasurer = g.session.role === "admin" || g.session.role === "treasurer";
-
   const sb = getSupabaseAdmin();
-  let q = sb.from("payment_structures").select("*");
-
-  if (!isAdminOrTreasurer) {
-    q = q.eq("is_active", true);
-  }
-
-  const { data, error } = await q.order("is_active", { ascending: false }).order("name");
+  const { data, error } = await sb
+    .from("payment_structures")
+    .select("*")
+    .eq("is_active", true)
+    .order("name");
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ structures: data ?? [] });
