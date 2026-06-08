@@ -44,6 +44,7 @@ export default function AdminRegistrationsPage() {
   });
   const [editError, setEditError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [batchBulk, setBatchBulk] = useState("");
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/admin/registration-requests?status=${tab}`, { credentials: "same-origin" });
@@ -163,7 +164,28 @@ export default function AdminRegistrationsPage() {
     }
   }
 
-  function toggleSelect(id: string) {
+  async function setBatchOnPending(batch: string) {
+    if (!batch || !requests) return;
+    setBusy(true);
+    try {
+      const pending = selected.size > 0
+        ? requests.filter((r) => r.status === "pending" && selected.has(r.id))
+        : requests.filter((r) => r.status === "pending");
+      for (const r of pending) {
+        await fetch(`/api/admin/registration-requests/${r.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ action: "update", batch }),
+        });
+      }
+      setBatchBulk("");
+      setSelected(new Set());
+      load();
+    } finally {
+      setBusy(false);
+    }
+  }
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -286,6 +308,24 @@ export default function AdminRegistrationsPage() {
             className="min-h-10 rounded-xl border border-[var(--border)] px-4 text-sm font-semibold text-[var(--muted)] disabled:opacity-40"
           >
             Reject all
+          </button>
+          <select
+            className="min-h-10 rounded-xl border border-[var(--border)] bg-[var(--background)] px-3 text-sm"
+            value={batchBulk}
+            onChange={(e) => setBatchBulk(e.target.value)}
+          >
+            <option value="">Set batch…</option>
+            {batches.map((b) => (
+              <option key={b} value={b}>{b}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => setBatchOnPending(batchBulk)}
+            disabled={busy || !batchBulk}
+            className="min-h-10 rounded-xl border border-[var(--accent)] px-4 text-sm font-semibold text-[var(--accent)] disabled:opacity-40"
+          >
+            Set all to {batchBulk || "…"}
           </button>
         </div>
       ) : null}
