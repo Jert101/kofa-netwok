@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import PaymentLookup from "@/components/PaymentLookup";
 import ReceiptModal from "@/components/ReceiptModal";
+import ConfirmModal from "@/components/ConfirmModal";
 import { formatPeso } from "@/lib/format-peso";
 
 interface Member {
@@ -42,6 +43,7 @@ export default function PaymentsPage() {
   const [err, setErr] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [voiding, setVoiding] = useState<string | null>(null);
+  const [confirmVoid, setConfirmVoid] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<{
     memberName: string;
     structureName: string;
@@ -68,7 +70,6 @@ export default function PaymentsPage() {
   useEffect(() => { load(); }, [load]);
 
   async function voidPayment(id: string) {
-    if (!confirm("Are you sure you want to void this payment? This action cannot be undone.")) return;
     setVoiding(id);
     try {
       const res = await fetch(`/api/admin/payments/${id}`, {
@@ -84,6 +85,7 @@ export default function PaymentsPage() {
       setAllPayments((prev) => prev.filter((p) => p.id !== id));
     } finally {
       setVoiding(null);
+      setConfirmVoid(null);
     }
   }
 
@@ -348,11 +350,10 @@ export default function PaymentsPage() {
                     <span className="text-xs text-[var(--muted)]">{p.paid_at}</span>
                     <button
                       type="button"
-                      onClick={() => voidPayment(p.id)}
-                      disabled={voiding === p.id}
-                      className="text-xs text-[var(--danger)] disabled:opacity-40"
+                      onClick={() => setConfirmVoid(p.id)}
+                      className="min-h-8 rounded-lg border border-[var(--danger)] px-3 text-xs font-medium text-[var(--danger)]"
                     >
-                      {voiding === p.id ? "Voiding…" : "Void"}
+                      Void
                     </button>
                   </div>
                 </div>
@@ -370,6 +371,15 @@ export default function PaymentsPage() {
         </>
       )}
 
+      {confirmVoid ? (
+        <ConfirmModal
+          message="Are you sure you want to void this payment? This will remove it from the member's payment history."
+          confirmLabel="Yes, void payment"
+          busy={voiding === confirmVoid}
+          onConfirm={() => voidPayment(confirmVoid)}
+          onCancel={() => setConfirmVoid(null)}
+        />
+      ) : null}
       {receipt ? (
         <ReceiptModal data={receipt} onClose={() => { setReceipt(null); setSuccess(false); }} />
       ) : null}

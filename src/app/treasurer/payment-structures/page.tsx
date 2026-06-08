@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import ConfirmModal from "@/components/ConfirmModal";
 import { formatPeso } from "@/lib/format-peso";
 
 interface Structure {
@@ -37,6 +38,7 @@ export default function PaymentStructuresPage() {
   const [editInstallment, setEditInstallment] = useState("");
   const [editForAll, setEditForAll] = useState(true);
   const [editBatch, setEditBatch] = useState("");
+  const [confirmDeactivate, setConfirmDeactivate] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const [sRes, bRes] = await Promise.all([
@@ -119,11 +121,11 @@ export default function PaymentStructuresPage() {
   }
 
   async function deactivate(id: string) {
-    if (!confirm("Are you sure you want to deactivate this payment structure? This action cannot be undone.")) return;
     await fetch(`/api/admin/payment-structures/${id}`, {
       method: "DELETE",
       credentials: "same-origin",
     });
+    setConfirmDeactivate(null);
     load();
   }
 
@@ -351,8 +353,8 @@ export default function PaymentStructuresPage() {
                   {s.is_active ? (
                     <button
                       type="button"
-                      onClick={() => deactivate(s.id)}
-                      className="text-sm text-[var(--danger)]"
+                      onClick={() => setConfirmDeactivate(s.id)}
+                      className="min-h-9 rounded-lg border border-[var(--danger)] px-3 text-sm font-medium text-[var(--danger)]"
                     >
                       Deactivate
                     </button>
@@ -366,6 +368,15 @@ export default function PaymentStructuresPage() {
           <p className="py-10 text-center text-sm text-[var(--muted)]">No payment structures yet.</p>
         ) : null}
       </div>
+
+      {confirmDeactivate ? (
+        <ConfirmModal
+          message="Are you sure you want to deactivate this payment structure? Members will no longer see it."
+          confirmLabel="Yes, deactivate"
+          onConfirm={() => deactivate(confirmDeactivate)}
+          onCancel={() => setConfirmDeactivate(null)}
+        />
+      ) : null}
     </div>
   );
 }
