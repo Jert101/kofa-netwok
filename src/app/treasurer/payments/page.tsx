@@ -23,6 +23,9 @@ interface Payment {
   id: string;
   amount_paid: number;
   paid_at: string;
+  notes?: string | null;
+  members: { full_name: string } | null;
+  payment_structures: { name: string; amount: number } | null;
 }
 
 export default function PaymentsPage() {
@@ -62,6 +65,16 @@ export default function PaymentsPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (tab !== "history") return;
+    (async () => {
+      const res = await fetch("/api/admin/payments", { credentials: "same-origin" });
+      if (!res.ok) return;
+      const j = (await res.json()) as { payments: Payment[] };
+      setAllPayments(j.payments ?? []);
+    })();
+  }, [tab]);
 
   const filteredMembers = useMemo(() => {
     if (!search.trim()) return [];
@@ -140,7 +153,8 @@ export default function PaymentsPage() {
     }
   }
 
-  const [tab, setTab] = useState<"record" | "lookup">("record");
+  const [allPayments, setAllPayments] = useState<Payment[]>([]);
+  const [tab, setTab] = useState<"record" | "history" | "lookup">("record");
 
   return (
     <div className="space-y-6 pb-8">
@@ -151,6 +165,13 @@ export default function PaymentsPage() {
           className={`min-h-10 rounded-xl px-4 text-sm font-semibold ${tab === "record" ? "bg-[var(--accent)] text-white" : "border border-[var(--border)] text-[var(--muted)]"}`}
         >
           Record
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("history")}
+          className={`min-h-10 rounded-xl px-4 text-sm font-semibold ${tab === "history" ? "bg-[var(--accent)] text-white" : "border border-[var(--border)] text-[var(--muted)]"}`}
+        >
+          History
         </button>
         <button
           type="button"
@@ -290,6 +311,28 @@ export default function PaymentsPage() {
           </div>
         </div>
       ) : null}
+        </>
+      ) : tab === "history" ? (
+        <>
+          <h1 className="text-lg font-semibold">Payment History</h1>
+          {allPayments.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-[var(--border)] py-10 text-center text-sm text-[var(--muted)]">No payments recorded yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {allPayments.map((p) => (
+                <div key={p.id} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-medium">{p.members?.full_name ?? "Unknown"}</p>
+                      <p className="text-[var(--muted)]">{p.payment_structures?.name ?? "Unknown"} — {formatPeso(Number(p.amount_paid))}</p>
+                    </div>
+                    <span className="shrink-0 text-xs text-[var(--muted)]">{p.paid_at}</span>
+                  </div>
+                  {p.notes ? <p className="mt-1 text-xs text-[var(--muted)]">Note: {p.notes}</p> : null}
+                </div>
+              ))}
+            </div>
+          )}
         </>
       ) : (
         <>
