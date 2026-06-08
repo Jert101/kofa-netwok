@@ -64,7 +64,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
 
   const filename = `${structure.name.toLowerCase().replace(/\s+/g, "-")}-report.pdf`;
 
-  return new NextResponse(pdf, {
+  return new NextResponse(Buffer.from(pdf), {
     headers: {
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="${filename}"`,
