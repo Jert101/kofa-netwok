@@ -5,6 +5,7 @@ import { autoTable } from "jspdf-autotable";
 export function buildActiveMembersPdf(input: {
   churchName: string;
   title: string;
+  label: string;
   generatedAt: Date;
   names: string[];
 }): Uint8Array {
@@ -25,7 +26,7 @@ export function buildActiveMembersPdf(input: {
   doc.setTextColor(85, 85, 85);
   doc.text(`Generated: ${format(input.generatedAt, "PPpp")}`, margin, y);
   y += 14;
-  doc.text(`Total active members: ${input.names.length}`, margin, y);
+  doc.text(input.label, margin, y);
   y += 14;
 
   autoTable(doc, {

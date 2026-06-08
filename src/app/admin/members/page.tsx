@@ -176,6 +176,10 @@ export default function AdminMembersPage() {
   const [addParts, setAddParts] = useState<NameParts>({ first: "", middle: "", last: "" });
   const [addDetails, setAddDetails] = useState<MemberDetails>({ ...emptyDetails });
   const [search, setSearch] = useState("");
+  const [filterBatch, setFilterBatch] = useState("");
+  const [filterGender, setFilterGender] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
+  const [filterBirthMonth, setFilterBirthMonth] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
@@ -205,10 +209,19 @@ export default function AdminMembersPage() {
 
   const filteredMembers = useMemo(() => {
     if (members === null) return [];
+    let list = members;
     const t = search.trim().toLowerCase();
-    if (!t) return members;
-    return members.filter((m) => m.full_name.toLowerCase().includes(t));
-  }, [members, search]);
+    if (t) list = list.filter((m) => m.full_name.toLowerCase().includes(t));
+    if (filterBatch) list = list.filter((m) => m.batch === filterBatch);
+    if (filterGender) list = list.filter((m) => m.gender === filterGender);
+    if (filterStatus === "active") list = list.filter((m) => m.is_active);
+    else if (filterStatus === "inactive") list = list.filter((m) => !m.is_active);
+    if (filterBirthMonth) {
+      const month = filterBirthMonth.padStart(2, "0");
+      list = list.filter((m) => m.date_of_birth?.slice(5, 7) === month);
+    }
+    return list;
+  }, [members, search, filterBatch, filterGender, filterStatus, filterBirthMonth]);
 
   const totalPages = Math.max(1, Math.ceil((filteredMembers?.length ?? 0) / perPage));
   const safePage = Math.min(page, totalPages);
@@ -312,6 +325,16 @@ export default function AdminMembersPage() {
 
   const addFull = composeName(addParts);
 
+  const pdfUrl = useMemo(() => {
+    const params = new URLSearchParams();
+    if (filterBatch) params.set("batch", filterBatch);
+    if (filterGender) params.set("gender", filterGender);
+    if (filterStatus) params.set("status", filterStatus);
+    if (filterBirthMonth) params.set("birth_month", filterBirthMonth);
+    const qs = params.toString();
+    return `/api/admin/members/pdf${qs ? `?${qs}` : ""}`;
+  }, [filterBatch, filterGender, filterStatus, filterBirthMonth]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -323,10 +346,10 @@ export default function AdminMembersPage() {
             </p>
           ) : null}
           <Link
-            href="/api/admin/members/pdf"
+            href={pdfUrl}
             className="min-h-10 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium text-[var(--accent)]"
           >
-            Download active list (PDF)
+            Download list (PDF)
           </Link>
         </div>
       </div>
@@ -368,6 +391,47 @@ export default function AdminMembersPage() {
             Showing {filteredMembers.length} of {members.length}
           </p>
         ) : null}
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <select
+          className="min-h-10 flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-sm sm:flex-none sm:w-28"
+          value={filterBatch}
+          onChange={(e) => { setFilterBatch(e.target.value); setPage(1); }}
+        >
+          <option value="">All batches</option>
+          {batches.map((b) => (
+            <option key={b} value={b}>{b}</option>
+          ))}
+        </select>
+        <select
+          className="min-h-10 flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-sm sm:flex-none sm:w-28"
+          value={filterGender}
+          onChange={(e) => { setFilterGender(e.target.value); setPage(1); }}
+        >
+          <option value="">All genders</option>
+          <option value="male">Male</option>
+          <option value="female">Female</option>
+        </select>
+        <select
+          className="min-h-10 flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-sm sm:flex-none sm:w-28"
+          value={filterStatus}
+          onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
+        >
+          <option value="">All status</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+        <select
+          className="min-h-10 flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-sm sm:flex-none sm:w-32"
+          value={filterBirthMonth}
+          onChange={(e) => { setFilterBirthMonth(e.target.value); setPage(1); }}
+        >
+          <option value="">All months</option>
+          {["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"].map((m, i) => (
+            <option key={i} value={String(i + 1)}>{m}</option>
+          ))}
+        </select>
       </div>
 
       {members === null ? (

@@ -9,11 +9,29 @@ export async function GET(req: NextRequest) {
   const g = await requireRole(req.headers.get("cookie"), ["admin"]);
   if (!g.ok) return g.response;
 
+  const url = new URL(req.url);
+  const filterBatch = url.searchParams.get("batch");
+  const filterGender = url.searchParams.get("gender");
+  const filterStatus = url.searchParams.get("status");
+  const filterBirthMonth = url.searchParams.get("birth_month");
+
   const sb = getSupabaseAdmin();
-  const { data, error } = await sb
+  let query = sb
     .from("members")
-    .select("full_name")
-    .eq("is_active", true);
+    .select("full_name, is_active, gender, date_of_birth, batch");
+
+  if (filterBatch) query = query.eq("batch", filterBatch);
+  if (filterGender) query = query.eq("gender", filterGender);
+  if (filterStatus === "active") query = query.eq("is_active", true);
+  else if (filterStatus === "inactive") query = query.eq("is_active", false);
+  else query = query.eq("is_active", true);
+
+  if (filterBirthMonth) {
+    const month = filterBirthMonth.padStart(2, "0");
+    query = query.filter("date_of_birth", "like", `%-${month}-%`);
+  }
+
+  const { data, error } = await query.order("full_name", { ascending: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -21,6 +39,18 @@ export async function GET(req: NextRequest) {
     .map((m) => formatNameLastFirst((m.full_name as string) ?? ""))
     .filter(Boolean)
     .sort((a, b) => a.localeCompare(b));
+
+  const parts: string[] = [];
+  if (filterBatch) parts.push(`Batch ${filterBatch}`);
+  if (filterGender) parts.push(filterGender);
+  if (filterStatus) parts.push(filterStatus);
+  if (filterBirthMonth) {
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    parts.push(`${months[parseInt(filterBirthMonth) - 1]} birthdays`);
+  }
+  const suffix = parts.length > 0 ? ` (${parts.join(", ")})` : "";
+  const title = `Members List${suffix}`;
+  const label = `Total members: ${names.length}`;
 
   let churchName = "Knights of the Altar";
   try {
@@ -32,7 +62,8 @@ export async function GET(req: NextRequest) {
 
   const pdf = buildActiveMembersPdf({
     churchName,
-    title: "Active Members List",
+    title,
+    label,
     generatedAt: new Date(),
     names,
   });
