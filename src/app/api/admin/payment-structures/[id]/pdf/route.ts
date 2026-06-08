@@ -28,20 +28,30 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     return NextResponse.json({ error: "Payment structure not found" }, { status: 404 });
   }
 
-  const { data: members } = await sb
-    .from("members")
-    .select("id, full_name")
-    .eq("is_active", true)
-    .order("full_name");
-
-  if (!members) {
-    return NextResponse.json({ error: "No members found" }, { status: 404 });
-  }
-
   const { data: payments } = await sb
     .from("payments")
     .select("member_id, amount_paid, paid_at")
     .eq("payment_structure_id", id);
+
+  const isForAll = structure.for_all !== false;
+  let membersQuery = sb
+    .from("members")
+    .select("id, full_name, batch");
+
+  if (isForAll) {
+    membersQuery = membersQuery.eq("is_active", true);
+  } else {
+    membersQuery = membersQuery.in("id", Array.from(new Set((payments ?? []).map((p) => p.member_id))));
+    if (structure.batch) {
+      membersQuery = membersQuery.eq("batch", structure.batch);
+    }
+  }
+
+  const { data: members } = await membersQuery.order("full_name");
+
+  if (!members) {
+    return NextResponse.json({ error: "No members found" }, { status: 404 });
+  }
 
   const totalAmount = Number(structure.amount);
   const installmentMonths = structure.installment_months ? Number(structure.installment_months) : null;

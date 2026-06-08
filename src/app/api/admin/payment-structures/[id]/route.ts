@@ -10,6 +10,8 @@ const patchSchema = z.object({
   amount: z.number().positive().optional(),
   deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   installment_months: z.number().int().positive().optional().nullable(),
+  for_all: z.boolean().optional(),
+  batch: z.string().regex(/^\d{4}$/).optional().nullable(),
   is_active: z.boolean().optional(),
 });
 

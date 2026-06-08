@@ -14,6 +14,8 @@ interface Structure {
   id: string;
   name: string;
   amount: number;
+  for_all: boolean;
+  batch: string | null;
   is_active: boolean;
 }
 
@@ -207,7 +209,10 @@ export default function PaymentsPage() {
             >
               <option value="">Select payment type</option>
               {structures.map((s) => (
-                <option key={s.id} value={s.id}>{s.name} — {formatPeso(Number(s.amount))}</option>
+                <option key={s.id} value={s.id}>
+                  {s.name} — {formatPeso(Number(s.amount))}
+                  {s.for_all === false ? (s.batch ? ` (Batch ${s.batch})` : " (Selected)") : ""}
+                </option>
               ))}
             </select>
           </label>

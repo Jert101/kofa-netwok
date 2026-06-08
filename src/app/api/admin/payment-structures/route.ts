@@ -8,6 +8,8 @@ const postSchema = z.object({
   amount: z.number().positive(),
   deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   installment_months: z.number().int().positive().optional().nullable(),
+  for_all: z.boolean().optional(),
+  batch: z.string().regex(/^\d{4}$/).optional().nullable(),
 });
 
 export async function GET(req: NextRequest) {
@@ -48,6 +50,8 @@ export async function POST(req: NextRequest) {
       amount: parsed.data.amount,
       deadline: parsed.data.deadline || null,
       installment_months: parsed.data.installment_months || null,
+      for_all: parsed.data.for_all ?? true,
+      batch: parsed.data.batch || null,
     })
     .select("id")
     .single();

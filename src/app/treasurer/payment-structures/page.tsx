@@ -9,7 +9,14 @@ interface Structure {
   amount: number;
   deadline: string | null;
   installment_months: number | null;
+  for_all: boolean;
+  batch: string | null;
   is_active: boolean;
+}
+
+interface Batch {
+  id: string;
+  year: string;
 }
 
 export default function PaymentStructuresPage() {
@@ -20,17 +27,30 @@ export default function PaymentStructuresPage() {
   const [installmentMonths, setInstallmentMonths] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [batches, setBatches] = useState<Batch[]>([]);
+  const [forAll, setForAll] = useState(true);
+  const [selectedBatch, setSelectedBatch] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editAmount, setEditAmount] = useState("");
   const [editDeadline, setEditDeadline] = useState("");
   const [editInstallment, setEditInstallment] = useState("");
+  const [editForAll, setEditForAll] = useState(true);
+  const [editBatch, setEditBatch] = useState("");
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/admin/payment-structures", { credentials: "same-origin" });
-    if (!res.ok) return;
-    const j = (await res.json()) as { structures: Structure[] };
-    setStructures(j.structures ?? []);
+    const [sRes, bRes] = await Promise.all([
+      fetch("/api/admin/payment-structures", { credentials: "same-origin" }),
+      fetch("/api/admin/member-batches", { credentials: "same-origin" }),
+    ]);
+    if (sRes.ok) {
+      const j = (await sRes.json()) as { structures: Structure[] };
+      setStructures(j.structures ?? []);
+    }
+    if (bRes.ok) {
+      const j = (await bRes.json()) as { batches: Batch[] };
+      setBatches(j.batches ?? []);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -43,6 +63,8 @@ export default function PaymentStructuresPage() {
       const body: Record<string, unknown> = {
         name: name.trim(),
         amount: parseFloat(amount),
+        for_all: forAll,
+        batch: forAll ? null : (selectedBatch || null),
       };
       if (deadline) body.deadline = deadline;
       if (installmentMonths) body.installment_months = parseInt(installmentMonths);
@@ -61,6 +83,8 @@ export default function PaymentStructuresPage() {
       setAmount("");
       setDeadline("");
       setInstallmentMonths("");
+      setForAll(true);
+      setSelectedBatch("");
       load();
     } finally {
       setBusy(false);
@@ -72,6 +96,8 @@ export default function PaymentStructuresPage() {
     const body: Record<string, unknown> = {
       name: editName.trim(),
       amount: parseFloat(editAmount),
+      for_all: editForAll,
+      batch: editForAll ? null : (editBatch || null),
     };
     if (editDeadline) body.deadline = editDeadline;
     else body.deadline = null;
@@ -106,6 +132,8 @@ export default function PaymentStructuresPage() {
     setEditAmount(String(s.amount));
     setEditDeadline(s.deadline ?? "");
     setEditInstallment(s.installment_months ? String(s.installment_months) : "");
+    setEditForAll(s.for_all);
+    setEditBatch(s.batch ?? "");
   }
 
   return (
@@ -160,6 +188,35 @@ export default function PaymentStructuresPage() {
               placeholder="e.g. 12"
             />
           </label>
+        </div>
+        <div className="space-y-3">
+          <label className="flex items-center gap-3 text-sm">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={forAll}
+              onClick={() => { setForAll(!forAll); setSelectedBatch(""); }}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${forAll ? "bg-[var(--accent)]" : "bg-gray-300"}`}
+            >
+              <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${forAll ? "translate-x-5" : "translate-x-0"}`} />
+            </button>
+            <span className="text-[var(--muted)]">For all members</span>
+          </label>
+          {!forAll ? (
+            <label className="block text-sm">
+              <span className="text-[var(--muted)]">Batch (optional)</span>
+              <select
+                className="mt-1 w-full min-h-11 rounded-xl border border-[var(--border)] bg-[var(--background)] px-3"
+                value={selectedBatch}
+                onChange={(e) => setSelectedBatch(e.target.value)}
+              >
+                <option value="">Any batch</option>
+                {batches.map((b) => (
+                  <option key={b.id} value={b.year}>{b.year}</option>
+                ))}
+              </select>
+            </label>
+          ) : null}
         </div>
         {err ? <p className="text-sm text-[var(--danger)]">{err}</p> : null}
         <button
@@ -218,6 +275,35 @@ export default function PaymentStructuresPage() {
                     />
                   </label>
                 </div>
+                <div className="space-y-3">
+                  <label className="flex items-center gap-3 text-sm">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={editForAll}
+                      onClick={() => { setEditForAll(!editForAll); setEditBatch(""); }}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${editForAll ? "bg-[var(--accent)]" : "bg-gray-300"}`}
+                    >
+                      <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${editForAll ? "translate-x-5" : "translate-x-0"}`} />
+                    </span>
+                    <span className="text-[var(--muted)]">For all members</span>
+                  </label>
+                  {!editForAll ? (
+                    <label className="block text-sm">
+                      <span className="text-[var(--muted)]">Batch (optional)</span>
+                      <select
+                        className="mt-1 w-full min-h-11 rounded-xl border border-[var(--border)] bg-[var(--background)] px-3"
+                        value={editBatch}
+                        onChange={(e) => setEditBatch(e.target.value)}
+                      >
+                        <option value="">Any batch</option>
+                        {batches.map((b) => (
+                          <option key={b.id} value={b.year}>{b.year}</option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+                </div>
                 <div className="flex gap-2">
                   <button
                     type="button"
@@ -243,6 +329,7 @@ export default function PaymentStructuresPage() {
                     {formatPeso(Number(s.amount))}
                     {s.installment_months ? ` / ${s.installment_months} months` : ""}
                     {s.deadline ? ` · Due: ${s.deadline}` : ""}
+                    {s.for_all === false ? <span className="ml-2 text-xs text-[var(--accent)]">{s.batch ? `Batch ${s.batch}` : "Selected members"}</span> : <span className="ml-2 text-xs text-[var(--muted)]">All members</span>}
                     {!s.is_active ? <span className="ml-2 text-xs text-[var(--danger)]">Inactive</span> : null}
                   </p>
                 </div>
