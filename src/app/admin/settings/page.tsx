@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 type PinRole = "admin" | "secretary" | "member" | "officer" | "treasurer";
 
@@ -64,6 +64,89 @@ function SinglePinForm({ role, label }: { role: PinRole; label: string }) {
       </button>
       {msg ? <p className="text-xs text-[var(--muted)]">{msg}</p> : null}
     </form>
+  );
+}
+
+function BatchManager() {
+  const [batches, setBatches] = useState<{ id: string; year: string }[]>([]);
+  const [year, setYear] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    const res = await fetch("/api/admin/member-batches", { credentials: "same-origin" });
+    if (!res.ok) return;
+    const j = (await res.json()) as { batches: { id: string; year: string }[] };
+    setBatches(j.batches ?? []);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function addBatch(e: React.FormEvent) {
+    e.preventDefault();
+    setErr(null);
+    if (!/^\d{4}$/.test(year)) { setErr("Enter a valid 4-digit year."); return; }
+    const res = await fetch("/api/admin/member-batches", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ year }),
+    });
+    if (!res.ok) {
+      const j = (await res.json()) as { error?: string };
+      setErr(j.error ?? "Could not add batch");
+      return;
+    }
+    setYear("");
+    load();
+  }
+
+  async function removeBatch(id: string) {
+    await fetch("/api/admin/member-batches", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ id }),
+    });
+    load();
+  }
+
+  return (
+    <div className="space-y-3">
+      <form onSubmit={addBatch} className="flex gap-2">
+        <input
+          className="min-h-11 flex-1 rounded-xl border border-[var(--border)] bg-[var(--background)] px-3"
+          placeholder="e.g. 2025"
+          value={year}
+          onChange={(e) => setYear(e.target.value.replace(/\D/g, "").slice(0, 4))}
+          maxLength={4}
+        />
+        <button
+          type="submit"
+          className="min-h-11 rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white"
+        >
+          Add
+        </button>
+      </form>
+      {err ? <p className="text-sm text-red-600">{err}</p> : null}
+      {batches.length === 0 ? (
+        <p className="text-sm text-[var(--muted)]">No batches added yet.</p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {batches.map((b) => (
+            <div key={b.id} className="flex items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-1.5 text-sm">
+              <span>{b.year}</span>
+              <button
+                type="button"
+                onClick={() => removeBatch(b.id)}
+                className="text-[var(--danger)] leading-none"
+              >
+                &times;
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -170,6 +253,16 @@ export default function AdminSettingsPage() {
           </button>
           {saved ? <p className="text-sm text-[var(--muted)]">Saved.</p> : null}
         </form>
+      </section>
+
+      <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+        <h2 className="font-semibold">Batch management</h2>
+        <p className="mt-2 text-sm text-[var(--muted)]">
+          Add or remove batch years used in member information.
+        </p>
+        <div className="mt-4 space-y-3">
+          <BatchManager />
+        </div>
       </section>
 
       <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">

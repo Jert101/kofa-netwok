@@ -11,6 +11,7 @@ type Member = {
   date_of_birth: string | null;
   gender: string | null;
   contact_number: string | null;
+  batch: string | null;
 };
 
 type NameParts = {
@@ -23,6 +24,7 @@ type MemberDetails = {
   date_of_birth: string;
   gender: string;
   contact_number: string;
+  batch: string;
 };
 
 function parseName(full: string): NameParts {
@@ -70,14 +72,16 @@ function nameExists(members: Member[], fullName: string, opts?: { excludeId?: st
   );
 }
 
-const emptyDetails: MemberDetails = { date_of_birth: "", gender: "", contact_number: "" };
+const emptyDetails: MemberDetails = { date_of_birth: "", gender: "", contact_number: "", batch: "" };
 
 function DetailsFields({
   details,
   onChange,
+  batches,
 }: {
   details: MemberDetails;
   onChange: (next: MemberDetails) => void;
+  batches: string[];
 }) {
   function update(field: keyof MemberDetails, value: string) {
     onChange({ ...details, [field]: value });
@@ -115,6 +119,17 @@ function DetailsFields({
         value={details.contact_number}
         onChange={(e) => update("contact_number", e.target.value)}
       />
+      <select
+        className="min-h-11 w-28 rounded-lg border border-[var(--border)] px-2"
+        title="Batch"
+        value={details.batch}
+        onChange={(e) => update("batch", e.target.value)}
+      >
+        <option value="">Batch</option>
+        {batches.map((b) => (
+          <option key={b} value={b}>{b}</option>
+        ))}
+      </select>
     </div>
   );
 }
@@ -157,6 +172,7 @@ function NameFormFields({
 
 export default function AdminMembersPage() {
   const [members, setMembers] = useState<Member[] | null>(null);
+  const [batches, setBatches] = useState<string[]>([]);
   const [addParts, setAddParts] = useState<NameParts>({ first: "", middle: "", last: "" });
   const [addDetails, setAddDetails] = useState<MemberDetails>({ ...emptyDetails });
   const [search, setSearch] = useState("");
@@ -177,6 +193,15 @@ export default function AdminMembersPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    (async () => {
+      const res = await fetch("/api/admin/member-batches", { credentials: "same-origin" });
+      if (!res.ok) return;
+      const j = (await res.json()) as { batches: { id: string; year: string }[] };
+      setBatches((j.batches ?? []).map((b) => b.year));
+    })();
+  }, []);
 
   const filteredMembers = useMemo(() => {
     if (members === null) return [];
@@ -220,6 +245,7 @@ export default function AdminMembersPage() {
         date_of_birth: addDetails.date_of_birth || null,
         gender: addDetails.gender || null,
         contact_number: addDetails.contact_number || null,
+        batch: addDetails.batch || null,
       }),
     });
     const j = (await res.json()) as { error?: string };
@@ -249,6 +275,7 @@ export default function AdminMembersPage() {
         date_of_birth: editDetails.date_of_birth || null,
         gender: editDetails.gender || null,
         contact_number: editDetails.contact_number || null,
+        batch: editDetails.batch || null,
       }),
     });
     const j = (await res.json()) as { error?: string };
@@ -277,6 +304,7 @@ export default function AdminMembersPage() {
       date_of_birth: m.date_of_birth ?? "",
       gender: m.gender ?? "",
       contact_number: m.contact_number ?? "",
+      batch: m.batch ?? "",
     });
     setEditing(m.id);
     setEditError(null);
@@ -306,7 +334,7 @@ export default function AdminMembersPage() {
       <form onSubmit={add} className="space-y-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
         <p className="text-sm font-semibold text-[var(--text)]">Add member</p>
         <NameFormFields parts={addParts} onChange={setAddParts} />
-        <DetailsFields details={addDetails} onChange={setAddDetails} />
+        <DetailsFields details={addDetails} onChange={setAddDetails} batches={batches} />
         <div className="flex items-center gap-3">
           <button type="submit" className="min-h-12 rounded-xl bg-[var(--accent)] px-4 font-medium text-white">
             Add
@@ -355,7 +383,7 @@ export default function AdminMembersPage() {
               {editing === m.id ? (
                 <div className="flex flex-col gap-2">
                   <NameFormFields parts={editParts} onChange={setEditParts} />
-                  <DetailsFields details={editDetails} onChange={setEditDetails} />
+                  <DetailsFields details={editDetails} onChange={setEditDetails} batches={batches} />
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
@@ -392,10 +420,11 @@ export default function AdminMembersPage() {
                     <span className={m.is_active ? "font-medium" : "font-medium text-[var(--muted)] line-through"}>
                       {formatNameLastFirst(m.full_name)}
                     </span>
-                    {(m.date_of_birth || m.gender || m.contact_number) ? (
+                    {(m.date_of_birth || m.gender || m.contact_number || m.batch) ? (
                       <div className="mt-1 space-y-0.5 text-xs text-[var(--muted)]">
                         {m.date_of_birth ? <span>DOB: {m.date_of_birth}</span> : null}
                         {m.gender ? <span> · {m.gender}</span> : null}
+                        {m.batch ? <span> · Batch {m.batch}</span> : null}
                         {m.contact_number ? <span> · {m.contact_number}</span> : null}
                       </div>
                     ) : null}

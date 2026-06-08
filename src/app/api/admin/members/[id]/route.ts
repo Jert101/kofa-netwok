@@ -12,6 +12,7 @@ const patchSchema = z.object({
   date_of_birth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   gender: z.enum(["male", "female"]).optional().nullable(),
   contact_number: z.string().max(20).trim().optional().nullable(),
+  batch: z.string().regex(/^\d{4}$/).optional().nullable(),
 });
 
 export async function PATCH(req: NextRequest, ctx: Ctx) {
@@ -30,7 +31,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   }
 
-  const { full_name, is_active, date_of_birth, gender, contact_number } = parsed.data;
+  const { full_name, is_active, date_of_birth, gender, contact_number, batch } = parsed.data;
 
   const updatePayload: Record<string, unknown> = {};
   if (full_name !== undefined) {
@@ -44,6 +45,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   if (date_of_birth !== undefined) updatePayload.date_of_birth = date_of_birth || null;
   if (gender !== undefined) updatePayload.gender = gender || null;
   if (contact_number !== undefined) updatePayload.contact_number = contact_number || null;
+  if (batch !== undefined) updatePayload.batch = batch || null;
   updatePayload.updated_at = new Date().toISOString();
 
   const sb = getSupabaseAdmin();

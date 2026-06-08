@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   const sb = getSupabaseAdmin();
   let q = sb
     .from("members")
-    .select("id, full_name, is_active, date_of_birth, gender, contact_number, created_at")
+    .select("id, full_name, is_active, date_of_birth, gender, contact_number, batch, created_at")
     .order("full_name", { ascending: true });
   if (!includeInactive) {
     q = q.eq("is_active", true);
@@ -32,6 +32,7 @@ const postSchema = z.object({
   date_of_birth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   gender: z.enum(["male", "female"]).optional().nullable(),
   contact_number: z.string().max(20).trim().optional().nullable(),
+  batch: z.string().regex(/^\d{4}$/).optional().nullable(),
 });
 
 export async function POST(req: NextRequest) {
@@ -62,6 +63,7 @@ export async function POST(req: NextRequest) {
       date_of_birth: parsed.data.date_of_birth || null,
       gender: parsed.data.gender || null,
       contact_number: parsed.data.contact_number || null,
+      batch: parsed.data.batch || null,
     })
     .select("id")
     .single();
