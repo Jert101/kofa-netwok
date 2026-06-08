@@ -46,7 +46,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
   const totalAmount = Number(structure.amount);
   const installmentMonths = structure.installment_months ? Number(structure.installment_months) : null;
 
-  let monthLabels: string[] = [];
+  const monthLabels: string[] = [];
   if (installmentMonths && installmentMonths > 0 && structure.created_at) {
     const startDate = new Date(structure.created_at);
     const startMonth = startDate.getUTCMonth();
