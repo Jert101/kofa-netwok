@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import PaymentLookup from "@/components/PaymentLookup";
 
 interface Member {
   id: string;
@@ -120,9 +121,30 @@ export default function PaymentsPage() {
     }
   }
 
+  const [tab, setTab] = useState<"record" | "lookup">("record");
+
   return (
     <div className="space-y-6 pb-8">
-      <h1 className="text-lg font-semibold">Record Payment</h1>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => setTab("record")}
+          className={`min-h-10 rounded-xl px-4 text-sm font-semibold ${tab === "record" ? "bg-[var(--accent)] text-white" : "border border-[var(--border)] text-[var(--muted)]"}`}
+        >
+          Record
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("lookup")}
+          className={`min-h-10 rounded-xl px-4 text-sm font-semibold ${tab === "lookup" ? "bg-[var(--accent)] text-white" : "border border-[var(--border)] text-[var(--muted)]"}`}
+        >
+          Lookup
+        </button>
+      </div>
+
+      {tab === "record" ? (
+        <>
+          <h1 className="text-lg font-semibold">Record Payment</h1>
 
       <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 space-y-4">
         <div>
@@ -246,6 +268,13 @@ export default function PaymentsPage() {
           </div>
         </div>
       ) : null}
+        </>
+      ) : (
+        <>
+          <h1 className="text-lg font-semibold">Payment Lookup</h1>
+          <PaymentLookup />
+        </>
+      )}
     </div>
   );
 }

@@ -21,6 +21,12 @@ export default function SecretaryLayout({ children }: { children: React.ReactNod
             Inbox
           </Link>
           <Link
+            href="/secretary/payments"
+            className="min-h-12 min-w-[4.5rem] rounded-xl px-3 py-2 text-center text-sm font-medium text-[var(--accent)]"
+          >
+            Payments
+          </Link>
+          <Link
             href="/secretary/reports"
             className="min-h-12 min-w-[4.5rem] rounded-xl px-3 py-2 text-center text-sm font-medium text-[var(--accent)]"
           >

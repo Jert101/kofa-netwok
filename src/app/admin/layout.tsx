@@ -5,6 +5,7 @@ const links = [
   { href: "/admin", label: "Home" },
   { href: "/admin/members", label: "Members" },
   { href: "/admin/registrations", label: "Registrations" },
+  { href: "/admin/payments", label: "Payments" },
   { href: "/admin/masses", label: "Masses" },
   { href: "/admin/reports", label: "Reports" },
   { href: "/admin/inbox", label: "Inbox" },
@@ -17,7 +18,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <LogoutBar />
       <div className="mx-auto w-full max-w-6xl px-3 pt-3 sm:px-4">{children}</div>
       <nav className="fixed bottom-0 left-0 right-0 border-t border-[var(--border)] bg-[var(--surface)]">
-        <div className="mx-auto grid w-full max-w-6xl grid-cols-4 gap-1 px-2 py-2 sm:grid-cols-7">
+        <div className="mx-auto grid w-full max-w-6xl grid-cols-4 gap-1 px-2 py-2 sm:grid-cols-8">
           {links.map((l) => (
             <Link
               key={l.href}

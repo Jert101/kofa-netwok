@@ -13,6 +13,9 @@ export default function OfficerLayout({ children }: { children: React.ReactNode 
           <Link href="/officer/inbox" className="text-[var(--text)]">
             Announcements
           </Link>
+          <Link href="/officer/payments" className="text-[var(--text)]">
+            Payments
+          </Link>
         </div>
       </nav>
       <div className="mx-auto w-full max-w-6xl px-3 pb-10 pt-3 sm:px-4">{children}</div>
