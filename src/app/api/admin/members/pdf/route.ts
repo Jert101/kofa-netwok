@@ -26,16 +26,17 @@ export async function GET(req: NextRequest) {
   else if (filterStatus === "inactive") query = query.eq("is_active", false);
   else query = query.eq("is_active", true);
 
-  if (filterBirthMonth) {
-    const month = filterBirthMonth.padStart(2, "0");
-    query = query.filter("date_of_birth", "like", `%-${month}-%`);
-  }
-
   const { data, error } = await query.order("full_name", { ascending: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const names = (data ?? [])
+  let filtered = data ?? [];
+  if (filterBirthMonth) {
+    const month = filterBirthMonth.padStart(2, "0");
+    filtered = filtered.filter((m) => (m.date_of_birth as string)?.slice(5, 7) === month);
+  }
+
+  const names = filtered
     .map((m) => formatNameLastFirst((m.full_name as string) ?? ""))
     .filter(Boolean)
     .sort((a, b) => a.localeCompare(b));
