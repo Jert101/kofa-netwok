@@ -246,6 +246,12 @@ export default function PaymentStructuresPage() {
                   </p>
                 </div>
                 <div className="flex shrink-0 gap-2">
+                  <a
+                    href={`/api/admin/payment-structures/${s.id}/pdf`}
+                    className="text-sm text-[var(--accent)]"
+                  >
+                    Report
+                  </a>
                   <button
                     type="button"
                     onClick={() => startEdit(s)}

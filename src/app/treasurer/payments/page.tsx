@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import PaymentLookup from "@/components/PaymentLookup";
+import ReceiptModal from "@/components/ReceiptModal";
 
 interface Member {
   id: string;
@@ -34,6 +35,13 @@ export default function PaymentsPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [receipt, setReceipt] = useState<{
+    memberName: string;
+    structureName: string;
+    amountPaid: number;
+    date: string;
+    receiptId: string;
+  } | null>(null);
 
   const load = useCallback(async () => {
     const [mRes, sRes] = await Promise.all([
@@ -112,7 +120,15 @@ export default function PaymentsPage() {
         setErr(j.error ?? "Could not record payment");
         return;
       }
+      const j = (await res.json()) as { id: string };
       setSuccess(true);
+      setReceipt({
+        memberName: selectedMember!.full_name,
+        structureName: structure?.name ?? "",
+        amountPaid: parseFloat(amountPaid),
+        date: paidAt || new Date().toISOString().split("T")[0],
+        receiptId: j.id,
+      });
       setAmountPaid("");
       setPaidAt("");
       setNotes("");
@@ -275,6 +291,10 @@ export default function PaymentsPage() {
           <PaymentLookup />
         </>
       )}
+
+      {receipt ? (
+        <ReceiptModal data={receipt} onClose={() => { setReceipt(null); setSuccess(false); }} />
+      ) : null}
     </div>
   );
 }
