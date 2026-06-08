@@ -59,14 +59,13 @@ export function buildPaymentStructurePdf(input: {
     }));
 
     const headRow = ["#", "Member name", ...input.monthLabels, "Total", "Remaining", "Remarks"];
-    const colStyles: Record<string, { cellWidth: number; halign?: string; fontSize?: number }> = {
-      0: { cellWidth: 20, halign: "center" },
-      1: { cellWidth: "auto" as unknown as number },
-    };
+    const colStyles: Record<string, { cellWidth: number | "auto"; halign?: "left" | "center" | "right"; fontSize?: number }> = {};
     for (const mc of monthCols) {
       colStyles[mc.col] = { cellWidth: mc.width, halign: "center", fontSize: 7 };
     }
     const lastIdx = headRow.length - 1;
+    colStyles[0] = { cellWidth: 20, halign: "center" };
+    colStyles[1] = { cellWidth: "auto", halign: "left" };
     colStyles[lastIdx - 2] = { cellWidth: 50, halign: "right", fontSize: 8 };
     colStyles[lastIdx - 1] = { cellWidth: 50, halign: "right", fontSize: 8 };
     colStyles[lastIdx] = { cellWidth: 44, halign: "center", fontSize: 8 };
