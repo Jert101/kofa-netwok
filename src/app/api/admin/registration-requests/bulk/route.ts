@@ -40,35 +40,53 @@ export async function POST(req: NextRequest) {
   const now = new Date().toISOString();
   const newStatus = action === "approve" ? "approved" : "rejected";
 
+  let skipped = 0;
+  let approveTargets = pending;
+
   if (action === "approve") {
-    const memberInserts = pending.map((r) => {
+    const { data: existingMembers } = await sb.from("members").select("full_name");
+    const existingNames = new Set((existingMembers ?? []).map((m) => m.full_name));
+
+    const memberInserts: Record<string, unknown>[] = [];
+    const kept: typeof pending = [];
+    for (const r of pending) {
       const mi = r.middle_initial ? ` ${r.middle_initial}.` : "";
       const full_name = `${r.first_name}${mi} ${r.last_name}`;
-      return {
+      if (existingNames.has(full_name)) {
+        skipped++;
+        continue;
+      }
+      kept.push(r);
+      memberInserts.push({
         full_name,
         date_of_birth: r.date_of_birth,
         gender: r.gender,
         contact_number: r.contact_number,
         batch: r.batch || null,
-      };
-    });
+      });
+    }
 
-    const { error: insertErr } = await sb.from("members").insert(memberInserts);
+    approveTargets = kept;
 
-    if (insertErr) {
-      return NextResponse.json({ error: insertErr.message }, { status: 500 });
+    if (memberInserts.length > 0) {
+      const { error: insertErr } = await sb.from("members").insert(memberInserts);
+      if (insertErr) {
+        return NextResponse.json({ error: insertErr.message }, { status: 500 });
+      }
     }
   }
 
-  const pendingIds = pending.map((r) => r.id);
-  const { error: updateErr } = await sb
-    .from("registration_requests")
-    .update({ status: newStatus, reviewed_at: now })
-    .in("id", pendingIds);
+  const pendingIds = approveTargets.map((r) => r.id);
+  if (pendingIds.length > 0) {
+    const { error: updateErr } = await sb
+      .from("registration_requests")
+      .update({ status: newStatus, reviewed_at: now })
+      .in("id", pendingIds);
 
-  if (updateErr) {
-    return NextResponse.json({ error: updateErr.message }, { status: 500 });
+    if (updateErr) {
+      return NextResponse.json({ error: updateErr.message }, { status: 500 });
+    }
   }
 
-  return NextResponse.json({ ok: true, count: pending.length });
+  return NextResponse.json({ ok: true, count: approveTargets.length, skipped });
 }

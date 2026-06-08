@@ -45,6 +45,8 @@ export default function AdminRegistrationsPage() {
   const [editError, setEditError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [batchBulk, setBatchBulk] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+  const [msgType, setMsgType] = useState<"success" | "error">("success");
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/admin/registration-requests?status=${tab}`, { credentials: "same-origin" });
@@ -118,13 +120,22 @@ export default function AdminRegistrationsPage() {
 
   async function changeStatus(id: string, newStatus: string) {
     setBusy(true);
+    setMsg(null);
     try {
-      await fetch(`/api/admin/registration-requests/${id}`, {
+      const res = await fetch(`/api/admin/registration-requests/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
         body: JSON.stringify({ action: "change-status", new_status: newStatus }),
       });
+      if (!res.ok) {
+        const j = (await res.json()) as { error?: string };
+        setMsg(j.error ?? "Could not change status");
+        setMsgType("error");
+        return;
+      }
+      setMsg(`Status changed to ${newStatus}`);
+      setMsgType("success");
       load();
     } finally {
       setBusy(false);
@@ -133,13 +144,23 @@ export default function AdminRegistrationsPage() {
 
   async function reviewSingle(id: string, action: "approve" | "reject") {
     setBusy(true);
+    setMsg(null);
     try {
-      await fetch(`/api/admin/registration-requests/${id}`, {
+      const res = await fetch(`/api/admin/registration-requests/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
         body: JSON.stringify({ action }),
       });
+      if (!res.ok) {
+        const j = (await res.json()) as { error?: string };
+        setMsg(j.error ?? `Could not ${action}`);
+        setMsgType("error");
+        return;
+      }
+      const label = action === "approve" ? "approved" : "rejected";
+      setMsg(`Request ${label} successfully`);
+      setMsgType("success");
       load();
     } finally {
       setBusy(false);
@@ -148,8 +169,9 @@ export default function AdminRegistrationsPage() {
 
   async function reviewBulk(action: "approve" | "reject") {
     setBusy(true);
+    setMsg(null);
     try {
-      await fetch("/api/admin/registration-requests/bulk", {
+      const res = await fetch("/api/admin/registration-requests/bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
@@ -158,6 +180,20 @@ export default function AdminRegistrationsPage() {
           ids: selected.size > 0 ? [...selected] : undefined,
         }),
       });
+      if (!res.ok) {
+        const j = (await res.json()) as { error?: string };
+        setMsg(j.error ?? `Bulk ${action} failed`);
+        setMsgType("error");
+        return;
+      }
+      const j = (await res.json()) as { count: number; skipped?: number };
+      const label = action === "approve" ? "approved" : "rejected";
+      let m = `${j.count} request${j.count !== 1 ? "s" : ""} ${label}`;
+      if (j.skipped && j.skipped > 0) {
+        m += ` (${j.skipped} skipped — names already exist in members)`;
+      }
+      setMsg(m);
+      setMsgType("success");
       load();
     } finally {
       setBusy(false);
@@ -167,20 +203,27 @@ export default function AdminRegistrationsPage() {
   async function setBatchOnPending(batch: string) {
     if (!batch || !requests) return;
     setBusy(true);
+    setMsg(null);
     try {
       const pending = selected.size > 0
         ? requests.filter((r) => r.status === "pending" && selected.has(r.id))
         : requests.filter((r) => r.status === "pending");
+      let count = 0;
+      let failCount = 0;
       for (const r of pending) {
-        await fetch(`/api/admin/registration-requests/${r.id}`, {
+        const res = await fetch(`/api/admin/registration-requests/${r.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           credentials: "same-origin",
           body: JSON.stringify({ action: "update", batch }),
         });
+        if (res.ok) count++;
+        else failCount++;
       }
       setBatchBulk("");
       setSelected(new Set());
+      setMsg(`Batch set to ${batch} for ${count} request${count !== 1 ? "s" : ""}${failCount > 0 ? ` (${failCount} failed)` : ""}`);
+      setMsgType(failCount > 0 && count === 0 ? "error" : "success");
       load();
     } finally {
       setBusy(false);
@@ -277,6 +320,11 @@ export default function AdminRegistrationsPage() {
         ))}
       </div>
 
+      {msg ? (
+        <div className={`rounded-xl border p-3 text-sm ${msgType === "error" ? "border-red-300 bg-red-50 text-red-700 dark:border-red-700 dark:bg-red-950 dark:text-red-300" : "border-green-300 bg-green-50 text-green-700 dark:border-green-700 dark:bg-green-950 dark:text-green-300"}`}>
+          {msg}
+        </div>
+      ) : null}
       {tab === "pending" && requests && requests.length > 0 ? (
         <div className="flex flex-wrap gap-2">
           <button
