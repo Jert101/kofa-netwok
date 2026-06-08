@@ -77,18 +77,7 @@ export default function ReceiptModal({
   const logoRef = useRef<HTMLImageElement | null>(null);
 
   useEffect(() => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.src = "/logo.png";
-    img.onload = () => {
-      logoRef.current = img;
-      drawReceipt();
-    };
-    img.onerror = () => drawReceipt();
-    drawReceipt();
-  }, [data]);
-
-  function drawReceipt() {
+    function draw() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -248,6 +237,17 @@ export default function ReceiptModal({
     ctx.textAlign = "center";
     ctx.fillText("Knights of the Altar Attendance Monitoring System", W / 2, y);
   }
+
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.src = "/logo.png";
+    img.onload = () => {
+      logoRef.current = img;
+      draw();
+    };
+    img.onerror = () => draw();
+    draw();
+  }, [data]);
 
   function downloadPng() {
     const canvas = canvasRef.current;

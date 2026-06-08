@@ -19,34 +19,23 @@ export async function GET(req: NextRequest) {
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  let rows = (data ?? []).map((r) => {
-    const mi = r.middle_initial ? ` ${r.middle_initial}.` : "";
-    return {
-      name: `${r.first_name}${mi} ${r.last_name}`,
-      nameFormatted: "",
-      gender: r.gender,
-      date_of_birth: r.date_of_birth,
-      contact_number: r.contact_number,
-      batch: r.batch ?? null,
-      status: r.status,
-      created_at: new Date(r.created_at).toLocaleString(),
-      reviewed_at: r.reviewed_at ? new Date(r.reviewed_at).toLocaleString() : null,
-    };
-  });
-  rows = rows
-    .map((r) => ({ ...r, nameFormatted: formatNameLastFirst(r.name) }))
-    .sort((a, b) => a.nameFormatted.localeCompare(b.nameFormatted))
-    .map((r, idx) => ({
-      index: idx + 1,
-      name: r.nameFormatted,
-      gender: r.gender,
-      date_of_birth: r.date_of_birth,
-      contact_number: r.contact_number,
-      batch: r.batch,
-      status: r.status,
-      created_at: r.created_at,
-      reviewed_at: r.reviewed_at,
-    }));
+  const rows = (data ?? [])
+    .map((r) => {
+      const mi = r.middle_initial ? ` ${r.middle_initial}.` : "";
+      const fullName = `${r.first_name}${mi} ${r.last_name}`;
+      return {
+        name: formatNameLastFirst(fullName),
+        gender: r.gender,
+        date_of_birth: r.date_of_birth,
+        contact_number: r.contact_number,
+        batch: r.batch ?? null,
+        status: r.status,
+        created_at: new Date(r.created_at).toLocaleString(),
+        reviewed_at: r.reviewed_at ? new Date(r.reviewed_at).toLocaleString() : null,
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((r, idx) => ({ index: idx + 1, ...r }));
 
   let churchName = "Knights of the Altar";
   try {
