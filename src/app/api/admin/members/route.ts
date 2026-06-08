@@ -5,7 +5,7 @@ import { formatMemberFullName } from "@/lib/members/name-format";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export async function GET(req: NextRequest) {
-  const g = await requireRole(req.headers.get("cookie"), ["admin"]);
+  const g = await requireRole(req.headers.get("cookie"), ["admin", "treasurer"]);
   if (!g.ok) return g.response;
 
   const url = new URL(req.url);

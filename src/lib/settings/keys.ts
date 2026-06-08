@@ -8,6 +8,7 @@ export const SETTING_KEYS = [
   "pin_secretary_hash",
   "pin_member_hash",
   "pin_officer_hash",
+  "pin_treasurer_hash",
 ] as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[number];

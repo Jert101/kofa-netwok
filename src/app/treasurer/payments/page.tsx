@@ -1,0 +1,251 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+interface Member {
+  id: string;
+  full_name: string;
+}
+
+interface Structure {
+  id: string;
+  name: string;
+  amount: number;
+  is_active: boolean;
+}
+
+interface Payment {
+  id: string;
+  amount_paid: number;
+  paid_at: string;
+}
+
+export default function PaymentsPage() {
+  const [members, setMembers] = useState<Member[]>([]);
+  const [structures, setStructures] = useState<Structure[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [search, setSearch] = useState("");
+  const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+  const [selectedStructure, setSelectedStructure] = useState("");
+  const [amountPaid, setAmountPaid] = useState("");
+  const [paidAt, setPaidAt] = useState("");
+  const [notes, setNotes] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  const load = useCallback(async () => {
+    const [mRes, sRes] = await Promise.all([
+      fetch("/api/admin/members?all=1", { credentials: "same-origin" }),
+      fetch("/api/admin/payment-structures", { credentials: "same-origin" }),
+    ]);
+    if (mRes.ok) {
+      const mj = (await mRes.json()) as { members: Member[] };
+      setMembers(mj.members ?? []);
+    }
+    if (sRes.ok) {
+      const sj = (await sRes.json()) as { structures: Structure[] };
+      setStructures((sj.structures ?? []).filter((s) => s.is_active !== false));
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const filteredMembers = useMemo(() => {
+    if (!search.trim()) return [];
+    const q = search.toLowerCase();
+    return members.filter((m) => m.full_name.toLowerCase().includes(q));
+  }, [search, members]);
+
+  useEffect(() => {
+    if (!selectedMember || !selectedStructure) {
+      setPayments([]);
+      return;
+    }
+    (async () => {
+      const res = await fetch(
+        `/api/admin/payments?member_id=${selectedMember.id}&structure_id=${selectedStructure}`,
+        { credentials: "same-origin" }
+      );
+      if (!res.ok) return;
+      const j = (await res.json()) as { payments: Payment[] };
+      setPayments(j.payments ?? []);
+    })();
+  }, [selectedMember, selectedStructure]);
+
+  const structure = useMemo(
+    () => structures.find((s) => s.id === selectedStructure),
+    [structures, selectedStructure]
+  );
+
+  const totalPaid = useMemo(
+    () => payments.reduce((sum, p) => sum + Number(p.amount_paid), 0),
+    [payments]
+  );
+
+  const totalAmount = structure ? Number(structure.amount) : 0;
+  const remaining = totalAmount - totalPaid;
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedMember || !selectedStructure) return;
+    setErr(null);
+    setSuccess(false);
+    setBusy(true);
+    try {
+      const body: Record<string, unknown> = {
+        member_id: selectedMember.id,
+        payment_structure_id: selectedStructure,
+        amount_paid: parseFloat(amountPaid),
+      };
+      if (paidAt) body.paid_at = paidAt;
+      if (notes.trim()) body.notes = notes.trim();
+      const res = await fetch("/api/admin/payments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const j = (await res.json()) as { error?: string };
+        setErr(j.error ?? "Could not record payment");
+        return;
+      }
+      setSuccess(true);
+      setAmountPaid("");
+      setPaidAt("");
+      setNotes("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6 pb-8">
+      <h1 className="text-lg font-semibold">Record Payment</h1>
+
+      <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 space-y-4">
+        <div>
+          <label htmlFor="member-search" className="text-sm font-medium text-[var(--muted)]">Member</label>
+          <input
+            id="member-search"
+            type="search"
+            className="mt-1 w-full min-h-11 rounded-xl border border-[var(--border)] bg-[var(--background)] px-3"
+            placeholder="Search by name"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setSelectedMember(null); }}
+            autoComplete="off"
+          />
+          {selectedMember ? (
+            <p className="mt-1 text-sm font-medium text-[var(--accent)]">{selectedMember.full_name}</p>
+          ) : search.trim() && filteredMembers.length > 0 ? (
+            <ul className="mt-1 max-h-48 overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface-2)]">
+              {filteredMembers.slice(0, 10).map((m) => (
+                <li key={m.id}>
+                  <button
+                    type="button"
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-[var(--surface)]"
+                    onClick={() => { setSelectedMember(m); setSearch(m.full_name); }}
+                  >
+                    {m.full_name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : search.trim() && filteredMembers.length === 0 ? (
+            <p className="mt-1 text-sm text-[var(--muted)]">No members found.</p>
+          ) : null}
+        </div>
+
+        <form onSubmit={onSubmit} className="space-y-4">
+          <label className="block text-sm">
+            <span className="font-medium text-[var(--muted)]">Payment type</span>
+            <select
+              required
+              className="mt-1 w-full min-h-11 rounded-xl border border-[var(--border)] bg-[var(--background)] px-3"
+              value={selectedStructure}
+              onChange={(e) => setSelectedStructure(e.target.value)}
+            >
+              <option value="">Select payment type</option>
+              {structures.map((s) => (
+                <option key={s.id} value={s.id}>{s.name} — ₱{Number(s.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</option>
+              ))}
+            </select>
+          </label>
+
+          {structure ? (
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3 space-y-1 text-sm">
+              <p>Total amount: <strong>₱{totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></p>
+              <p>Total paid: <strong>₱{totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></p>
+              <p>Remaining balance: <strong className={remaining <= 0 ? "text-green-600" : ""}>₱{Math.max(0, remaining).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></p>
+            </div>
+          ) : null}
+
+          <label className="block text-sm">
+            <span className="font-medium text-[var(--muted)]">Amount to pay now</span>
+            <input
+              required
+              type="number"
+              step="0.01"
+              min="0.01"
+              className="mt-1 w-full min-h-11 rounded-xl border border-[var(--border)] bg-[var(--background)] px-3"
+              value={amountPaid}
+              onChange={(e) => setAmountPaid(e.target.value)}
+              placeholder="0.00"
+            />
+          </label>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block text-sm">
+              <span className="font-medium text-[var(--muted)]">Date paid (optional)</span>
+              <input
+                type="date"
+                className="mt-1 w-full min-h-11 rounded-xl border border-[var(--border)] bg-[var(--background)] px-3"
+                value={paidAt}
+                onChange={(e) => setPaidAt(e.target.value)}
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="font-medium text-[var(--muted)]">Notes (optional)</span>
+              <input
+                className="mt-1 w-full min-h-11 rounded-xl border border-[var(--border)] bg-[var(--background)] px-3"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Optional notes"
+              />
+            </label>
+          </div>
+
+          {err ? <p className="text-sm text-[var(--danger)]">{err}</p> : null}
+          {success ? <p className="text-sm text-green-600">Payment recorded!</p> : null}
+
+          <button
+            type="submit"
+            disabled={busy || !selectedMember || !selectedStructure}
+            className="min-h-12 w-full rounded-xl bg-[var(--accent)] text-sm font-semibold text-white disabled:opacity-40"
+          >
+            {busy ? "Recording…" : "Record payment"}
+          </button>
+        </form>
+      </div>
+
+      {selectedMember && selectedStructure ? (
+        <div>
+          <h2 className="font-semibold mb-2">Payment history</h2>
+          <div className="space-y-2">
+            {payments.length === 0 ? (
+              <p className="text-sm text-[var(--muted)]">No payments recorded yet.</p>
+            ) : (
+              payments.map((p) => (
+                <div key={p.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-sm">
+                  <span className="font-medium">₱{Number(p.amount_paid).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  <span className="text-[var(--muted)]"> on {p.paid_at}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
