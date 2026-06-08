@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { formatPeso } from "@/lib/format-peso";
 
 interface Structure {
   id: string;
@@ -239,7 +240,7 @@ export default function PaymentStructuresPage() {
                 <div>
                   <p className="font-medium">{s.name}</p>
                   <p className="mt-0.5 text-sm text-[var(--muted)]">
-                    ₱{Number(s.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {formatPeso(Number(s.amount))}
                     {s.installment_months ? ` / ${s.installment_months} months` : ""}
                     {s.deadline ? ` · Due: ${s.deadline}` : ""}
                     {!s.is_active ? <span className="ml-2 text-xs text-[var(--danger)]">Inactive</span> : null}

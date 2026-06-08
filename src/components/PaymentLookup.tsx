@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { formatPeso } from "@/lib/format-peso";
 
 interface Member {
   id: string;
@@ -122,12 +123,12 @@ export default function PaymentLookup() {
                 <div key={s.name} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
                   <p className="font-medium">{s.name}</p>
                   <div className="mt-2 space-y-1 text-sm">
-                    <p>Total amount: <strong>₱{s.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></p>
-                    <p>Total paid: <strong>₱{s.totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></p>
+                    <p>Total amount: <strong>{formatPeso(s.totalAmount)}</strong></p>
+                    <p>Total paid: <strong>{formatPeso(s.totalPaid)}</strong></p>
                     <p>
                       Remaining balance:{" "}
                       <strong className={remaining <= 0 ? "text-green-600" : ""}>
-                        ₱{Math.max(0, remaining).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        {formatPeso(Math.max(0, remaining))}
                       </strong>
                     </p>
                   </div>
@@ -138,7 +139,7 @@ export default function PaymentLookup() {
                         .filter((p) => p.payment_structures?.name === s.name)
                         .map((p) => (
                           <li key={p.id} className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm">
-                            <span className="font-medium">₱{Number(p.amount_paid).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                            <span className="font-medium">{formatPeso(Number(p.amount_paid))}</span>
                             <span className="text-[var(--muted)]"> on {p.paid_at}</span>
                           </li>
                         ))}

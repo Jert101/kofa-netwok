@@ -1,6 +1,7 @@
 import { format } from "date-fns";
 import { jsPDF } from "jspdf";
 import { autoTable } from "jspdf-autotable";
+import { formatPeso, formatAmount } from "@/lib/format-peso";
 
 export interface PaymentStatusRow {
   memberName: string;
@@ -43,7 +44,7 @@ export function buildPaymentStructurePdf(input: {
   }
   if (hasInstallments) {
     const perMonth = input.rows.length > 0 ? input.rows[0].totalAmount / input.installmentMonths! : 0;
-    doc.text(`${input.installmentMonths} months · ₱${input.rows[0]?.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 }) ?? "0.00"} total · ₱${perMonth.toLocaleString(undefined, { minimumFractionDigits: 2 })}/month`, margin, y);
+    doc.text(`${input.installmentMonths} months · ${formatPeso(input.rows[0]?.totalAmount ?? 0)} total · ${formatPeso(perMonth)}/month`, margin, y);
     y += 12;
   }
 
@@ -79,11 +80,11 @@ export function buildPaymentStructurePdf(input: {
         r.memberName,
         ...r.monthlyPaid.map((v) =>
           v > 0
-            ? v.toLocaleString(undefined, { minimumFractionDigits: 0 })
+            ? formatAmount(v, 0)
             : "—"
         ),
-        r.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 }),
-        Math.max(0, r.remaining).toLocaleString(undefined, { minimumFractionDigits: 2 }),
+        formatAmount(r.totalAmount),
+        formatAmount(Math.max(0, r.remaining)),
         r.remaining <= 0 ? "Paid" : "Not Paid",
       ]),
       margin: { left: margin, right: margin },
@@ -112,9 +113,9 @@ export function buildPaymentStructurePdf(input: {
           ? input.rows.map((r, idx) => [
               String(idx + 1),
               r.memberName,
-              r.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 }),
-              r.totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2 }),
-              r.remaining.toLocaleString(undefined, { minimumFractionDigits: 2 }),
+              formatAmount(r.totalAmount),
+              formatAmount(r.totalPaid),
+              formatAmount(r.remaining),
               r.remaining <= 0 ? "Paid" : "Not Paid",
             ])
           : [["", "No members", "", "", "", ""]],
@@ -149,9 +150,9 @@ export function buildPaymentStructurePdf(input: {
   doc.setFontSize(9);
   const totalDue = input.rows.reduce((s, r) => s + r.totalAmount, 0);
   const totalPaidSum = input.rows.reduce((s, r) => s + r.totalPaid, 0);
-  doc.text(`Total amount due: ₱${totalDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, margin, finalY + 40);
-  doc.text(`Total amount paid: ₱${totalPaidSum.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, margin, finalY + 54);
-  doc.text(`Overall remaining: ₱${(totalDue - totalPaidSum).toLocaleString(undefined, { minimumFractionDigits: 2 })}`, margin, finalY + 68);
+  doc.text(`Total amount due: ${formatPeso(totalDue)}`, margin, finalY + 40);
+  doc.text(`Total amount paid: ${formatPeso(totalPaidSum)}`, margin, finalY + 54);
+  doc.text(`Overall remaining: ${formatPeso(totalDue - totalPaidSum)}`, margin, finalY + 68);
   doc.text(`Members fully paid: ${paidCount}`, margin, finalY + 82);
   doc.text(`Members not fully paid: ${unpaidCount}`, margin, finalY + 96);
 

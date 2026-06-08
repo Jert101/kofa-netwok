@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import PaymentLookup from "@/components/PaymentLookup";
 import ReceiptModal from "@/components/ReceiptModal";
+import { formatPeso } from "@/lib/format-peso";
 
 interface Member {
   id: string;
@@ -206,16 +207,16 @@ export default function PaymentsPage() {
             >
               <option value="">Select payment type</option>
               {structures.map((s) => (
-                <option key={s.id} value={s.id}>{s.name} — ₱{Number(s.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</option>
+                <option key={s.id} value={s.id}>{s.name} — {formatPeso(Number(s.amount))}</option>
               ))}
             </select>
           </label>
 
           {structure ? (
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3 space-y-1 text-sm">
-              <p>Total amount: <strong>₱{totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></p>
-              <p>Total paid: <strong>₱{totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></p>
-              <p>Remaining balance: <strong className={remaining <= 0 ? "text-green-600" : ""}>₱{Math.max(0, remaining).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></p>
+              <p>Total amount: <strong>{formatPeso(totalAmount)}</strong></p>
+              <p>Total paid: <strong>{formatPeso(totalPaid)}</strong></p>
+              <p>Remaining balance: <strong className={remaining <= 0 ? "text-green-600" : ""}>{formatPeso(Math.max(0, remaining))}</strong></p>
             </div>
           ) : null}
 
@@ -276,7 +277,7 @@ export default function PaymentsPage() {
             ) : (
               payments.map((p) => (
                 <div key={p.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-sm">
-                  <span className="font-medium">₱{Number(p.amount_paid).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  <span className="font-medium">{formatPeso(Number(p.amount_paid))}</span>
                   <span className="text-[var(--muted)]"> on {p.paid_at}</span>
                 </div>
               ))

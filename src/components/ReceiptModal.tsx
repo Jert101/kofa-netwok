@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import { formatPeso } from "@/lib/format-peso";
 
 interface ReceiptData {
   memberName: string;
@@ -86,7 +87,7 @@ export default function ReceiptModal({
     ctx.fillStyle = "#1a1a1a";
     ctx.textAlign = "right";
     ctx.fillText(
-      `₱${data.amountPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      formatPeso(data.amountPaid),
       w - 30,
       250
     );
@@ -124,7 +125,7 @@ export default function ReceiptModal({
           <p><span className="text-[var(--muted)]">Member:</span> {data.memberName}</p>
           <p><span className="text-[var(--muted)]">Payment type:</span> {data.structureName}</p>
           <p className="text-lg font-bold text-[var(--accent)]">
-            ₱{data.amountPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            {formatPeso(data.amountPaid)}
           </p>
         </div>
 
