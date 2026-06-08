@@ -67,14 +67,13 @@ export default function PaymentsPage() {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    if (tab !== "history") return;
     (async () => {
       const res = await fetch("/api/admin/payments", { credentials: "same-origin" });
       if (!res.ok) return;
       const j = (await res.json()) as { payments: Payment[] };
       setAllPayments(j.payments ?? []);
     })();
-  }, [tab]);
+  }, []);
 
   const filteredMembers = useMemo(() => {
     if (!search.trim()) return [];
@@ -148,13 +147,18 @@ export default function PaymentsPage() {
       setAmountPaid("");
       setPaidAt("");
       setNotes("");
+      const refreshRes = await fetch("/api/admin/payments", { credentials: "same-origin" });
+      if (refreshRes.ok) {
+        const rj = (await refreshRes.json()) as { payments: Payment[] };
+        setAllPayments(rj.payments ?? []);
+      }
     } finally {
       setBusy(false);
     }
   }
 
   const [allPayments, setAllPayments] = useState<Payment[]>([]);
-  const [tab, setTab] = useState<"record" | "history" | "lookup">("record");
+  const [tab, setTab] = useState<"record" | "lookup">("record");
 
   return (
     <div className="space-y-6 pb-8">
@@ -165,13 +169,6 @@ export default function PaymentsPage() {
           className={`min-h-10 rounded-xl px-4 text-sm font-semibold ${tab === "record" ? "bg-[var(--accent)] text-white" : "border border-[var(--border)] text-[var(--muted)]"}`}
         >
           Record
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("history")}
-          className={`min-h-10 rounded-xl px-4 text-sm font-semibold ${tab === "history" ? "bg-[var(--accent)] text-white" : "border border-[var(--border)] text-[var(--muted)]"}`}
-        >
-          History
         </button>
         <button
           type="button"
@@ -296,7 +293,7 @@ export default function PaymentsPage() {
 
       {selectedMember && selectedStructure ? (
         <div>
-          <h2 className="font-semibold mb-2">Payment history</h2>
+          <h2 className="font-semibold mb-2">Payment history for {selectedMember.full_name}</h2>
           <div className="space-y-2">
             {payments.length === 0 ? (
               <p className="text-sm text-[var(--muted)]">No payments recorded yet.</p>
@@ -305,34 +302,35 @@ export default function PaymentsPage() {
                 <div key={p.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-sm">
                   <span className="font-medium">{formatPeso(Number(p.amount_paid))}</span>
                   <span className="text-[var(--muted)]"> on {p.paid_at}</span>
+                  {p.notes ? <span className="text-[var(--muted)]"> — {p.notes}</span> : null}
                 </div>
               ))
             )}
           </div>
         </div>
       ) : null}
-        </>
-      ) : tab === "history" ? (
-        <>
-          <h1 className="text-lg font-semibold">Payment History</h1>
-          {allPayments.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-[var(--border)] py-10 text-center text-sm text-[var(--muted)]">No payments recorded yet.</p>
-          ) : (
-            <div className="space-y-2">
-              {allPayments.map((p) => (
-                <div key={p.id} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="font-medium">{p.members?.full_name ?? "Unknown"}</p>
-                      <p className="text-[var(--muted)]">{p.payment_structures?.name ?? "Unknown"} — {formatPeso(Number(p.amount_paid))}</p>
-                    </div>
-                    <span className="shrink-0 text-xs text-[var(--muted)]">{p.paid_at}</span>
+
+      <div>
+        <h2 className="font-semibold mb-2">All recorded payments</h2>
+        {allPayments.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-[var(--border)] py-10 text-center text-sm text-[var(--muted)]">No payments recorded yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {allPayments.map((p) => (
+              <div key={p.id} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-medium">{p.members?.full_name ?? "Unknown"}</p>
+                    <p className="text-[var(--muted)]">{p.payment_structures?.name ?? "Unknown"} — {formatPeso(Number(p.amount_paid))}</p>
                   </div>
-                  {p.notes ? <p className="mt-1 text-xs text-[var(--muted)]">Note: {p.notes}</p> : null}
+                  <span className="shrink-0 text-xs text-[var(--muted)]">{p.paid_at}</span>
                 </div>
-              ))}
-            </div>
-          )}
+                {p.notes ? <p className="mt-1 text-xs text-[var(--muted)]">Note: {p.notes}</p> : null}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
         </>
       ) : (
         <>
