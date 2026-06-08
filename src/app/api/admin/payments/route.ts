@@ -12,7 +12,7 @@ const postSchema = z.object({
 });
 
 export async function GET(req: NextRequest) {
-  const g = await requireRole(req.headers.get("cookie"), ["admin", "treasurer"]);
+  const g = await requireRole(req.headers.get("cookie"), ["admin", "treasurer", "member", "officer", "secretary"]);
   if (!g.ok) return g.response;
 
   const url = new URL(req.url);
