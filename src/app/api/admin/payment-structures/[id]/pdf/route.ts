@@ -86,7 +86,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     memberPayments.get(p.member_id)!.push({ amount: Number(p.amount_paid), monthIndex: mi });
   }
 
-  let rows: PaymentStatusRow[] = members.map((m) => {
+  const rows: PaymentStatusRow[] = members.map((m) => {
     const mp = memberPayments.get(m.id) ?? [];
     const totalPaid = mp.reduce((s, p) => s + p.amount, 0);
     const monthlyPaid: number[] = installmentMonths ? new Array(installmentMonths).fill(0) : [];
