@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
       gender: r.gender,
       date_of_birth: r.date_of_birth,
       contact_number: r.contact_number,
+      batch: r.batch ?? null,
       status: r.status,
       created_at: new Date(r.created_at).toLocaleString(),
       reviewed_at: r.reviewed_at ? new Date(r.reviewed_at).toLocaleString() : null,

@@ -13,6 +13,7 @@ type Request = {
   status: string;
   created_at: string;
   reviewed_at: string | null;
+  batch: string | null;
 };
 
 type EditForm = {
@@ -22,10 +23,12 @@ type EditForm = {
   date_of_birth: string;
   gender: string;
   contact_number: string;
+  batch: string;
 };
 
 export default function AdminRegistrationsPage() {
   const [requests, setRequests] = useState<Request[] | null>(null);
+  const [batches, setBatches] = useState<string[]>([]);
   const [tab, setTab] = useState<"pending" | "approved" | "rejected">("pending");
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -37,6 +40,7 @@ export default function AdminRegistrationsPage() {
     date_of_birth: "",
     gender: "",
     contact_number: "",
+    batch: "",
   });
   const [editError, setEditError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -51,6 +55,15 @@ export default function AdminRegistrationsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    (async () => {
+      const res = await fetch("/api/admin/member-batches", { credentials: "same-origin" });
+      if (!res.ok) return;
+      const j = (await res.json()) as { batches: { id: string; year: string }[] };
+      setBatches((j.batches ?? []).map((b) => b.year));
+    })();
+  }, []);
 
   const filteredRequests = useMemo(() => {
     if (requests === null) return [];
@@ -71,6 +84,7 @@ export default function AdminRegistrationsPage() {
       date_of_birth: r.date_of_birth,
       gender: r.gender,
       contact_number: r.contact_number,
+      batch: r.batch ?? "",
     });
     setEditingId(r.id);
     setEditError(null);
@@ -85,6 +99,7 @@ export default function AdminRegistrationsPage() {
     if (editForm.date_of_birth) body.date_of_birth = editForm.date_of_birth;
     if (editForm.gender) body.gender = editForm.gender;
     if (editForm.contact_number.trim()) body.contact_number = editForm.contact_number.trim();
+    body.batch = editForm.batch || null;
     const res = await fetch(`/api/admin/registration-requests/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -170,7 +185,7 @@ export default function AdminRegistrationsPage() {
 
   function downloadCsv() {
     if (!requests || requests.length === 0) return;
-    const headers = ["Name", "Gender", "Date of Birth", "Contact Number", "Status", "Submitted", "Reviewed"];
+    const headers = ["Name", "Gender", "Date of Birth", "Contact Number", "Batch", "Status", "Submitted", "Reviewed"];
     const rows = requests.map((r) => {
       const mi = r.middle_initial ? ` ${r.middle_initial}.` : "";
       return [
@@ -178,6 +193,7 @@ export default function AdminRegistrationsPage() {
         r.gender,
         r.date_of_birth,
         r.contact_number,
+        r.batch ?? "",
         r.status,
         new Date(r.created_at).toLocaleString(),
         r.reviewed_at ? new Date(r.reviewed_at).toLocaleString() : "",
@@ -384,6 +400,17 @@ export default function AdminRegistrationsPage() {
                               value={editForm.contact_number}
                               onChange={(e) => setEditForm({ ...editForm, contact_number: e.target.value })}
                             />
+                            <select
+                              className="min-h-10 w-28 rounded-lg border border-[var(--border)] px-2 text-sm"
+                              title="Batch"
+                              value={editForm.batch}
+                              onChange={(e) => setEditForm({ ...editForm, batch: e.target.value })}
+                            >
+                              <option value="">Batch</option>
+                              {batches.map((b) => (
+                                <option key={b} value={b}>{b}</option>
+                              ))}
+                            </select>
                           </div>
                           <div className="flex items-center gap-2">
                             <button
@@ -412,6 +439,7 @@ export default function AdminRegistrationsPage() {
                             <p>Gender: {r.gender}</p>
                             <p>DOB: {r.date_of_birth}</p>
                             <p>Contact: {r.contact_number}</p>
+                            {r.batch ? <p>Batch: {r.batch}</p> : null}
                             <p>Submitted: {new Date(r.created_at).toLocaleString()}</p>
                             {r.reviewed_at ? (
                               <p>Reviewed: {new Date(r.reviewed_at).toLocaleString()}</p>

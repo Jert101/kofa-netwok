@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
         date_of_birth: r.date_of_birth,
         gender: r.gender,
         contact_number: r.contact_number,
+        batch: r.batch || null,
       };
     });
 

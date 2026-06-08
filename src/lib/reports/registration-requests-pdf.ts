@@ -8,6 +8,7 @@ export type RegistrationRequestRow = {
   gender: string;
   date_of_birth: string;
   contact_number: string;
+  batch: string | null;
   status: string;
   created_at: string;
   reviewed_at: string | null;
@@ -42,7 +43,7 @@ export function buildRegistrationRequestsPdf(input: {
   autoTable(doc, {
     startY: y + 6,
     theme: "grid",
-    head: [["#", "Name", "Gender", "Date of birth", "Contact", "Status", "Submitted", "Reviewed"]],
+    head: [["#", "Name", "Gender", "Date of birth", "Contact", "Batch", "Status", "Submitted", "Reviewed"]],
     body:
       input.rows.length > 0
         ? input.rows.map((r) => [
@@ -51,11 +52,12 @@ export function buildRegistrationRequestsPdf(input: {
             r.gender,
             r.date_of_birth,
             r.contact_number,
+            r.batch ?? "",
             r.status,
             r.created_at,
             r.reviewed_at ?? "",
           ])
-        : [["", "No registration requests", "", "", "", "", "", ""]],
+        : [["", "No registration requests", "", "", "", "", "", "", ""]],
     margin: { left: margin, right: margin },
     styles: {
       fontSize: 8,
@@ -75,9 +77,10 @@ export function buildRegistrationRequestsPdf(input: {
       2: { cellWidth: 50, halign: "center" },
       3: { cellWidth: 65, halign: "center" },
       4: { cellWidth: 80 },
-      5: { cellWidth: 55, halign: "center" },
-      6: { cellWidth: 90 },
+      5: { cellWidth: 40, halign: "center" },
+      6: { cellWidth: 55, halign: "center" },
       7: { cellWidth: 90 },
+      8: { cellWidth: 90 },
     },
   });
 

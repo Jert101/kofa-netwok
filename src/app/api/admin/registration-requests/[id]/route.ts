@@ -11,6 +11,7 @@ const updateSchema = z.object({
   date_of_birth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   gender: z.enum(["male", "female"]).optional(),
   contact_number: z.string().min(7).max(20).trim().optional(),
+  batch: z.string().regex(/^\d{4}$/).optional().nullable(),
 });
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -84,6 +85,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         date_of_birth: request.date_of_birth,
         gender: request.gender,
         contact_number: request.contact_number,
+        batch: request.batch || null,
       });
       if (insertErr) {
         if (insertErr.code === "23505") {
@@ -120,6 +122,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       date_of_birth: request.date_of_birth,
       gender: request.gender,
       contact_number: request.contact_number,
+      batch: request.batch || null,
     });
 
     if (insertErr) {
