@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
   let q = sb
     .from("payments")
     .select("*, payment_structures(name, amount), members(full_name)")
+    .eq("voided", false)
     .order("paid_at", { ascending: false })
     .order("created_at", { ascending: false });
 

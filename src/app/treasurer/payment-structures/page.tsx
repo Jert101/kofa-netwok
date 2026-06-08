@@ -119,6 +119,7 @@ export default function PaymentStructuresPage() {
   }
 
   async function deactivate(id: string) {
+    if (!confirm("Are you sure you want to deactivate this payment structure? This action cannot be undone.")) return;
     await fetch(`/api/admin/payment-structures/${id}`, {
       method: "DELETE",
       credentials: "same-origin",

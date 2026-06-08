@@ -41,6 +41,7 @@ export default function PaymentsPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [voiding, setVoiding] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<{
     memberName: string;
     structureName: string;
@@ -65,6 +66,26 @@ export default function PaymentsPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  async function voidPayment(id: string) {
+    if (!confirm("Are you sure you want to void this payment? This action cannot be undone.")) return;
+    setVoiding(id);
+    try {
+      const res = await fetch(`/api/admin/payments/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+      });
+      if (!res.ok) {
+        const j = (await res.json()) as { error?: string };
+        alert(j.error ?? "Could not void payment");
+        return;
+      }
+      setAllPayments((prev) => prev.filter((p) => p.id !== id));
+    } finally {
+      setVoiding(null);
+    }
+  }
 
   useEffect(() => {
     (async () => {
@@ -323,7 +344,17 @@ export default function PaymentsPage() {
                     <p className="font-medium">{p.members?.full_name ?? "Unknown"}</p>
                     <p className="text-[var(--muted)]">{p.payment_structures?.name ?? "Unknown"} — {formatPeso(Number(p.amount_paid))}</p>
                   </div>
-                  <span className="shrink-0 text-xs text-[var(--muted)]">{p.paid_at}</span>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="text-xs text-[var(--muted)]">{p.paid_at}</span>
+                    <button
+                      type="button"
+                      onClick={() => voidPayment(p.id)}
+                      disabled={voiding === p.id}
+                      className="text-xs text-[var(--danger)] disabled:opacity-40"
+                    >
+                      {voiding === p.id ? "Voiding…" : "Void"}
+                    </button>
+                  </div>
                 </div>
                 {p.notes ? <p className="mt-1 text-xs text-[var(--muted)]">Note: {p.notes}</p> : null}
               </div>
