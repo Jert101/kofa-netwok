@@ -139,13 +139,14 @@ export default function ReceiptModal({
     let y = 138;
     const lineH = 30;
 
+    const c = ctx;
     function drawDetail(label: string, value: string) {
-      ctx.font = "11px sans-serif";
-      ctx.fillStyle = MUTED;
-      ctx.fillText(label, labelX, y);
-      ctx.fillStyle = DARK;
-      ctx.font = "12px sans-serif";
-      ctx.fillText(value, valueX, y);
+      c.font = "11px sans-serif";
+      c.fillStyle = MUTED;
+      c.fillText(label, labelX, y);
+      c.fillStyle = DARK;
+      c.font = "12px sans-serif";
+      c.fillText(value, valueX, y);
       y += lineH;
     }
 
