@@ -186,6 +186,8 @@ export default function AdminRegistrationsPage() {
       setBusy(false);
     }
   }
+
+  function toggleSelect(id: string) {
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
