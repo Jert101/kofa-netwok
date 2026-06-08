@@ -284,8 +284,8 @@ export default function PaymentStructuresPage() {
                       onClick={() => { setEditForAll(!editForAll); setEditBatch(""); }}
                       className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${editForAll ? "bg-[var(--accent)]" : "bg-gray-300"}`}
                     >
-                      <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${editForAll ? "translate-x-5" : "translate-x-0"}`} />
-                    </span>
+                        <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${editForAll ? "translate-x-5" : "translate-x-0"}`} />
+                    </button>
                     <span className="text-[var(--muted)]">For all members</span>
                   </label>
                   {!editForAll ? (
