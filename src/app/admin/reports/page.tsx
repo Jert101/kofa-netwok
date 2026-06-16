@@ -1,5 +1,6 @@
 import { ReportsPanel } from "@/components/ReportsPanel";
 import { TopServersCard } from "@/components/TopServersCard";
+import { InactiveMembersCard } from "@/components/InactiveMembersCard";
 import Image from "next/image";
 
 export default function AdminReportsPage() {
@@ -11,6 +12,7 @@ export default function AdminReportsPage() {
       </div>
       <ReportsPanel showAdminScheduleBypass showArchiveToggle />
       <TopServersCard />
+      <InactiveMembersCard />
     </div>
   );
 }
