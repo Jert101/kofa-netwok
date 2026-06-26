@@ -22,9 +22,7 @@ function configureWebPush() {
 export async function broadcastPush(payload: PushPayload): Promise<void> {
   try {
     if (!configureWebPush()) {
-      if (process.env.NODE_ENV === "development") {
-        console.warn("[push] VAPID env not set; skipping broadcast");
-      }
+      console.warn("[push] VAPID env not set; skipping broadcast");
       return;
     }
 
@@ -52,8 +50,8 @@ export async function broadcastPush(payload: PushPayload): Promise<void> {
           const status = (e as { statusCode?: number })?.statusCode;
           if (status === 410 || status === 404) {
             deadIds.push(row.id as string);
-          } else if (process.env.NODE_ENV === "development") {
-            console.warn("[push] send failed", status, e);
+          } else {
+            console.error("[push] send failed", status, e);
           }
         }
       })
@@ -63,8 +61,6 @@ export async function broadcastPush(payload: PushPayload): Promise<void> {
       await sb.from("push_subscriptions").delete().in("id", deadIds);
     }
   } catch (e) {
-    if (process.env.NODE_ENV === "development") {
-      console.warn("[push] broadcast error", e);
-    }
+    console.error("[push] broadcast error", e);
   }
 }

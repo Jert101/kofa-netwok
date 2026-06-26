@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
 
     created.push({ id: m.id, ok: true });
 
-    void broadcastPush({
+    await broadcastPush({
       title: "Birthday Greeting",
       body,
       url: "/member",
