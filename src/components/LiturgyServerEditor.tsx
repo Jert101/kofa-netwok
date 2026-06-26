@@ -77,6 +77,11 @@ export function LiturgyServerEditor(props: LiturgyServerEditorProps) {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
+  const [templates, setTemplates] = useState<{ id: string; name: string; slot_count: number }[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [saveTemplateName, setSaveTemplateName] = useState("");
+  const [templateLoading, setTemplateLoading] = useState(false);
+
   useEffect(() => {
     setRoles(rowsToRoleBlocks(props.initialRows));
   }, [props.initialRows]);
@@ -98,6 +103,15 @@ export function LiturgyServerEditor(props: LiturgyServerEditorProps) {
     }, 180);
     return () => clearTimeout(t);
   }, [term]);
+
+  useEffect(() => {
+    (async () => {
+      const res = await fetch("/api/officer/liturgy-templates", { credentials: "same-origin" });
+      if (!res.ok) return;
+      const j = (await res.json()) as { templates: { id: string; name: string; slot_count: number }[] };
+      setTemplates(j.templates ?? []);
+    })();
+  }, []);
 
   const addMemberToRole = useCallback((roleIdx: number, m: Member) => {
     setRoles((prev) => {
@@ -130,6 +144,79 @@ export function LiturgyServerEditor(props: LiturgyServerEditorProps) {
 
   function removeRole(i: number) {
     setRoles((r) => (r.length <= 1 ? r : r.filter((_, j) => j !== i)));
+  }
+
+  async function saveAsTemplate() {
+    const name = saveTemplateName.trim();
+    if (!name) {
+      setMsg("Enter a template name.");
+      return;
+    }
+    const labels = roles.map((r) => r.position_label.trim()).filter(Boolean);
+    if (labels.length === 0) {
+      setMsg("Add at least one role before saving as template.");
+      return;
+    }
+    setTemplateLoading(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/officer/liturgy-templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ name, position_labels: labels }),
+      });
+      const j = (await res.json()) as { id?: string; error?: string };
+      if (!res.ok) {
+        setMsg(j.error ?? "Could not save template.");
+        return;
+      }
+      setTemplates((prev) => [...prev, { id: j.id!, name, slot_count: labels.length }]);
+      setSaveTemplateName("");
+      setMsg("Template saved.");
+    } finally {
+      setTemplateLoading(false);
+    }
+  }
+
+  async function loadTemplate() {
+    if (!selectedTemplateId) {
+      setMsg("Select a template to load.");
+      return;
+    }
+    setTemplateLoading(true);
+    setMsg(null);
+    try {
+      const res = await fetch(`/api/officer/liturgy-templates/${selectedTemplateId}`, {
+        credentials: "same-origin",
+      });
+      if (!res.ok) {
+        setMsg("Could not load template.");
+        return;
+      }
+      const j = (await res.json()) as { position_labels: string[] };
+      setRoles(j.position_labels.map((label) => ({ position_label: label, members: [] })));
+      setSelectedTemplateId("");
+      setMsg("Template loaded — assign members to each role.");
+    } finally {
+      setTemplateLoading(false);
+    }
+  }
+
+  async function deleteTemplate(id: string) {
+    if (!confirm("Delete this template?")) return;
+    setMsg(null);
+    try {
+      const res = await fetch(`/api/officer/liturgy-templates/${id}`, {
+        method: "DELETE",
+        credentials: "same-origin",
+      });
+      if (!res.ok) return;
+      setTemplates((prev) => prev.filter((t) => t.id !== id));
+      setMsg("Template deleted.");
+    } catch {
+      /* ignore */
+    }
   }
 
   async function save() {
@@ -235,6 +322,66 @@ export function LiturgyServerEditor(props: LiturgyServerEditorProps) {
     <section className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
       <h2 className="text-sm font-semibold text-[var(--accent)]">{heading}</h2>
       <p className="mt-1 text-xs text-[var(--muted)]">{sub}</p>
+
+      <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3">
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs text-[var(--muted)]">
+            Load a template
+            <div className="flex gap-2">
+              <select
+                className="min-h-11 flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm"
+                value={selectedTemplateId}
+                onChange={(e) => setSelectedTemplateId(e.target.value)}
+              >
+                <option value="">— Select —</option>
+                {templates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} ({t.slot_count})
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                disabled={templateLoading}
+                className="min-h-11 rounded-lg bg-[var(--accent)] px-4 text-sm font-medium text-white disabled:opacity-40"
+                onClick={() => void loadTemplate()}
+              >
+                Load
+              </button>
+              {selectedTemplateId ? (
+                <button
+                  type="button"
+                  className="min-h-11 rounded-lg border border-[var(--danger)] px-3 text-sm text-[var(--danger)]"
+                  onClick={() => { const id = selectedTemplateId; setSelectedTemplateId(""); void deleteTemplate(id); }}
+                >
+                  ×
+                </button>
+              ) : null}
+            </div>
+          </label>
+        </div>
+        <div className="mt-2 flex flex-wrap items-end gap-2">
+          <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs text-[var(--muted)]">
+            Save current positions as template
+            <div className="flex gap-2">
+              <input
+                className="min-h-11 flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm"
+                placeholder="Template name"
+                value={saveTemplateName}
+                onChange={(e) => setSaveTemplateName(e.target.value)}
+              />
+              <button
+                type="button"
+                disabled={templateLoading}
+                className="min-h-11 rounded-lg bg-[var(--accent)] px-4 text-sm font-medium text-white disabled:opacity-40"
+                onClick={() => void saveAsTemplate()}
+              >
+                Save
+              </button>
+            </div>
+          </label>
+        </div>
+      </div>
 
       <ul className="mt-4 space-y-4">
         {roles.map((role, i) => (
