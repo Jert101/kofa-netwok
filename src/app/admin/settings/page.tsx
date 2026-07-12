@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-type PinRole = "admin" | "secretary" | "member" | "officer" | "treasurer";
+type PinRole = "admin" | "secretary" | "member" | "officer" | "treasurer" | "super_admin";
 
 function SinglePinForm({ role, label }: { role: PinRole; label: string }) {
   const [pin, setPin] = useState("");
@@ -276,6 +276,7 @@ export default function AdminSettingsPage() {
           <SinglePinForm role="member" label="Member" />
           <SinglePinForm role="officer" label="Officer" />
           <SinglePinForm role="treasurer" label="Treasurer" />
+          <SinglePinForm role="super_admin" label="Super Admin (report approval)" />
         </div>
       </section>
     </div>

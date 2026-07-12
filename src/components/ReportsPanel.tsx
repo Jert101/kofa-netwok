@@ -9,6 +9,7 @@ type Report = {
   title: string;
   generated_by: string;
   created_at: string;
+  status?: string;
   data_archived?: boolean;
 };
 
@@ -561,6 +562,8 @@ export function ReportsPanel({ showAdminScheduleBypass = false, showArchiveToggl
           <ul className="space-y-3">
             {reports.map((r) => {
               const archived = r.data_archived !== false;
+              const isPending = r.status === "pending";
+              const isRejected = r.status === "rejected";
               return (
                 <li
                   key={r.id}
@@ -575,14 +578,33 @@ export function ReportsPanel({ showAdminScheduleBypass = false, showArchiveToggl
                           dateStyle: "medium",
                           timeStyle: "short",
                         })}
+                        {isPending ? (
+                          <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                            Pending approval
+                          </span>
+                        ) : isRejected ? (
+                          <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                            Rejected
+                          </span>
+                        ) : null}
                       </p>
                     </div>
-                    <a
-                      href={`/api/reports/${r.id}/pdf`}
-                      className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl bg-[var(--accent)] px-5 text-sm font-semibold text-white shadow-sm active:scale-[0.99] sm:self-start"
-                    >
-                      Download PDF
-                    </a>
+                    {isPending ? (
+                      <span className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl bg-[var(--surface-2)] px-5 text-sm font-medium text-[var(--muted)] sm:self-start">
+                        Awaiting approval
+                      </span>
+                    ) : isRejected ? (
+                      <span className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl bg-[var(--surface-2)] px-5 text-sm font-medium text-[var(--muted)] sm:self-start">
+                        Rejected
+                      </span>
+                    ) : (
+                      <a
+                        href={`/api/reports/${r.id}/pdf`}
+                        className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl bg-[var(--accent)] px-5 text-sm font-semibold text-white shadow-sm active:scale-[0.99] sm:self-start"
+                      >
+                        Download PDF
+                      </a>
+                    )}
                   </div>
                   {showArchiveToggle ? (
                     <div className="flex flex-col gap-2 border-t border-[var(--border)] pt-3 sm:flex-row sm:items-center sm:justify-between">

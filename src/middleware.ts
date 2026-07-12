@@ -80,6 +80,13 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  if (need("/super-admin")) {
+    if (session?.role !== "super_admin") {
+      return NextResponse.redirect(loginUrl(req));
+    }
+    return NextResponse.next();
+  }
+
   return NextResponse.redirect(loginUrl(req));
 }
 

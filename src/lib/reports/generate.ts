@@ -84,9 +84,17 @@ export async function generateMonthlyReport(params: {
   const monthStart = requestedMonthStart;
   const { start, end } = monthBoundsFromStart(monthStart);
 
-  const { data: existing } = await sb.from("reports").select("id").eq("report_month", monthStart).maybeSingle();
-  if (existing?.id) {
+  const { data: existing } = await sb
+    .from("reports")
+    .select("id, status")
+    .eq("report_month", monthStart)
+    .maybeSingle();
+  if (existing?.id && existing.status !== "rejected") {
     return { ok: false, code: "ALREADY_EXISTS", message: "A report for this month already exists." };
+  }
+
+  if (existing?.id && existing.status === "rejected") {
+    await sb.from("reports").delete().eq("id", existing.id);
   }
 
   const { data: sessions, error: sErr } = await sb
@@ -200,6 +208,9 @@ export async function generateMonthlyReport(params: {
     })),
   };
 
+  const superAdminHash = settings.pin_super_admin_hash ?? "";
+  const needsApproval = superAdminHash.length > 0;
+
   const zNow = toZonedTime(params.now, tz);
   const generatedAtLabel = format(zNow, "PPpp");
 
@@ -221,12 +232,14 @@ export async function generateMonthlyReport(params: {
 
   const pdfB64 = Buffer.from(pdfBytes).toString("base64");
 
+  const status = needsApproval ? "pending" : "approved";
   const { data: reportRow, error: repErr } = await sb
     .from("reports")
     .insert({
       report_month: monthStart,
       title: `${reportTitle} — ${monthLabel}`,
       generated_by: params.generatedBy,
+      status,
       summary_json: summaryJson,
       pdf_storage_path: pdfB64,
     })
@@ -239,20 +252,29 @@ export async function generateMonthlyReport(params: {
 
   const reportId = reportRow.id as string;
 
-  if (archiveAfterGenerate) {
+  if (archiveAfterGenerate && !needsApproval) {
     const moved = await moveLiveMonthAttendanceToArchive(sb, reportId, sessionList, records);
     if (!moved.ok) {
       return { ok: false, code: "SERVER", message: moved.message };
     }
   }
 
-  const toRole = params.generatedBy === "secretary" ? "admin" : "secretary";
-  await sb.from("notifications").insert({
-    from_role: params.generatedBy,
-    to_role: toRole,
-    title: "Monthly report generated",
-    body: `${monthLabel} report is ready. You can download the PDF from Reports.`,
-  });
+  if (needsApproval) {
+    await sb.from("notifications").insert({
+      from_role: params.generatedBy,
+      to_role: "super_admin",
+      title: "Monthly report pending approval",
+      body: `${monthLabel} report was generated and needs your review.`,
+    });
+  } else {
+    const toRole = params.generatedBy === "secretary" ? "admin" : "secretary";
+    await sb.from("notifications").insert({
+      from_role: params.generatedBy,
+      to_role: toRole,
+      title: "Monthly report generated",
+      body: `${monthLabel} report is ready. You can download the PDF from Reports.`,
+    });
+  }
 
   return { ok: true, reportId };
 }

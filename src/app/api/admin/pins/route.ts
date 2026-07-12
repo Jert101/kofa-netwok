@@ -9,7 +9,7 @@ const pinField = z.string().min(4).max(12);
 
 const bodySchema = z
   .object({
-    role: z.enum(["admin", "secretary", "member", "officer", "treasurer"]),
+    role: z.enum(["admin", "secretary", "member", "officer", "treasurer", "super_admin"]),
     pin: pinField,
     confirm: pinField,
   })
@@ -21,6 +21,7 @@ const PIN_HASH_KEY: Record<z.infer<typeof bodySchema>["role"], SettingKey> = {
   member: "pin_member_hash",
   officer: "pin_officer_hash",
   treasurer: "pin_treasurer_hash",
+  super_admin: "pin_super_admin_hash",
 };
 
 export async function POST(req: NextRequest) {

@@ -7,15 +7,19 @@ export const runtime = "nodejs";
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(req: NextRequest, ctx: Ctx) {
-  const g = await requireRole(req.headers.get("cookie"), ["admin", "secretary"]);
+  const g = await requireRole(req.headers.get("cookie"), ["admin", "secretary", "super_admin"]);
   if (!g.ok) return g.response;
 
   const { id } = await ctx.params;
   const sb = getSupabaseAdmin();
-  const { data, error } = await sb.from("reports").select("title, pdf_storage_path").eq("id", id).maybeSingle();
+  const { data, error } = await sb.from("reports").select("title, pdf_storage_path, status").eq("id", id).maybeSingle();
 
   if (error || !data?.pdf_storage_path) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  if (g.session.role !== "super_admin" && data.status !== "approved") {
+    return NextResponse.json({ error: "Report not yet approved" }, { status: 403 });
   }
 
   const buf = Buffer.from(data.pdf_storage_path as string, "base64");

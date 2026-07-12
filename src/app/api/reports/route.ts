@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   const sb = getSupabaseAdmin();
   const { data, error } = await sb
     .from("reports")
-    .select("id, report_month, title, generated_by, created_at, summary_json")
+    .select("id, report_month, title, generated_by, created_at, summary_json, status")
     .order("created_at", { ascending: false });
 
   if (error) {
