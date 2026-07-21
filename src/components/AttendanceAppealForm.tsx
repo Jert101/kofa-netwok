@@ -20,7 +20,6 @@ export function AttendanceAppealForm({
   const [results, setResults] = useState<Member[]>([]);
   const [selected, setSelected] = useState<Map<string, string>>(new Map());
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
   const [modal, setModal] = useState<{ title: string; body: string } | null>(null);
   const [cannotAppealIds, setCannotAppealIds] = useState<Set<string>>(new Set());
 
@@ -70,7 +69,6 @@ export function AttendanceAppealForm({
   }, [term]);
 
   async function submitAppeal() {
-    setMsg(null);
     setSaving(true);
     onSubmittingChange?.(true);
     try {
@@ -184,7 +182,6 @@ export function AttendanceAppealForm({
                     });
                     return;
                   }
-                  setMsg(null);
                   setSelected((prev) => {
                     const n = new Map(prev);
                     n.set(m.id, m.full_name);

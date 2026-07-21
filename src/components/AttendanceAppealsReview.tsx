@@ -77,7 +77,7 @@ export function AttendanceAppealsReview({
       onAppealApproved?.();
       load();
     } finally {
-      setApproveAllBusy(null);
+      setApproveAllBusy(false);
     }
   }
 
