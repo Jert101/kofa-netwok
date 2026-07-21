@@ -21,6 +21,7 @@ export function AttendanceAppealForm({
   const [selected, setSelected] = useState<Map<string, string>>(new Map());
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [modal, setModal] = useState<{ title: string; body: string } | null>(null);
   const [cannotAppealIds, setCannotAppealIds] = useState<Set<string>>(new Set());
 
   const loadAppealRestrictions = useCallback(async () => {
@@ -75,7 +76,7 @@ export function AttendanceAppealForm({
     try {
       const member_ids = [...selected.keys()];
       if (member_ids.length === 0) {
-        setMsg("Add at least one name.");
+        setModal({ title: "No names selected", body: "Add at least one name before submitting." });
         return;
       }
       const res = await fetch(`/api/attendance/session/${sessionId}/appeals`, {
@@ -86,20 +87,19 @@ export function AttendanceAppealForm({
       });
       const j = (await res.json()) as { error?: string; auto_approved?: boolean; approved_count?: number };
       if (!res.ok) {
-        setMsg(j.error ?? "Could not submit appeal.");
+        setModal({
+          title: "Appeal not submitted",
+          body: j.error ?? "Could not submit appeal.",
+        });
         return;
       }
       setSelected(new Map());
       setTerm("");
       setResults([]);
       if (j.auto_approved) {
-        setMsg(
-          `Auto-approved: ${j.approved_count ?? member_ids.length} name${
-            (j.approved_count ?? member_ids.length) === 1 ? "" : "s"
-          } added to attendance.`
-        );
+        setModal({ title: "Appeal approved", body: "Attendance has been updated." });
       } else {
-        setMsg("Appeal submitted. Admin/Secretary will review each name.");
+        setModal({ title: "Appeal submitted", body: "Your appeal will be reviewed by the administrator." });
       }
       await loadAppealRestrictions();
       onAppealSubmitted?.();
@@ -134,6 +134,30 @@ export function AttendanceAppealForm({
   return (
     <section className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
       {submittingOverlay}
+      {modal && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4 backdrop-blur-[2px]"
+              onClick={() => setModal(null)}
+            >
+              <div
+                className="w-full max-w-sm rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <p className="text-lg font-semibold text-[var(--text)]">{modal.title}</p>
+                <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">{modal.body}</p>
+                <button
+                  type="button"
+                  onClick={() => setModal(null)}
+                  className="mt-5 min-h-11 w-full rounded-xl bg-[var(--accent)] text-sm font-semibold text-white"
+                >
+                  OK
+                </button>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
       <h2 className="text-sm font-semibold text-[var(--accent)]">Attendance appeal</h2>
       <p className="mt-1 text-xs text-[var(--muted)]">
         If a server is missing in this attendance, add one or more names and submit for review. You cannot appeal
@@ -150,24 +174,27 @@ export function AttendanceAppealForm({
       <ul className="mt-2 max-h-48 overflow-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
         {results.map((m) => (
           <li key={m.id}>
-            <button
-              type="button"
-              onClick={() => {
-                if (cannotAppealIds.has(m.id)) {
-                  setMsg("This name is already on attendance or already has a pending appeal for this Mass.");
-                  return;
-                }
-                setMsg(null);
-                setSelected((prev) => {
-                  const n = new Map(prev);
-                  n.set(m.id, m.full_name);
-                  return n;
-                });
-                setTerm("");
-                setResults([]);
-              }}
-              className="min-h-11 w-full px-4 text-left text-sm active:bg-[var(--surface-2)]"
-            >
+              <button
+                type="button"
+                onClick={() => {
+                  if (cannotAppealIds.has(m.id)) {
+                    setModal({
+                      title: "Cannot appeal",
+                      body: `${m.full_name} is already on the attendance list or already has a pending appeal for this Mass.`,
+                    });
+                    return;
+                  }
+                  setMsg(null);
+                  setSelected((prev) => {
+                    const n = new Map(prev);
+                    n.set(m.id, m.full_name);
+                    return n;
+                  });
+                  setTerm("");
+                  setResults([]);
+                }}
+                className="min-h-11 w-full px-4 text-left text-sm active:bg-[var(--surface-2)]"
+              >
               {m.full_name}
             </button>
           </li>
@@ -198,8 +225,6 @@ export function AttendanceAppealForm({
           </span>
         ))}
       </div>
-
-      {msg ? <p className="mt-3 text-sm text-[var(--muted)]">{msg}</p> : null}
 
       <button
         type="button"

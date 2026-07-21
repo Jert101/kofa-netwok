@@ -96,8 +96,15 @@ export default function MemberSessionDetailPage() {
         ← Back
       </button>
       <h1 className="text-lg font-semibold">{loading ? "…" : massName}</h1>
+      {!loading ? (
+        <AttendanceAppealForm
+          sessionId={id}
+          onAppealSubmitted={() => setRosterVersion((v) => v + 1)}
+          onSubmittingChange={setAppealSubmitting}
+        />
+      ) : null}
       {!loading && liturgy.length > 0 ? (
-        <section className="mt-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+        <section className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
           <h2 className="text-sm font-semibold text-[var(--accent)]">Liturgy servers</h2>
           <ul className="mt-2 space-y-2">
             {liturgy.map((row, i) => {
@@ -116,7 +123,7 @@ export default function MemberSessionDetailPage() {
       <input
         type="search"
         placeholder="Search names"
-        className="mt-4 w-full min-h-12 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4"
+        className="mt-5 w-full min-h-12 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4"
         value={q}
         onChange={(e) => setQ(e.target.value)}
         disabled={appealSubmitting}
@@ -131,13 +138,6 @@ export default function MemberSessionDetailPage() {
           <li className="px-4 py-6 text-center text-sm text-[var(--muted)]">No matches</li>
         ) : null}
       </ul>
-      {!loading ? (
-        <AttendanceAppealForm
-          sessionId={id}
-          onAppealSubmitted={() => setRosterVersion((v) => v + 1)}
-          onSubmittingChange={setAppealSubmitting}
-        />
-      ) : null}
     </div>
   );
 }

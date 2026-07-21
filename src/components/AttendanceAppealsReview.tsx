@@ -82,7 +82,14 @@ export function AttendanceAppealsReview({
   }
 
   return (
-    <section className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+    <section className="relative mt-5 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+      {approveAllBusy ? (
+        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-black/40 backdrop-blur-[2px]">
+          <div className="rounded-xl bg-[var(--surface)] px-6 py-4 shadow-lg">
+            <p className="text-sm font-semibold text-[var(--text)]">Saving approved attendances…</p>
+          </div>
+        </div>
+      ) : null}
       <h2 className="text-sm font-semibold text-[var(--accent)]">Attendance appeals</h2>
       <p className="mt-1 text-xs text-[var(--muted)]">
         Pending appeals only; resolved appeals are removed to keep the list and database lean.
