@@ -20,6 +20,7 @@ export function AttendanceAppealsReview({
 }) {
   const [items, setItems] = useState<AppealItem[] | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [approveAllBusy, setApproveAllBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -59,6 +60,27 @@ export function AttendanceAppealsReview({
     }
   }
 
+  async function approveAll() {
+    setMsg(null);
+    setApproveAllBusy(true);
+    try {
+      const res = await fetch(`/api/attendance/session/${sessionId}/appeals/approve-all`, {
+        method: "POST",
+        credentials: "same-origin",
+      });
+      const j = (await res.json()) as { error?: string; approved_count?: number };
+      if (!res.ok) {
+        setMsg(j.error ?? "Could not approve all");
+        return;
+      }
+      setMsg(`All ${j.approved_count ?? 0} pending appeals approved.`);
+      onAppealApproved?.();
+      load();
+    } finally {
+      setApproveAllBusy(null);
+    }
+  }
+
   return (
     <section className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
       <h2 className="text-sm font-semibold text-[var(--accent)]">Attendance appeals</h2>
@@ -71,34 +93,46 @@ export function AttendanceAppealsReview({
       ) : items.length === 0 ? (
         <p className="mt-3 text-sm text-[var(--muted)]">No pending appeals for this session.</p>
       ) : (
-        <ul className="mt-3 space-y-2">
-          {items.map((a) => (
-            <li key={a.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3">
-              <p className="font-medium text-[var(--text)]">{a.member_name}</p>
-              <p className="mt-1 text-xs text-[var(--muted)]">
-                Submitted {new Date(a.submitted_at ?? a.created_at).toLocaleString()}
-              </p>
-              <div className="mt-2 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => review(a.id, "approve")}
-                  disabled={busyId === a.id}
-                  className="min-h-10 rounded-lg bg-[var(--accent)] px-3 text-sm font-medium text-white disabled:opacity-40"
-                >
-                  Approve
-                </button>
-                <button
-                  type="button"
-                  onClick={() => review(a.id, "reject")}
-                  disabled={busyId === a.id}
-                  className="min-h-10 rounded-lg border border-[var(--danger)] px-3 text-sm font-medium text-[var(--danger)] disabled:opacity-40"
-                >
-                  Reject
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <>
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void approveAll()}
+              disabled={approveAllBusy}
+              className="min-h-10 rounded-lg bg-[var(--accent)] px-4 text-sm font-semibold text-white disabled:opacity-40"
+            >
+              {approveAllBusy ? "Approving…" : `Approve all (${items.length})`}
+            </button>
+          </div>
+          <ul className="mt-3 space-y-2">
+            {items.map((a) => (
+              <li key={a.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3">
+                <p className="font-medium text-[var(--text)]">{a.member_name}</p>
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  Submitted {new Date(a.submitted_at ?? a.created_at).toLocaleString()}
+                </p>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => review(a.id, "approve")}
+                    disabled={busyId === a.id || approveAllBusy}
+                    className="min-h-10 rounded-lg bg-[var(--accent)] px-3 text-sm font-medium text-white disabled:opacity-40"
+                  >
+                    Approve
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => review(a.id, "reject")}
+                    disabled={busyId === a.id || approveAllBusy}
+                    className="min-h-10 rounded-lg border border-[var(--danger)] px-3 text-sm font-medium text-[var(--danger)] disabled:opacity-40"
+                  >
+                    Reject
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
 
       {msg ? <p className="mt-3 text-sm text-[var(--muted)]">{msg}</p> : null}
