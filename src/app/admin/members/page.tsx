@@ -74,6 +74,15 @@ function nameExists(members: Member[], fullName: string, opts?: { excludeId?: st
 
 const emptyDetails: MemberDetails = { date_of_birth: "", gender: "", contact_number: "", batch: "" };
 
+const dobFormatter = new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric", year: "numeric" });
+
+function formatDob(iso: string | null): string | null {
+  if (!iso) return null;
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return iso;
+  return dobFormatter.format(new Date(y, m - 1, d));
+}
+
 function DetailsFields({
   details,
   onChange,
@@ -93,18 +102,20 @@ function DetailsFields({
 
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+      <label className="sr-only" htmlFor="dob-input">Date of birth</label>
       <input
+        id="dob-input"
         type="date"
         min={`${minYear}-01-01`}
         max={`${maxYear}-12-31`}
-        className="min-h-11 flex-1 rounded-lg border border-[var(--border)] px-2"
-        title="Date of birth"
+        aria-label="Date of birth"
+        className="min-h-11 flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3"
         value={details.date_of_birth}
         onChange={(e) => update("date_of_birth", e.target.value)}
       />
       <select
-        className="min-h-11 w-28 rounded-lg border border-[var(--border)] px-2"
-        title="Gender"
+        aria-label="Gender"
+        className="min-h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 sm:w-28"
         value={details.gender}
         onChange={(e) => update("gender", e.target.value)}
       >
@@ -114,14 +125,16 @@ function DetailsFields({
       </select>
       <input
         type="tel"
-        className="min-h-11 flex-1 rounded-lg border border-[var(--border)] px-2"
+        inputMode="tel"
+        aria-label="Contact number"
         placeholder="Contact number"
+        className="min-h-11 flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3"
         value={details.contact_number}
         onChange={(e) => update("contact_number", e.target.value)}
       />
       <select
-        className="min-h-11 w-28 rounded-lg border border-[var(--border)] px-2"
-        title="Batch"
+        aria-label="Batch"
+        className="min-h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 sm:w-28"
         value={details.batch}
         onChange={(e) => update("batch", e.target.value)}
       >
@@ -148,20 +161,26 @@ function NameFormFields({
   return (
     <div className="flex flex-col gap-2 sm:flex-row">
       <input
-        className="min-h-11 flex-1 rounded-lg border border-[var(--border)] px-2"
+        aria-label="First name"
+        autoComplete="given-name"
+        className="min-h-11 flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3"
         placeholder="First name"
         value={parts.first}
         onChange={(e) => update("first", e.target.value)}
       />
       <input
-        className="min-h-11 w-20 rounded-lg border border-[var(--border)] px-2 text-center"
+        aria-label="Middle initial"
+        autoComplete="additional-name"
+        className="min-h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-center sm:w-20"
         placeholder="MI"
         maxLength={1}
         value={parts.middle}
         onChange={(e) => update("middle", e.target.value.replace(".", ""))}
       />
       <input
-        className="min-h-11 flex-1 rounded-lg border border-[var(--border)] px-2"
+        aria-label="Last name"
+        autoComplete="family-name"
+        className="min-h-11 flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3"
         placeholder="Last name"
         value={parts.last}
         onChange={(e) => update("last", e.target.value)}
@@ -347,7 +366,7 @@ export default function AdminMembersPage() {
           ) : null}
           <Link
             href={pdfUrl}
-            className="min-h-10 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium text-[var(--accent)]"
+            className="min-h-11 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--accent)] hover:bg-[var(--surface-2)]"
           >
             Download list (PDF)
           </Link>
@@ -367,7 +386,7 @@ export default function AdminMembersPage() {
           ) : null}
         </div>
         {addError ? (
-          <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+          <p className="text-sm text-[var(--danger)]" role="alert">
             {addError}
           </p>
         ) : null}
@@ -451,14 +470,14 @@ export default function AdminMembersPage() {
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
-                      className="min-h-11 rounded-lg bg-[var(--accent)] px-3 text-white"
+                      className="min-h-11 rounded-xl bg-[var(--accent)] px-4 font-medium text-white"
                       onClick={() => save(m.id)}
                     >
                       Save
                     </button>
                     <button
                       type="button"
-                      className="min-h-11"
+                      className="min-h-11 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 text-sm font-medium text-[var(--muted)] hover:bg-[var(--surface-2)]"
                       onClick={() => {
                         setEditing(null);
                         setEditError(null);
@@ -473,7 +492,7 @@ export default function AdminMembersPage() {
                     ) : null}
                   </div>
                   {editError ? (
-                    <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+                    <p className="text-sm text-[var(--danger)]" role="alert">
                       {editError}
                     </p>
                   ) : null}
@@ -486,7 +505,7 @@ export default function AdminMembersPage() {
                     </span>
                     {(m.date_of_birth || m.gender || m.contact_number || m.batch) ? (
                       <div className="mt-1 space-y-0.5 text-xs text-[var(--muted)]">
-                        {m.date_of_birth ? <span>DOB: {m.date_of_birth}</span> : null}
+                        {m.date_of_birth ? <span>DOB: {formatDob(m.date_of_birth)}</span> : null}
                         {m.gender ? <span> · {m.gender}</span> : null}
                         {m.batch ? <span> · Batch {m.batch}</span> : null}
                         {m.contact_number ? <span> · {m.contact_number}</span> : null}
@@ -496,14 +515,14 @@ export default function AdminMembersPage() {
                   <div className="flex gap-2 shrink-0">
                     <button
                       type="button"
-                      className="text-sm text-[var(--accent)]"
+                      className="min-h-11 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 text-sm font-medium text-[var(--accent)] hover:bg-[var(--surface-2)]"
                       onClick={() => startEdit(m)}
                     >
                       Edit
                     </button>
                     <button
                       type="button"
-                      className="text-sm text-[var(--muted)]"
+                      className="min-h-11 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 text-sm font-medium text-[var(--muted)] hover:bg-[var(--surface-2)]"
                       onClick={() => toggleActive(m.id, m.is_active)}
                     >
                       {m.is_active ? "Deactivate" : "Activate"}
@@ -520,7 +539,8 @@ export default function AdminMembersPage() {
           <button
             type="button"
             disabled={safePage <= 1}
-            className="min-h-9 min-w-9 rounded-lg border border-[var(--border)] px-2 text-sm disabled:opacity-40"
+            aria-label="Previous page"
+            className="min-h-11 min-w-11 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-2 text-sm disabled:opacity-40"
             onClick={() => goToPage(safePage - 1)}
           >
             ‹
@@ -547,10 +567,11 @@ export default function AdminMembersPage() {
                 <button
                   key={p}
                   type="button"
-                  className={`min-h-9 min-w-9 rounded-lg border px-2 text-sm ${
+                  aria-current={p === safePage ? "page" : undefined}
+                  className={`min-h-11 min-w-11 rounded-xl border px-2 text-sm ${
                     p === safePage
                       ? "border-[var(--accent)] bg-[var(--accent)] text-white"
-                      : "border-[var(--border)]"
+                      : "border-[var(--border)] bg-[var(--surface)]"
                   }`}
                   onClick={() => goToPage(p)}
                 >
@@ -562,7 +583,8 @@ export default function AdminMembersPage() {
           <button
             type="button"
             disabled={safePage >= totalPages}
-            className="min-h-9 min-w-9 rounded-lg border border-[var(--border)] px-2 text-sm disabled:opacity-40"
+            aria-label="Next page"
+            className="min-h-11 min-w-11 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-2 text-sm disabled:opacity-40"
             onClick={() => goToPage(safePage + 1)}
           >
             ›

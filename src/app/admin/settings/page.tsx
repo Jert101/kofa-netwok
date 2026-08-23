@@ -127,7 +127,11 @@ function BatchManager() {
           Add
         </button>
       </form>
-      {err ? <p className="text-sm text-red-600">{err}</p> : null}
+      {err ? (
+        <p role="alert" className="text-sm text-[var(--danger)]">
+          {err}
+        </p>
+      ) : null}
       {batches.length === 0 ? (
         <p className="text-sm text-[var(--muted)]">No batches added yet.</p>
       ) : (

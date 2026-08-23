@@ -59,7 +59,7 @@ function ArchiveSwitch({
         if (!disabled) onCheckedChange(!checked);
       }}
       className={`relative inline-flex h-8 w-[3.25rem] shrink-0 rounded-full border border-black/10 transition-colors dark:border-white/10 ${
-        checked ? "bg-[var(--accent)]" : "bg-zinc-300 dark:bg-zinc-600"
+        checked ? "bg-[var(--accent)]" : "bg-[var(--border)]"
       } ${disabled ? "cursor-default opacity-60" : "cursor-pointer"}`}
     >
       <span
@@ -430,7 +430,7 @@ export function ReportsPanel({ showAdminScheduleBypass = false, showArchiveToggl
           ) : null}
 
           {msg ? (
-            <p className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5 text-sm text-[var(--text)]">
+            <p role="status" className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5 text-sm text-[var(--text)]">
               {msg}
             </p>
           ) : null}
@@ -482,7 +482,7 @@ export function ReportsPanel({ showAdminScheduleBypass = false, showArchiveToggl
               <button
                 type="button"
                 onClick={selectAll}
-                className="min-h-10 rounded-lg border border-[var(--border)] px-3 text-sm font-medium"
+                className="min-h-11 rounded-xl border border-[var(--border)] px-4 text-sm font-medium hover:bg-[var(--surface-2)]"
                 disabled={!monthSessions?.length}
               >
                 Select all
@@ -490,14 +490,14 @@ export function ReportsPanel({ showAdminScheduleBypass = false, showArchiveToggl
               <button
                 type="button"
                 onClick={clearSelection}
-                className="min-h-10 rounded-lg border border-[var(--border)] px-3 text-sm font-medium"
+                className="min-h-11 rounded-xl border border-[var(--border)] px-4 text-sm font-medium hover:bg-[var(--surface-2)]"
               >
                 Clear all
               </button>
               <button
                 type="button"
                 onClick={() => setPreviewOpen(false)}
-                className="ml-auto min-h-10 rounded-lg bg-[var(--accent)] px-4 text-sm font-semibold text-white"
+                className="ml-auto min-h-11 rounded-xl bg-[var(--accent)] px-5 text-sm font-semibold text-white"
               >
                 Done
               </button>
@@ -579,11 +579,11 @@ export function ReportsPanel({ showAdminScheduleBypass = false, showArchiveToggl
                           timeStyle: "short",
                         })}
                         {isPending ? (
-                          <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                          <span className="ml-2 rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-xs font-medium text-[var(--accent)]">
                             Pending approval
                           </span>
                         ) : isRejected ? (
-                          <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                          <span className="ml-2 rounded-full bg-[var(--danger)]/10 px-2 py-0.5 text-xs font-medium text-[var(--danger)]">
                             Rejected
                           </span>
                         ) : null}

@@ -58,7 +58,11 @@ export default function LoginPage() {
               maxLength={12}
             />
           </label>
-          {err ? <p className="text-sm text-[var(--danger)]">{err}</p> : null}
+          {err ? (
+            <p role="alert" className="text-sm text-[var(--danger)]">
+              {err}
+            </p>
+          ) : null}
           <button
             type="submit"
             disabled={loading || pin.length < 4}

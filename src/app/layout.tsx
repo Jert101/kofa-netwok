@@ -15,11 +15,12 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#aa1f2a",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#aa1f2a" },
+    { media: "(prefers-color-scheme: dark)", color: "#2b0d0f" },
+  ],
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
 };
 
 export default function RootLayout({

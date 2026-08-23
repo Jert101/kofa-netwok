@@ -16,6 +16,7 @@ export default function SuperAdminReportsPage() {
   const [approved, setApproved] = useState<Report[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [msgIsError, setMsgIsError] = useState(false);
 
   const load = useCallback(async () => {
     const [pRes, aRes] = await Promise.all([
@@ -40,9 +41,12 @@ export default function SuperAdminReportsPage() {
       });
       const j = (await res.json()) as { error?: string };
       if (!res.ok) {
+        setMsgIsError(true);
         setMsg(j.error ?? "Could not update report");
         return;
       }
+      setMsgIsError(false);
+      setMsg(action === "approve" ? "Report approved." : "Report rejected.");
       load();
     } finally {
       setBusy(null);
@@ -64,7 +68,7 @@ export default function SuperAdminReportsPage() {
           <div className="flex items-center gap-2">
             <a
               href={`/api/reports/${r.id}/pdf`}
-              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-[var(--border)] px-4 text-sm font-medium text-[var(--text)]"
+              className="inline-flex min-h-11 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 text-sm font-medium text-[var(--text)] hover:bg-[var(--surface-2)]"
             >
               View PDF
             </a>
@@ -73,22 +77,22 @@ export default function SuperAdminReportsPage() {
                 <button
                   type="button"
                   disabled={busy === r.id}
-                  className="min-h-10 rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white disabled:opacity-40"
+                  className="min-h-11 rounded-xl bg-[var(--success)] px-4 text-sm font-semibold text-white disabled:opacity-40 dark:text-[var(--surface)]"
                   onClick={() => void handleAction(r.id, "approve")}
                 >
-                  {busy === r.id ? "…" : "Approve"}
+                  {busy === r.id ? "Approving…" : "Approve"}
                 </button>
                 <button
                   type="button"
                   disabled={busy === r.id}
-                  className="min-h-10 rounded-lg bg-red-600 px-4 text-sm font-semibold text-white disabled:opacity-40"
+                  className="min-h-11 rounded-xl border border-[var(--danger)] bg-[var(--surface)] px-4 text-sm font-semibold text-[var(--danger)] hover:bg-[var(--danger)]/10 disabled:opacity-40"
                   onClick={() => void handleAction(r.id, "reject")}
                 >
-                  {busy === r.id ? "…" : "Reject"}
+                  {busy === r.id ? "Rejecting…" : "Reject"}
                 </button>
               </>
             ) : (
-              <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+              <span className="rounded-full bg-[var(--success-soft)] px-3 py-1 text-xs font-medium text-[var(--success)]">
                 Approved
               </span>
             )}
@@ -100,10 +104,19 @@ export default function SuperAdminReportsPage() {
 
   return (
     <div className="space-y-8 pb-8">
-      <h1 className="text-lg font-semibold">Super Admin — Reports</h1>
+      <h1 className="text-lg font-semibold sm:text-xl">Super Admin — Reports</h1>
 
       {msg ? (
-        <p className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5 text-sm">{msg}</p>
+        <p
+          role={msgIsError ? "alert" : "status"}
+          className={`rounded-xl border px-3 py-2.5 text-sm ${
+            msgIsError
+              ? "border-[var(--danger)] bg-[var(--surface)] text-[var(--danger)]"
+              : "border-[var(--success)] bg-[var(--success-soft)] text-[var(--success)]"
+          }`}
+        >
+          {msg}
+        </p>
       ) : null}
 
       <section>

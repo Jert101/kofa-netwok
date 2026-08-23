@@ -15,13 +15,24 @@ export default function AdminDashboardPage() {
     sessions: { id: string; mass_name: string }[];
     attendance_count: number;
   } | null>(null);
+  const [dashError, setDashError] = useState(false);
+
+  const loadDash = async () => {
+    setDashError(false);
+    try {
+      const res = await fetch("/api/admin/dashboard", { credentials: "same-origin" });
+      if (!res.ok) {
+        setDashError(true);
+        return;
+      }
+      setDash(await res.json());
+    } catch {
+      setDashError(true);
+    }
+  };
 
   useEffect(() => {
-    (async () => {
-      const res = await fetch("/api/admin/dashboard", { credentials: "same-origin" });
-      if (!res.ok) return;
-      setDash(await res.json());
-    })();
+    loadDash();
   }, []);
 
   return (
@@ -35,7 +46,9 @@ export default function AdminDashboardPage() {
           <p className="text-sm text-[var(--muted)]">total check-ins (all masses)</p>
           <ul className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
             {dash.sessions.length === 0 ? (
-              <li className="text-sm text-[var(--muted)]">No sessions today.</li>
+              <li className="rounded-xl border border-dashed border-[var(--border)] px-4 py-3 text-sm text-[var(--muted)]">
+                No sessions today.
+              </li>
             ) : (
               dash.sessions.map((s) => (
                 <li key={s.id}>
@@ -50,6 +63,20 @@ export default function AdminDashboardPage() {
             )}
           </ul>
         </section>
+      ) : dashError ? (
+        <div
+          role="alert"
+          className="rounded-2xl border border-dashed border-[var(--danger)] p-6 text-center"
+        >
+          <p className="text-sm font-medium text-[var(--danger)]">Could not load today&apos;s summary.</p>
+          <button
+            type="button"
+            onClick={() => void loadDash()}
+            className="mt-3 min-h-11 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 text-sm font-medium hover:bg-[var(--surface-2)]"
+          >
+            Retry
+          </button>
+        </div>
       ) : (
         <p className="text-sm text-[var(--muted)]">Loading…</p>
       )}

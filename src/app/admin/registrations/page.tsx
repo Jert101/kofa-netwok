@@ -309,10 +309,11 @@ export default function AdminRegistrationsPage() {
             key={t}
             type="button"
             onClick={() => setTab(t)}
-            className={`min-h-9 rounded-lg px-4 text-sm font-medium capitalize ${
+            aria-current={tab === t ? "true" : undefined}
+            className={`min-h-11 rounded-xl px-4 text-sm font-medium capitalize transition-colors ${
               tab === t
                 ? "bg-[var(--accent)] text-white"
-                : "text-[var(--muted)] hover:text-[var(--text)]"
+                : "text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
             }`}
           >
             {t}
@@ -321,7 +322,14 @@ export default function AdminRegistrationsPage() {
       </div>
 
       {msg ? (
-        <div className={`rounded-xl border p-3 text-sm ${msgType === "error" ? "border-red-300 bg-red-50 text-red-700 dark:border-red-700 dark:bg-red-950 dark:text-red-300" : "border-green-300 bg-green-50 text-green-700 dark:border-green-700 dark:bg-green-950 dark:text-green-300"}`}>
+        <div
+          role={msgType === "error" ? "alert" : "status"}
+          className={`rounded-xl border p-3 text-sm ${
+            msgType === "error"
+              ? "border-[var(--danger)] bg-[var(--surface)] text-[var(--danger)]"
+              : "border-[var(--success)] bg-[var(--success-soft)] text-[var(--success)]"
+          }`}
+        >
           {msg}
         </div>
       ) : null}
@@ -506,20 +514,20 @@ export default function AdminRegistrationsPage() {
                             <button
                               type="button"
                               onClick={() => saveEdit(r.id)}
-                              className="min-h-9 rounded-lg bg-[var(--accent)] px-3 text-sm text-white"
+                              className="min-h-11 rounded-xl bg-[var(--accent)] px-4 text-sm font-medium text-white"
                             >
                               Save
                             </button>
                             <button
                               type="button"
                               onClick={() => { setEditingId(null); setEditError(null); }}
-                              className="min-h-9 text-sm"
+                              className="min-h-11 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 text-sm font-medium text-[var(--muted)] hover:bg-[var(--surface-2)]"
                             >
                               Cancel
                             </button>
                           </div>
                           {editError ? (
-                            <p className="text-sm text-red-600 dark:text-red-400" role="alert">{editError}</p>
+                            <p className="text-sm text-[var(--danger)]" role="alert">{editError}</p>
                           ) : null}
                         </div>
                       ) : (

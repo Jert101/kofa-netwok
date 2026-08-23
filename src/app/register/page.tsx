@@ -82,6 +82,7 @@ export default function RegisterPage() {
               <span className="text-sm font-medium text-[var(--muted)]">First name</span>
               <input
                 required
+                autoComplete="given-name"
                 className="mt-1 w-full min-h-11 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3"
                 value={form.first_name}
                 onChange={(e) => update("first_name", e.target.value)}
@@ -91,6 +92,7 @@ export default function RegisterPage() {
               <span className="text-sm font-medium text-[var(--muted)]">Last name</span>
               <input
                 required
+                autoComplete="family-name"
                 className="mt-1 w-full min-h-11 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3"
                 value={form.last_name}
                 onChange={(e) => update("last_name", e.target.value)}
@@ -123,23 +125,25 @@ export default function RegisterPage() {
 
           <fieldset>
             <legend className="text-sm font-medium text-[var(--muted)]">Gender</legend>
-            <div className="mt-2 flex gap-4">
-              <label className="flex items-center gap-2 text-sm">
+            <div className="mt-2 flex gap-2">
+              <label className="flex min-h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm has-checked:border-[var(--accent)] has-checked:bg-[var(--accent-soft)]">
                 <input
                   required
                   type="radio"
                   name="gender"
                   value="male"
+                  className="accent-[var(--accent)]"
                   checked={form.gender === "male"}
                   onChange={(e) => update("gender", e.target.value)}
                 />
                 Male
               </label>
-              <label className="flex items-center gap-2 text-sm">
+              <label className="flex min-h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm has-checked:border-[var(--accent)] has-checked:bg-[var(--accent-soft)]">
                 <input
                   type="radio"
                   name="gender"
                   value="female"
+                  className="accent-[var(--accent)]"
                   checked={form.gender === "female"}
                   onChange={(e) => update("gender", e.target.value)}
                 />
@@ -153,6 +157,10 @@ export default function RegisterPage() {
             <input
               required
               type="tel"
+              autoComplete="tel"
+              inputMode="tel"
+              pattern="09[0-9]{9}"
+              title="Enter a valid mobile number (09xxxxxxxxx)"
               className="mt-1 w-full min-h-11 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3"
               value={form.contact_number}
               onChange={(e) => update("contact_number", e.target.value)}
@@ -160,7 +168,11 @@ export default function RegisterPage() {
             />
           </label>
 
-          {err ? <p className="text-sm text-[var(--danger)]">{err}</p> : null}
+          {err ? (
+            <p role="alert" className="text-sm text-[var(--danger)]">
+              {err}
+            </p>
+          ) : null}
 
           <button
             type="submit"

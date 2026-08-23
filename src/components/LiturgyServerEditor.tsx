@@ -329,7 +329,7 @@ export function LiturgyServerEditor(props: LiturgyServerEditorProps) {
             Load a template
             <div className="flex gap-2">
               <select
-                className="min-h-11 flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm"
+                className="min-h-11 flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-sm"
                 value={selectedTemplateId}
                 onChange={(e) => setSelectedTemplateId(e.target.value)}
               >
@@ -343,7 +343,7 @@ export function LiturgyServerEditor(props: LiturgyServerEditorProps) {
               <button
                 type="button"
                 disabled={templateLoading}
-                className="min-h-11 rounded-lg bg-[var(--accent)] px-4 text-sm font-medium text-white disabled:opacity-40"
+                className="min-h-11 rounded-xl bg-[var(--accent)] px-4 text-sm font-medium text-white disabled:opacity-40"
                 onClick={() => void loadTemplate()}
               >
                 Load
@@ -351,10 +351,11 @@ export function LiturgyServerEditor(props: LiturgyServerEditorProps) {
               {selectedTemplateId ? (
                 <button
                   type="button"
-                  className="min-h-11 rounded-lg border border-[var(--danger)] px-3 text-sm text-[var(--danger)]"
+                  className="min-h-11 min-w-11 rounded-xl border border-[var(--danger)] px-3 text-sm font-medium text-[var(--danger)]"
+                  aria-label="Delete selected template"
                   onClick={() => { const id = selectedTemplateId; setSelectedTemplateId(""); void deleteTemplate(id); }}
                 >
-                  ×
+                  Delete
                 </button>
               ) : null}
             </div>
@@ -365,7 +366,7 @@ export function LiturgyServerEditor(props: LiturgyServerEditorProps) {
             Save current positions as template
             <div className="flex gap-2">
               <input
-                className="min-h-11 flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm"
+                className="min-h-11 flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-sm"
                 placeholder="Template name"
                 value={saveTemplateName}
                 onChange={(e) => setSaveTemplateName(e.target.value)}
@@ -373,7 +374,7 @@ export function LiturgyServerEditor(props: LiturgyServerEditorProps) {
               <button
                 type="button"
                 disabled={templateLoading}
-                className="min-h-11 rounded-lg bg-[var(--accent)] px-4 text-sm font-medium text-white disabled:opacity-40"
+                className="min-h-11 rounded-xl bg-[var(--accent)] px-4 text-sm font-medium text-white disabled:opacity-40"
                 onClick={() => void saveAsTemplate()}
               >
                 Save
@@ -386,20 +387,22 @@ export function LiturgyServerEditor(props: LiturgyServerEditorProps) {
       <ul className="mt-4 space-y-4">
         {roles.map((role, i) => (
           <li key={i} className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3">
-            <label className="block text-xs font-medium text-[var(--muted)]">Role / position</label>
-            <input
-              className="mt-1 w-full min-h-11 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3"
-              placeholder="e.g. Crucifix, Candle"
-              value={role.position_label}
-              onChange={(e) => {
-                const v = e.target.value;
-                setRoles((prev) => {
-                  const n = [...prev];
-                  n[i] = { ...n[i], position_label: v };
-                  return n;
-                });
-              }}
-            />
+            <label className="block text-xs font-medium text-[var(--muted)]">
+              Role / position
+              <input
+                className="mt-1 w-full min-h-11 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3"
+                placeholder="e.g. Crucifix, Candle"
+                value={role.position_label}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setRoles((prev) => {
+                    const n = [...prev];
+                    n[i] = { ...n[i], position_label: v };
+                    return n;
+                  });
+                }}
+              />
+            </label>
 
             <p className="mt-3 text-xs font-medium text-[var(--muted)]">Members from directory</p>
             {role.members.length > 0 ? (
@@ -412,7 +415,7 @@ export function LiturgyServerEditor(props: LiturgyServerEditorProps) {
                     <span>{m.full_name}</span>
                     <button
                       type="button"
-                      className="text-[var(--danger)]"
+                      className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--danger)] hover:bg-[var(--surface-2)]"
                       aria-label={`Remove ${m.full_name}`}
                       onClick={() => removeMemberFromRole(i, m.id)}
                     >
@@ -426,7 +429,7 @@ export function LiturgyServerEditor(props: LiturgyServerEditorProps) {
             )}
 
             <input
-              className="mt-2 w-full min-h-11 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3"
+              className="mt-2 w-full min-h-11 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3"
               placeholder="Search member to add…"
               value={searchRoleIdx === i ? term : ""}
               onFocus={() => {
@@ -439,12 +442,12 @@ export function LiturgyServerEditor(props: LiturgyServerEditorProps) {
               }}
             />
             {searchRoleIdx === i && results.length > 0 ? (
-              <ul className="mt-1 max-h-36 overflow-auto rounded-lg border border-[var(--border)] bg-[var(--surface)]">
+              <ul className="mt-1 max-h-36 overflow-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
                 {results.map((m) => (
                   <li key={m.id}>
                     <button
                       type="button"
-                      className="w-full px-3 py-2 text-left text-sm hover:bg-[var(--surface-2)]"
+                      className="flex min-h-11 w-full items-center px-3 text-left text-sm hover:bg-[var(--surface-2)]"
                       onClick={() => addMemberToRole(i, m)}
                     >
                       {m.full_name}
@@ -454,7 +457,11 @@ export function LiturgyServerEditor(props: LiturgyServerEditorProps) {
               </ul>
             ) : null}
 
-            <button type="button" className="mt-3 text-sm text-[var(--danger)]" onClick={() => removeRole(i)}>
+            <button
+              type="button"
+              className="mt-3 min-h-11 rounded-xl px-2 text-sm font-medium text-[var(--danger)] hover:bg-[var(--surface-2)]"
+              onClick={() => removeRole(i)}
+            >
               Remove this role
             </button>
           </li>
@@ -486,7 +493,11 @@ export function LiturgyServerEditor(props: LiturgyServerEditorProps) {
           Remove all
         </button>
       </div>
-      {msg ? <p className="mt-2 text-sm text-[var(--muted)]">{msg}</p> : null}
+      {msg ? (
+        <p role="status" className="mt-2 text-sm text-[var(--muted)]">
+          {msg}
+        </p>
+      ) : null}
     </section>
   );
 }

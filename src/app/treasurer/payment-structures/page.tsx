@@ -199,7 +199,7 @@ export default function PaymentStructuresPage() {
               role="switch"
               aria-checked={forAll}
               onClick={() => { setForAll(!forAll); setSelectedBatch(""); }}
-              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${forAll ? "bg-[var(--accent)]" : "bg-gray-300"}`}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${forAll ? "bg-[var(--accent)]" : "bg-[var(--border)]"}`}
             >
               <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${forAll ? "translate-x-5" : "translate-x-0"}`} />
             </button>
@@ -285,7 +285,7 @@ export default function PaymentStructuresPage() {
                       role="switch"
                       aria-checked={editForAll}
                       onClick={() => { setEditForAll(!editForAll); setEditBatch(""); }}
-                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${editForAll ? "bg-[var(--accent)]" : "bg-gray-300"}`}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${editForAll ? "bg-[var(--accent)]" : "bg-[var(--border)]"}`}
                     >
                         <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${editForAll ? "translate-x-5" : "translate-x-0"}`} />
                     </button>
@@ -311,14 +311,14 @@ export default function PaymentStructuresPage() {
                   <button
                     type="button"
                     onClick={() => saveEdit(s.id)}
-                    className="min-h-9 rounded-lg bg-[var(--accent)] px-3 text-sm text-white"
+                    className="min-h-11 rounded-xl bg-[var(--accent)] px-4 text-sm font-medium text-white"
                   >
                     Save
                   </button>
                   <button
                     type="button"
                     onClick={() => setEditing(null)}
-                    className="min-h-9 text-sm"
+                    className="min-h-11 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 text-sm font-medium text-[var(--muted)] hover:bg-[var(--surface-2)]"
                   >
                     Cancel
                   </button>
@@ -339,14 +339,14 @@ export default function PaymentStructuresPage() {
                 <div className="flex shrink-0 gap-2">
                   <a
                     href={`/api/admin/payment-structures/${s.id}/pdf`}
-                    className="text-sm text-[var(--accent)]"
+                    className="inline-flex min-h-11 items-center rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-sm font-medium text-[var(--accent)] hover:bg-[var(--surface-2)]"
                   >
                     Report
                   </a>
                   <button
                     type="button"
                     onClick={() => startEdit(s)}
-                    className="text-sm text-[var(--accent)]"
+                    className="min-h-11 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 text-sm font-medium text-[var(--accent)] hover:bg-[var(--surface-2)]"
                   >
                     Edit
                   </button>
@@ -354,7 +354,7 @@ export default function PaymentStructuresPage() {
                     <button
                       type="button"
                       onClick={() => setConfirmDeactivate(s.id)}
-                      className="min-h-9 rounded-lg border border-[var(--danger)] px-3 text-sm font-medium text-[var(--danger)]"
+                      className="min-h-11 rounded-xl border border-[var(--danger)] bg-[var(--surface)] px-3 text-sm font-medium text-[var(--danger)] hover:bg-[var(--surface-2)]"
                     >
                       Deactivate
                     </button>

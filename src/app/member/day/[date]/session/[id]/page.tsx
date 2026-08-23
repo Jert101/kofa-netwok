@@ -21,6 +21,8 @@ export default function MemberSessionDetailPage() {
   const [liturgy, setLiturgy] = useState<LiturgyLine[]>([]);
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [rosterVersion, setRosterVersion] = useState(0);
   const [appealSubmitting, setAppealSubmitting] = useState(false);
 
@@ -28,33 +30,48 @@ export default function MemberSessionDetailPage() {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const res = await fetch(`/api/attendance/session/${id}`, { credentials: "same-origin" });
-      if (!res.ok) {
-        router.replace("/member");
-        return;
-      }
-      const j = (await res.json()) as {
-        session: { mass_name: string };
-        members: MemberRow[];
-        liturgy_servers?: LiturgyLine[];
-      };
-      if (!cancelled) {
-        setMassName(j.session.mass_name);
-        setMembers(j.members);
-        setLiturgy(
-          (j.liturgy_servers ?? []).map((r) => ({
-            position_label: r.position_label,
-            member_name: r.member_name,
-            free_text: r.free_text,
-          }))
-        );
-        setLoading(false);
+      setLoadError(false);
+      try {
+        const res = await fetch(`/api/attendance/session/${id}`, { credentials: "same-origin" });
+        if (!cancelled && res.status === 404) {
+          router.replace("/member");
+          return;
+        }
+        if (!res.ok) {
+          if (!cancelled) {
+            setLoadError(true);
+            setLoading(false);
+          }
+          return;
+        }
+        const j = (await res.json()) as {
+          session: { mass_name: string };
+          members: MemberRow[];
+          liturgy_servers?: LiturgyLine[];
+        };
+        if (!cancelled) {
+          setMassName(j.session.mass_name);
+          setMembers(j.members);
+          setLiturgy(
+            (j.liturgy_servers ?? []).map((r) => ({
+              position_label: r.position_label,
+              member_name: r.member_name,
+              free_text: r.free_text,
+            }))
+          );
+          setLoading(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setLoadError(true);
+          setLoading(false);
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [id, router]);
+  }, [id, router, reloadKey]);
 
   useEffect(() => {
     if (rosterVersion === 0 || !id) return;
@@ -95,8 +112,22 @@ export default function MemberSessionDetailPage() {
       >
         ← Back
       </button>
-      <h1 className="text-lg font-semibold">{loading ? "…" : massName}</h1>
-      {!loading ? (
+      <h1 className="text-lg font-semibold sm:text-xl">
+        {loading ? <span className="inline-block h-7 w-48 animate-pulse rounded bg-[var(--surface-2)]" /> : massName}
+      </h1>
+      {loadError ? (
+        <div role="alert" className="mt-4 rounded-2xl border border-dashed border-[var(--danger)] p-6 text-center">
+          <p className="text-sm font-medium text-[var(--danger)]">Could not load this session.</p>
+          <button
+            type="button"
+            onClick={() => setReloadKey((k) => k + 1)}
+            className="mt-3 min-h-11 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 text-sm font-medium hover:bg-[var(--surface-2)]"
+          >
+            Retry
+          </button>
+        </div>
+      ) : null}
+      {!loading && !loadError ? (
         <AttendanceAppealForm
           sessionId={id}
           onAppealSubmitted={() => setRosterVersion((v) => v + 1)}
@@ -120,14 +151,22 @@ export default function MemberSessionDetailPage() {
           </ul>
         </section>
       ) : null}
+      <label htmlFor="roster-search" className="sr-only">
+        Search names
+      </label>
       <input
+        id="roster-search"
         type="search"
         placeholder="Search names"
+        aria-describedby="roster-count"
         className="mt-5 w-full min-h-12 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4"
         value={q}
         onChange={(e) => setQ(e.target.value)}
         disabled={appealSubmitting}
       />
+      <p id="roster-count" className="sr-only" aria-live="polite">
+        {filtered.length} of {members.length} names shown
+      </p>
       <ul className="mt-3 divide-y divide-[var(--border)] rounded-xl border border-[var(--border)] bg-[var(--surface)]">
         {filtered.map((m) => (
           <li key={m.member_id} className="px-4 py-3 text-base">

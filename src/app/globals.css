@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 :root {
+  color-scheme: light dark;
   --background: #fff8ef;
   --foreground: #2b120f;
   --surface: #ffffff;
@@ -10,6 +11,9 @@
   --accent: #aa1f2a;
   --accent-soft: #ffe4b8;
   --danger: #8f0f1f;
+  --success: #1a7f4b;
+  --success-soft: #d9f2e4;
+  --ring: #aa1f2a;
   --text: var(--foreground);
 }
 
@@ -30,6 +34,9 @@
     --accent: #f0bc62;
     --accent-soft: #7a281f;
     --danger: #ff8a8a;
+    --success: #5fd39a;
+    --success-soft: #14382a;
+    --ring: #f0bc62;
     --text: var(--foreground);
   }
 }
@@ -39,4 +46,15 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans);
   min-height: 100dvh;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--foreground);
 }
