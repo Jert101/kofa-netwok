@@ -2,14 +2,31 @@ import { format } from "date-fns";
 import { jsPDF } from "jspdf";
 import { autoTable } from "jspdf-autotable";
 
+export type MemberRow = {
+  name: string;
+  date_of_birth: string | null;
+  gender: string | null;
+  batch: string | null;
+  contact_number: string | null;
+};
+
+function formatDob(dob: string | null): string {
+  if (!dob) return "—";
+  try {
+    return format(new Date(dob + "T12:00:00"), "MMM d, yyyy");
+  } catch {
+    return dob;
+  }
+}
+
 export function buildActiveMembersPdf(input: {
   churchName: string;
   title: string;
   label: string;
   generatedAt: Date;
-  names: string[];
+  rows: MemberRow[];
 }): Uint8Array {
-  const doc = new jsPDF({ unit: "pt", format: "a4", orientation: "portrait" });
+  const doc = new jsPDF({ unit: "pt", format: "a4", orientation: "landscape" });
   const margin = 36;
   let y = margin;
 
@@ -32,14 +49,21 @@ export function buildActiveMembersPdf(input: {
   autoTable(doc, {
     startY: y + 6,
     theme: "grid",
-    head: [["#", "Full name"]],
+    head: [["#", "Full name", "Date of Birth", "Gender", "Batch", "Contact Number"]],
     body:
-      input.names.length > 0
-        ? input.names.map((name, idx) => [String(idx + 1), name])
-        : [["", "No active members"]],
+      input.rows.length > 0
+        ? input.rows.map((row, idx) => [
+            String(idx + 1),
+            row.name,
+            formatDob(row.date_of_birth),
+            row.gender ?? "—",
+            row.batch ?? "—",
+            row.contact_number ?? "—",
+          ])
+        : [["", "No active members", "", "", "", ""]],
     margin: { left: margin, right: margin },
     styles: {
-      fontSize: 10,
+      fontSize: 9,
       cellPadding: { top: 4, right: 4, bottom: 4, left: 4 },
       lineColor: [0, 0, 0],
       lineWidth: 0.25,
@@ -51,8 +75,12 @@ export function buildActiveMembersPdf(input: {
       fontStyle: "bold",
     },
     columnStyles: {
-      0: { cellWidth: 36, halign: "center" },
+      0: { cellWidth: 30, halign: "center" },
       1: { cellWidth: "auto" },
+      2: { cellWidth: 90 },
+      3: { cellWidth: 60 },
+      4: { cellWidth: 55 },
+      5: { cellWidth: 110 },
     },
   });
 

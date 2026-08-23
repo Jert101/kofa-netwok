@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
   const sb = getSupabaseAdmin();
   let query = sb
     .from("members")
-    .select("full_name, is_active, gender, date_of_birth, batch");
+    .select("full_name, is_active, gender, date_of_birth, batch, contact_number");
 
   if (filterBatch) query = query.eq("batch", filterBatch);
   if (filterGender) query = query.eq("gender", filterGender);
@@ -36,10 +36,16 @@ export async function GET(req: NextRequest) {
     filtered = filtered.filter((m) => (m.date_of_birth as string)?.slice(5, 7) === month);
   }
 
-  const names = filtered
-    .map((m) => formatNameLastFirst((m.full_name as string) ?? ""))
-    .filter(Boolean)
-    .sort((a, b) => a.localeCompare(b));
+  const rows = filtered
+    .map((m) => ({
+      name: formatNameLastFirst((m.full_name as string) ?? ""),
+      date_of_birth: (m.date_of_birth as string | null) ?? null,
+      gender: (m.gender as string | null) ?? null,
+      batch: (m.batch as string | null) ?? null,
+      contact_number: (m.contact_number as string | null) ?? null,
+    }))
+    .filter((r) => r.name)
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   const parts: string[] = [];
   if (filterBatch) parts.push(`Batch ${filterBatch}`);
@@ -51,7 +57,7 @@ export async function GET(req: NextRequest) {
   }
   const suffix = parts.length > 0 ? ` (${parts.join(", ")})` : "";
   const title = `Members List${suffix}`;
-  const label = `Total members: ${names.length}`;
+  const label = `Total members: ${rows.length}`;
 
   let churchName = "Knights of the Altar";
   try {
@@ -66,7 +72,7 @@ export async function GET(req: NextRequest) {
     title,
     label,
     generatedAt: new Date(),
-    names,
+    rows,
   });
   const body = Buffer.from(pdf);
 
