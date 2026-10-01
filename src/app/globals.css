@@ -1,7 +1,24 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+/*
+  ---break---
+*/
+@custom-variant dark (&:is(.dark *));
+
+/*
+  Two layers:
+  1. App tokens  — the original parish palette. Untouched, so every existing
+     `text-[var(--muted)]` / `bg-[var(--surface)]` usage (236 + 128 sites)
+     keeps working verbatim.
+  2. shadcn layer — @theme mappings from shadcn's names onto the app tokens,
+     so shadcn components (which use named utilities like `bg-primary`) are
+     themed from the same source of truth.
+  The app never uses named color utilities, so the two layers cannot collide.
+*/
 
 :root {
   color-scheme: light dark;
+
   --background: #fff8ef;
   --foreground: #2b120f;
   --surface: #ffffff;
@@ -15,12 +32,65 @@
   --success-soft: #d9f2e4;
   --ring: #aa1f2a;
   --text: var(--foreground);
+  --primary-foreground: #ffffff;
+  --radius: 0.75rem;
+  --sidebar: var(--surface);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--accent);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent-soft);
+  --sidebar-accent-foreground: var(--accent);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
 }
 
 @theme inline {
+  --font-sans: ui-sans-serif, system-ui, sans-serif;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: ui-sans-serif, system-ui, sans-serif;
+
+  --color-card: var(--surface);
+  --color-card-foreground: var(--foreground);
+
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--foreground);
+
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--surface-2);
+  --color-secondary-foreground: var(--foreground);
+
+  --color-muted: var(--surface-2);
+  --color-muted-foreground: var(--muted);
+
+  --color-accent: var(--surface-2);
+  --color-accent-foreground: var(--accent);
+
+  --color-destructive: var(--danger);
+  --color-destructive-foreground: var(--primary-foreground);
+
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-accent-soft: var(--accent-soft);
+
+  --color-border: var(--border);
+  --color-input: var(--border);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -38,6 +108,15 @@
     --success-soft: #14382a;
     --ring: #f0bc62;
     --text: var(--foreground);
+    --primary-foreground: #2b0d0f;
+    --sidebar: var(--surface);
+    --sidebar-foreground: var(--foreground);
+    --sidebar-primary: var(--accent);
+    --sidebar-primary-foreground: var(--primary-foreground);
+    --sidebar-accent: var(--accent-soft);
+    --sidebar-accent-foreground: var(--accent);
+    --sidebar-border: var(--border);
+    --sidebar-ring: var(--ring);
   }
 }
 

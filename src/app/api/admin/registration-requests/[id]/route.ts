@@ -1,18 +1,53 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/api/guard";
-import { capitalizeName } from "@/lib/members/name-format";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import {
+  badRequest,
+  conflict,
+  internalError,
+  jsonOk,
+  validationFailed,
+  zodFields,
+} from "@/lib/api/response";
+import { logAudit } from "@/lib/audit/log-audit";
+import { getClientIp } from "@/lib/auth/ip-hash";
+import {
+  decideRequest,
+  linkRequestToMember,
+  type RequestRow,
+} from "@/features/registrations/server/decide-request";
+import { normalizeRegisterInput } from "@/features/registrations/schemas";
 
-const updateSchema = z.object({
+const SELECT = `
+  id, first_name, last_name, middle_initial, date_of_birth, gender,
+  contact_number, batch, status, reference_code, reject_reason,
+  created_at, reviewed_at, possible_duplicate_member_id, approved_member_id,
+  approval_created_member
+`;
+
+const editSchema = z.object({
   first_name: z.string().min(1).max(100).trim().optional(),
+  middle_initial: z.string().max(1).trim().optional().nullable(),
   last_name: z.string().min(1).max(100).trim().optional(),
-  middle_initial: z.string().max(1).trim().optional(),
-  date_of_birth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  gender: z.enum(["male", "female"]).optional(),
-  contact_number: z.string().min(7).max(20).trim().optional(),
+  date_of_birth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  gender: z.enum(["male", "female"]).optional().nullable(),
+  contact_number: z.string().max(20).trim().optional().nullable(),
   batch: z.string().regex(/^\d{4}$/).optional().nullable(),
 });
+
+const actionSchema = z.object({
+  action: z.enum(["approve", "reject", "update", "change-status", "link-member"]),
+  new_status: z.enum(["pending", "approved", "rejected"]).optional(),
+  reason: z.string().max(200).trim().optional(),
+  note: z.string().max(200).trim().optional().nullable(),
+  member_id: z.string().uuid().optional(),
+});
+
+/** REG-4: an approved row is edited through the member record, not here. */
+function editAllowed(status: string): boolean {
+  return status === "pending" || status === "rejected";
+}
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const g = await requireRole(req.headers.get("cookie"), ["admin"]);
@@ -24,123 +59,182 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
     json = await req.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    return badRequest("Could not read the request.");
   }
 
-  const { action, ...fields } = json as Record<string, unknown>;
+  const parsed = actionSchema.safeParse(json);
+  if (!parsed.success) {
+    return validationFailed("Check the details and try again.", zodFields(parsed.error));
+  }
 
+  const { action, new_status, reason, note, member_id, ...fields } = parsed.data;
   const sb = getSupabaseAdmin();
+  const ip = getClientIp(req.headers);
 
-  const { data: request, error: fetchErr } = await sb
+  const { data, error: fetchErr } = await sb
     .from("registration_requests")
-    .select("*")
+    .select(SELECT)
     .eq("id", id)
-    .single();
+    .maybeSingle();
 
-  if (fetchErr || !request) {
-    return NextResponse.json({ error: "Request not found" }, { status: 404 });
+  if (fetchErr) {
+    return internalError("Could not load the application.");
   }
+  if (!data) {
+    return badRequest("That application no longer exists.");
+  }
+
+  const request = data as unknown as RequestRow;
+  const actor = {
+    role: g.session.role,
+    memberId: g.session.actor?.id ?? null,
+    name: g.session.actor?.name ?? null,
+  };
 
   if (action === "update") {
-    const parsed = updateSchema.safeParse(fields);
-    if (!parsed.success) {
-      return NextResponse.json({ error: "Invalid fields" }, { status: 400 });
+    if (!editAllowed(request.status)) {
+      return conflict(
+        "CONFLICT",
+        "This application was approved, so it is now a member. Edit the member instead.",
+      );
     }
+
+    // Reuse the public form's normalization so an admin edit and a public
+    // application cannot end up stored in two different shapes.
+    const normalized = normalizeRegisterInput(fields);
+    const editParsed = editSchema.safeParse(normalized);
+    if (!editParsed.success) {
+      return validationFailed("Check the details and try again.", zodFields(editParsed.error));
+    }
+
     const updates: Record<string, unknown> = {};
-    for (const [key, val] of Object.entries(parsed.data)) {
+    for (const [key, val] of Object.entries(editParsed.data)) {
       if (val === undefined) continue;
-      if (key === "first_name" || key === "last_name") updates[key] = capitalizeName(val as string);
-      else if (key === "middle_initial") updates[key] = (val as string).toUpperCase();
-      else updates[key] = val;
+      updates[key] = val === "" ? null : val;
     }
     if (Object.keys(updates).length === 0) {
-      return NextResponse.json({ error: "No fields to update" }, { status: 400 });
-    }
-    const { error: upErr } = await sb.from("registration_requests").update(updates).eq("id", id);
-    if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
-    return NextResponse.json({ ok: true });
-  }
-
-  if (action === "change-status") {
-    const newStatus = typeof fields.new_status === "string" ? fields.new_status : null;
-    if (!newStatus || !["pending", "approved", "rejected"].includes(newStatus)) {
-      return NextResponse.json({ error: "new_status must be 'pending', 'approved', or 'rejected'" }, { status: 400 });
+      return badRequest("Nothing to change.");
     }
 
-    if (newStatus === request.status) {
-      return NextResponse.json({ error: "Status is already " + newStatus }, { status: 400 });
+    const { error: upErr } = await sb
+      .from("registration_requests")
+      .update(updates)
+      .eq("id", id);
+
+    if (upErr) {
+      return internalError("Could not save the changes.");
     }
 
-    if (request.status === "approved") {
-      const mi = request.middle_initial ? ` ${request.middle_initial}.` : "";
-      const fullName = `${request.first_name}${mi} ${request.last_name}`;
-      await sb.from("members").delete().eq("full_name", fullName).eq("date_of_birth", request.date_of_birth);
-    }
-
-    if (newStatus === "approved") {
-      const mi = request.middle_initial ? ` ${request.middle_initial}.` : "";
-      const full_name = `${request.first_name}${mi} ${request.last_name}`;
-      const { error: insertErr } = await sb.from("members").insert({
-        full_name,
-        date_of_birth: request.date_of_birth,
-        gender: request.gender,
-        contact_number: request.contact_number,
-        batch: request.batch || null,
-      });
-      if (insertErr) {
-        if (insertErr.code === "23505") {
-          return NextResponse.json({ error: "A member with this name already exists" }, { status: 409 });
-        }
-        return NextResponse.json({ error: insertErr.message }, { status: 500 });
-      }
-    }
-
-    const updates: Record<string, unknown> = { status: newStatus };
-    if (newStatus !== "pending") updates.reviewed_at = new Date().toISOString();
-    else updates.reviewed_at = null;
-    const { error: upErr } = await sb.from("registration_requests").update(updates).eq("id", id);
-    if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
-    return NextResponse.json({ ok: true });
-  }
-
-  if (typeof action !== "string" || !["approve", "reject", "update"].includes(action)) {
-    return NextResponse.json({ error: "action must be 'approve', 'reject', 'update', or 'change-status'" }, { status: 400 });
-  }
-
-  if (request.status !== "pending") {
-    return NextResponse.json({ error: "Request already reviewed" }, { status: 400 });
-  }
-
-  const status = action === "approve" ? "approved" : "rejected";
-
-  if (action === "approve") {
-    const mi = request.middle_initial ? ` ${request.middle_initial}.` : "";
-    const full_name = `${request.first_name}${mi} ${request.last_name}`;
-
-    const { error: insertErr } = await sb.from("members").insert({
-      full_name,
-      date_of_birth: request.date_of_birth,
-      gender: request.gender,
-      contact_number: request.contact_number,
-      batch: request.batch || null,
+    await logAudit({
+      action: "registration_edited",
+      actor,
+      entityType: "registration_request",
+      entityId: id,
+      ip,
+      meta: { changed: Object.keys(updates) },
     });
 
-    if (insertErr) {
-      if (insertErr.code === "23505") {
-        return NextResponse.json({ error: "A member with this name already exists" }, { status: 409 });
+    return jsonOk({ id });
+  }
+
+  if (action === "link-member") {
+    if (!member_id) return badRequest("Choose the member to link.");
+
+    // REG-6, third option. On a pending or rejected application this is how the
+    // admin says "this is someone who is already on the roll": the request is
+    // approved and pointed at that member, and no second member is inserted.
+    if (request.status === "pending" || request.status === "rejected") {
+      const linked = await linkRequestToMember({ request, memberId: member_id, actor, ip });
+      if (!linked.ok) {
+        if (linked.code === "already") return conflict("CONFLICT", linked.message);
+        return internalError(linked.message);
       }
-      return NextResponse.json({ error: insertErr.message }, { status: 500 });
+      return jsonOk({ id, status: linked.status, approved_member_id: member_id });
     }
+
+    // Already approved: the admin is re-pointing the link at a different member,
+    // so the one this approval created is put aside. Only a member *this* approval
+    // created may be deactivated, and the flag is cleared so that undoing the
+    // approval later does not touch the newly linked member.
+    if (request.approved_member_id && request.approved_member_id !== member_id) {
+      if (request.approval_created_member) {
+        const { error: offErr } = await sb
+          .from("members")
+          .update({
+            is_active: false,
+            deactivated_at: new Date().toISOString(),
+            deactivation_reason: "Linked to an existing member instead.",
+          })
+          .eq("id", request.approved_member_id);
+        if (offErr) return internalError("Could not unlink the member this approval created.");
+      }
+
+      const { error } = await sb
+        .from("registration_requests")
+        .update({
+          approved_member_id: member_id,
+          approval_created_member: false,
+          reject_reason: null,
+        })
+        .eq("id", id);
+      if (error) return internalError("Could not link the member.");
+
+      await logAudit({
+        action: "registration_status_changed",
+        actor,
+        entityType: "registration_request",
+        entityId: id,
+        ip,
+        meta: { linked_member_id: member_id, relinked: true },
+      });
+      return jsonOk({ id, approved_member_id: member_id });
+    }
+
+    return jsonOk({ id, approved_member_id: request.approved_member_id });
   }
 
-  const { error: updateErr } = await sb
-    .from("registration_requests")
-    .update({ status, reviewed_at: new Date().toISOString() })
-    .eq("id", id);
+  const target =
+    action === "approve"
+      ? "approved"
+      : action === "reject"
+        ? "rejected"
+        : new_status;
 
-  if (updateErr) {
-    return NextResponse.json({ error: updateErr.message }, { status: 500 });
+  if (!target) {
+    return badRequest("Choose what to change the status to.");
   }
 
-  return NextResponse.json({ ok: true });
+  if (request.status !== "pending" && action !== "change-status") {
+    return conflict("CONFLICT", `This application was already ${request.status}.`);
+  }
+
+  // REG-5: a rejection has to say why.
+  if (target === "rejected" && !reason) {
+    return badRequest("Choose a reason so the applicant can be told.");
+  }
+
+  const result = await decideRequest({
+    request,
+    next: target,
+    actor,
+    ip,
+    reject: target === "rejected" ? { reason: reason ?? "", note } : null,
+  });
+
+  if (!result.ok) {
+    if (result.code === "conflict") {
+      // REG-6: the message and both ids travel together so the UI can offer
+      // "Edit name" and "Reject as duplicate" without a second lookup.
+      return conflict("CONFLICT", result.message, {
+        conflict_member_id: result.conflictId,
+        conflict_name: result.conflictName,
+      });
+    }
+    if (result.code === "already") {
+      return conflict("CONFLICT", result.message);
+    }
+    return internalError(result.message);
+  }
+
+  return jsonOk({ id, status: result.status, member_id: result.memberId });
 }

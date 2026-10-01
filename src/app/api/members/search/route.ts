@@ -4,7 +4,13 @@ import { requireRole } from "@/lib/api/guard";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export async function GET(req: NextRequest) {
-  const g = await requireRole(req.headers.get("cookie"), ["secretary", "admin", "member", "officer"]);
+  const g = await requireRole(req.headers.get("cookie"), [
+    "secretary",
+    "admin",
+    "member",
+    "officer",
+    "treasurer",
+  ]);
   if (!g.ok) return g.response;
 
   const url = new URL(req.url);
@@ -14,6 +20,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ members: [] });
   }
 
+  const limit = Math.min(
+    Math.max(Number(url.searchParams.get("limit")) || 40, 1),
+    40,
+  );
+
   const escaped = parsed.data.replace(/%/g, "\\%").replace(/_/g, "\\_");
   const sb = getSupabaseAdmin();
   const { data, error } = await sb
@@ -22,7 +33,7 @@ export async function GET(req: NextRequest) {
     .eq("is_active", true)
     .ilike("full_name", `%${escaped}%`)
     .order("full_name", { ascending: true })
-    .limit(40);
+    .limit(limit);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

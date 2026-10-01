@@ -1,38 +1,115 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { z } from "zod";
 import { resolveRoleFromPin } from "@/lib/auth/pin-login";
-import { SESSION_COOKIE } from "@/lib/auth/constants";
+import { SESSION_COOKIE, DEFAULT_PIN_ROLES_COOKIE } from "@/lib/auth/constants";
 import { signSession } from "@/lib/auth/session";
+import {
+  badRequest,
+  internalError,
+  jsonError,
+  jsonOk,
+  unauthenticated,
+  validationFailed,
+  zodFields,
+} from "@/lib/api/response";
+import { checkLoginAllowed, recordAttempt } from "@/lib/auth/throttle";
+import { getClientIp } from "@/lib/auth/ip-hash";
+import { isActorRequired } from "@/lib/auth/session-valid";
+import { getAllSettings } from "@/lib/settings/store";
+import { logAudit } from "@/lib/audit/log-audit";
+import { findRolesOnDefaultPin } from "@/lib/auth/pin-service";
+import type { Role } from "@/lib/auth/roles";
 
 const bodySchema = z.object({
   pin: z.string().min(4).max(12),
 });
+
+const SESSION_MAX_AGE = 60 * 60 * 24 * 7;
 
 export async function POST(req: NextRequest) {
   let json: unknown;
   try {
     json = await req.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    return badRequest("Could not read the request.");
   }
+
+  const ip = getClientIp(req.headers);
+
+  // AUTH-2: 5 failures per 15 minutes per client, checked before any hashing.
+  const throttle = await checkLoginAllowed(ip);
+  if (throttle.blocked) {
+    const minutes = Math.max(1, Math.ceil(throttle.retryAfterSeconds / 60));
+    return jsonError(
+      "RATE_LIMITED",
+      `Too many wrong PINs. Try again in ${minutes} minute${
+        minutes === 1 ? "" : "s"
+      }.`,
+      { status: 429, headers: { "Retry-After": String(throttle.retryAfterSeconds) } },
+    );
+  }
+
+  if (throttle.globalDelayMs > 0) {
+    await new Promise((r) => setTimeout(r, throttle.globalDelayMs));
+  }
+
   const parsed = bodySchema.safeParse(json);
   if (!parsed.success) {
-    return NextResponse.json({ error: "PIN must be 4–12 characters" }, { status: 400 });
+    return validationFailed("PIN must be 4-12 characters.", zodFields(parsed.error));
   }
 
-  const role = await resolveRoleFromPin(parsed.data.pin);
+  let role;
+  try {
+    role = await resolveRoleFromPin(parsed.data.pin);
+  } catch (cause) {
+    console.error("[auth/login] pin lookup failed", cause);
+    return internalError();
+  }
+
   if (!role) {
-    return NextResponse.json({ error: "Invalid PIN" }, { status: 401 });
+    await recordAttempt("login", ip, false);
+    await logAudit({ action: "login_failed", actor: { role: null, memberId: null, name: null }, ip });
+    return unauthenticated("That PIN isn't right.");
   }
 
-  const token = await signSession(role);
-  const res = NextResponse.json({ ok: true, role });
+  await recordAttempt("login", ip, true);
+
+  let token: string;
+  try {
+    token = await signSession(role);
+  } catch (cause) {
+    console.error("[auth/login] signSession failed", cause);
+    return internalError();
+  }
+
+  // AUTH-4: staff roles are asked who is using the device. Member sessions are
+  // logged without an actor, matching today's anonymous behaviour.
+  const settings = await getAllSettings().catch(() => ({} as Record<string, string>));
+  const actorRequired = isActorRequired(role, settings);
+  if (role !== "member") {
+    await logAudit({ action: "login_succeeded", actor: { role, memberId: null, name: null }, ip });
+  }
+
+  // AUTH-1: the default-PIN check runs here (six bcrypt compares) and is cached in a
+  // cookie so admin pages can show the blocking banner without re-hashing on every render.
+  const defaultPinRoles = await findRolesOnDefaultPin().catch(() => [] as Role[]);
+
+  const res = jsonOk({ role, actorRequired, defaultPinRoles });
   res.cookies.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: 60 * 60 * 24 * 7,
+    maxAge: SESSION_MAX_AGE,
   });
+  if (role === "admin") {
+    res.cookies.set(DEFAULT_PIN_ROLES_COOKIE, defaultPinRoles.join(","), {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: SESSION_MAX_AGE,
+    });
+  }
   return res;
 }

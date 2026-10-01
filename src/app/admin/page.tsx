@@ -2,14 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { AnnouncementsFeed } from "@/components/AnnouncementsFeed";
 import { AssignedServersSection } from "@/components/AssignedServersSection";
-import { MonthCalendar } from "@/components/MonthCalendar";
+import { AttendanceCalendar } from "@/features/attendance/ui/AttendanceCalendar";
+import { CreateWeekendButton } from "@/features/attendance/ui/CreateWeekendButton";
 
 export default function AdminDashboardPage() {
-  const router = useRouter();
-  const [month, setMonth] = useState(() => new Date());
   const [dash, setDash] = useState<{
     today: string;
     sessions: { id: string; mass_name: string }[];
@@ -85,11 +83,8 @@ export default function AdminDashboardPage() {
 
       <section>
         <h2 className="mb-2 text-sm font-semibold text-[var(--muted)]">Calendar</h2>
-        <MonthCalendar
-          month={month}
-          onMonthChange={setMonth}
-          onSelectDate={(ymd) => router.push(`/admin/day/${ymd}`)}
-        />
+        <AttendanceCalendar role="admin" />
+        <CreateWeekendButton />
       </section>
     </div>
   );

@@ -19,6 +19,22 @@ export async function getSetting(key: SettingKey): Promise<string | null> {
   return data?.value ?? null;
 }
 
+export async function getSettingsUpdatedAt(
+  keys: readonly SettingKey[],
+): Promise<Record<string, string>> {
+  const sb = getSupabaseAdmin();
+  const { data, error } = await sb
+    .from("system_settings")
+    .select("key, updated_at")
+    .in("key", [...keys]);
+  if (error) throw error;
+  const out: Record<string, string> = {};
+  for (const row of data ?? []) {
+    if (row.updated_at) out[row.key] = row.updated_at as string;
+  }
+  return out;
+}
+
 export async function upsertSettings(pairs: Partial<Record<SettingKey, string>>) {
   const sb = getSupabaseAdmin();
   const rows = Object.entries(pairs).map(([key, value]) => ({

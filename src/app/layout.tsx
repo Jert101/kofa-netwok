@@ -1,7 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { PwaHub } from "@/components/PwaHub";
 import { RegisterPWA } from "@/components/RegisterPWA";
+import { AppProviders } from "@/components/layout/AppProviders";
+import { Toaster } from "@/components/ui/sonner";
 
 export const metadata: Metadata = {
   title: "KofA Attendance",
@@ -32,8 +33,8 @@ export default function RootLayout({
     <html lang="en">
       <body className="antialiased">
         <RegisterPWA />
-        <PwaHub />
-        {children}
+        <AppProviders>{children}</AppProviders>
+        <Toaster position="top-center" richColors closeButton />
       </body>
     </html>
   );

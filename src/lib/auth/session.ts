@@ -14,10 +14,12 @@ function getSecret() {
   return new TextEncoder().encode(s);
 }
 
-export type SessionPayload = JWTPayload & { role: Role };
+export type SessionActor = { id: string; name: string };
 
-export async function signSession(role: Role): Promise<string> {
-  return new SignJWT({ role })
+export type SessionPayload = JWTPayload & { role: Role; actor?: SessionActor };
+
+export async function signSession(role: Role, actor?: SessionActor | null): Promise<string> {
+  return new SignJWT(actor ? { role, actor } : { role })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("7d")
@@ -41,8 +43,8 @@ export async function getSessionFromCookies(): Promise<SessionPayload | null> {
   return verifySessionToken(raw);
 }
 
-export async function setSessionCookie(role: Role) {
-  const token = await signSession(role);
+export async function setSessionCookie(role: Role, actor?: SessionActor | null) {
+  const token = await signSession(role, actor);
   const jar = await cookies();
   jar.set(SESSION_COOKIE, token, {
     httpOnly: true,

@@ -1,39 +1,39 @@
-import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
+import { NextRequest } from "next/server";
 import { requireRole } from "@/lib/api/guard";
-import { formatMemberFullName } from "@/lib/members/name-format";
-import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { internalError, jsonOk, validationFailed, zodFields } from "@/lib/api/response";
+import { logAudit } from "@/lib/audit/log-audit";
+import { getClientIp } from "@/lib/auth/ip-hash";
+import {
+  fetchMembers,
+  safeParseMemberQuery,
+  type MemberQuery,
+} from "@/features/members/member-query";
+import { createMember } from "@/features/members/server/create-member";
+import { createMemberSchema, toCreateMemberInput } from "@/features/members/member-input";
+
+const ROLES = ["admin", "treasurer", "member", "officer", "secretary"] as const;
 
 export async function GET(req: NextRequest) {
-  const g = await requireRole(req.headers.get("cookie"), ["admin", "treasurer", "member", "officer", "secretary"]);
+  const g = await requireRole(req.headers.get("cookie"), [...ROLES]);
   if (!g.ok) return g.response;
 
   const url = new URL(req.url);
-  const includeInactive = url.searchParams.get("all") === "1";
+  const parsed = safeParseMemberQuery(url.searchParams);
 
-  const sb = getSupabaseAdmin();
-  let q = sb
-    .from("members")
-    .select("id, full_name, is_active, date_of_birth, gender, contact_number, batch, created_at")
-    .order("full_name", { ascending: true });
-  if (!includeInactive) {
-    q = q.eq("is_active", true);
+  if (!parsed.success) {
+    return validationFailed("Check the filters and try again.", zodFields(parsed.error));
   }
-  const { data, error } = await q;
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  const query: MemberQuery = parsed.data;
+
+  try {
+    const result = await fetchMembers(query);
+    return jsonOk(result);
+  } catch (e) {
+    console.error("[admin/members] list failed:", e instanceof Error ? e.message : e);
+    return internalError("Could not load the member list.");
   }
-  return NextResponse.json({ members: data ?? [] });
 }
-
-const postSchema = z.object({
-  full_name: z.string().min(1).max(160).trim(),
-  date_of_birth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-  gender: z.enum(["male", "female"]).optional().nullable(),
-  contact_number: z.string().max(20).trim().optional().nullable(),
-  batch: z.string().regex(/^\d{4}$/).optional().nullable(),
-});
 
 export async function POST(req: NextRequest) {
   const g = await requireRole(req.headers.get("cookie"), ["admin"]);
@@ -43,36 +43,41 @@ export async function POST(req: NextRequest) {
   try {
     json = await req.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    return validationFailed("Check the details and try again.", {
+      _form: "Could not read the request.",
+    });
   }
-  const parsed = postSchema.safeParse(json);
+
+  // The sheet sends snake_case column names, so validate before mapping. Casting
+  // used to let `first_name` through as an undefined `firstName`.
+  const parsed = createMemberSchema.safeParse(json);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+    return validationFailed("Check the details and try again.", zodFields(parsed.error));
   }
 
-  const full_name = formatMemberFullName(parsed.data.full_name);
-  if (!full_name) {
-    return NextResponse.json({ error: "Invalid name" }, { status: 400 });
+  const result = await createMember(toCreateMemberInput(parsed.data));
+
+  if (result.ok) {
+    await logAudit({
+      action: "member_created",
+      actor: {
+        role: g.session.role,
+        memberId: g.session.actor?.id ?? null,
+        name: g.session.actor?.name ?? null,
+      },
+      entityType: "member",
+      entityId: result.memberId,
+      ip: getClientIp(req.headers),
+      meta: { full_name: result.fullName, source: "admin" },
+    });
+    return jsonOk({ id: result.memberId, full_name: result.fullName }, { status: 201 });
   }
 
-  const sb = getSupabaseAdmin();
-  const { data, error } = await sb
-    .from("members")
-    .insert({
-      full_name,
-      date_of_birth: parsed.data.date_of_birth || null,
-      gender: parsed.data.gender || null,
-      contact_number: parsed.data.contact_number || null,
-      batch: parsed.data.batch || null,
-    })
-    .select("id")
-    .single();
-
-  if (error) {
-    if (error.code === "23505") {
-      return NextResponse.json({ error: "An active member with this name already exists" }, { status: 409 });
-    }
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  if (result.reason === "conflict") {
+    return validationFailed("That name is already in use.", {
+      _form: `An active member named ${result.conflictName} already exists.`,
+    });
   }
-  return NextResponse.json({ id: data?.id });
+
+  return validationFailed("Check the details and try again.", { _form: result.message });
 }

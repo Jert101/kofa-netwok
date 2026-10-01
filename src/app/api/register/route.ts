@@ -1,79 +1,128 @@
-import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
-import { capitalizeName } from "@/lib/members/name-format";
+import { NextRequest } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import {
+  badRequest,
+  internalError,
+  jsonError,
+  jsonOk,
+  validationFailed,
+  zodFields,
+} from "@/lib/api/response";
+import {
+  normalizeRegisterInput,
+  registerSchema,
+} from "@/features/registrations/schemas";
+import { findPossibleDuplicate } from "@/features/registrations/server/duplicates";
+import { checkSubmitAllowed, recordAttempt } from "@/lib/auth/throttle";
+import { getClientIp } from "@/lib/auth/ip-hash";
+import { REGISTER_MIN_FILL_MS } from "@/lib/auth/throttle-rules";
+import { generateReferenceCode } from "@/lib/registrations/generate";
 
-const schema = z.object({
-  first_name: z.string().min(1).max(100).trim(),
-  last_name: z.string().min(1).max(100).trim(),
-  middle_initial: z.string().max(1).trim().optional().default(""),
-  date_of_birth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format"),
-  gender: z.enum(["male", "female"]),
-  contact_number: z.string().min(7).max(20).trim(),
-});
+/** Honeypot: a real person never sees or fills this. */
+const HONEYPOT_FIELD = "company";
+const FORM_LOADED_AT_FIELD = "formLoadedAt";
+
+/** Postgres unique violation on registration_requests_reference_code. */
+const UNIQUE_VIOLATION = "23505";
+
+/** How many times to retry a reference-code clash before giving up. */
+const CODE_ATTEMPTS = 5;
 
 export async function POST(req: NextRequest) {
   let json: unknown;
   try {
     json = await req.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    return badRequest("Could not read the request.");
   }
 
-  const parsed = schema.safeParse(json);
+  if (typeof json !== "object" || json === null) {
+    return badRequest("Could not read the request.");
+  }
+
+  const body = json as Record<string, unknown>;
+  const ip = getClientIp(req.headers);
+
+  // AUTH-2: a filled honeypot is a bot. Report success so it learns nothing,
+  // and do not write anything.
+  if (typeof body[HONEYPOT_FIELD] === "string" && body[HONEYPOT_FIELD].trim() !== "") {
+    return jsonOk({ received: true });
+  }
+
+  const loadedAt = Number(body[FORM_LOADED_AT_FIELD]);
+  if (!Number.isFinite(loadedAt) || Date.now() - loadedAt < REGISTER_MIN_FILL_MS) {
+    return jsonError("RATE_LIMITED", "Please wait a moment and try again.", { status: 429 });
+  }
+
+  const throttle = await checkSubmitAllowed("register", ip);
+  if (throttle.blocked) {
+    const minutes = Math.max(1, Math.ceil(throttle.retryAfterSeconds / 60));
+    return jsonError("RATE_LIMITED", `Too many submissions. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}.`, {
+      status: 429,
+      headers: { "Retry-After": String(throttle.retryAfterSeconds) },
+    });
+  }
+
+  const parsed = registerSchema.safeParse(normalizeRegisterInput(body));
   if (!parsed.success) {
-    const first = parsed.error.issues[0];
-    return NextResponse.json({ error: first?.message ?? "Invalid input" }, { status: 400 });
+    return validationFailed("Check the form and try again.", zodFields(parsed.error));
   }
 
-  const { date_of_birth, gender, contact_number, middle_initial } = parsed.data;
-  let { first_name, last_name } = parsed.data;
-  first_name = capitalizeName(first_name);
-  last_name = capitalizeName(last_name);
-  const mi = middle_initial?.replace(".", "").trim().toUpperCase() || null;
+  const first_name = parsed.data.first_name;
+  const last_name = parsed.data.last_name;
+  const middle_initial = parsed.data.middle_initial || null;
+  const batch = parsed.data.batch || null;
+  const { date_of_birth, gender, contact_number } = parsed.data;
 
   const sb = getSupabaseAdmin();
 
-  let reqQuery = sb
-    .from("registration_requests")
-    .select("id")
-    .eq("first_name", first_name)
-    .eq("last_name", last_name)
-    .neq("status", "rejected");
-
-  reqQuery = mi ? reqQuery.eq("middle_initial", mi) : reqQuery.is("middle_initial", null);
-
-  const { data: existing } = await reqQuery.maybeSingle();
-
-  if (existing) {
-    return NextResponse.json({ error: "This name is already registered and is under review." }, { status: 409 });
-  }
-
-  const fullMi = mi ? ` ${mi}.` : "";
-  const full_name = `${first_name}${fullMi} ${last_name}`;
-
-  const { data: memberMatch } = await sb
-    .from("members")
-    .select("id")
-    .eq("full_name", full_name)
-    .maybeSingle();
-
-  if (memberMatch) {
-    return NextResponse.json({ error: "This name is already a member." }, { status: 409 });
-  }
-
-  const { error } = await sb.from("registration_requests").insert({
-    first_name,
-    last_name,
-    middle_initial: mi,
-    date_of_birth,
-    gender,
-    contact_number,
+  // REG-2: a name that already exists is recorded, not refused. Telling the
+  // applicant would confirm whether that person is a member.
+  const duplicate = await findPossibleDuplicate({
+    firstName: first_name,
+    middleInitial: middle_initial,
+    lastName: last_name,
   });
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  // REG-3: the applicant gets a code so they can check the outcome themselves.
+  // A clash with an existing code is astronomically unlikely but the unique index
+  // would reject the whole insert, so retry rather than lose the application.
+  let referenceCode = generateReferenceCode();
+  let inserted = false;
+  let lastError: { code?: string; message: string } | null = null;
+
+  for (let attempt = 0; attempt < CODE_ATTEMPTS && !inserted; attempt += 1) {
+    if (attempt > 0) referenceCode = generateReferenceCode();
+
+    const { error } = await sb.from("registration_requests").insert({
+      first_name,
+      last_name,
+      middle_initial,
+      date_of_birth,
+      gender,
+      contact_number,
+      batch,
+      reference_code: referenceCode,
+      possible_duplicate_member_id: duplicate.memberId,
+    });
+
+    if (!error) {
+      inserted = true;
+      break;
+    }
+
+    lastError = { code: error.code, message: error.message };
+    if (error.code !== UNIQUE_VIOLATION) break;
+    console.warn(`[register] reference code clash on attempt ${attempt + 1}, retrying`);
   }
 
-  return NextResponse.json({ ok: true });
+  if (!inserted) {
+    console.error("[register] insert failed", lastError);
+    await recordAttempt("register", ip, false);
+    return internalError("Could not save the application. Please try again.");
+  }
+
+  await recordAttempt("register", ip, true);
+  return jsonOk({ received: true, reference_code: referenceCode });
 }
+

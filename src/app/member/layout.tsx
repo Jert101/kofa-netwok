@@ -1,17 +1,12 @@
-import { LogoutBar } from "@/components/LogoutBar";
-import { RoleNav } from "@/components/RoleNav";
+import { AppShell } from "@/components/layout/AppShell";
+import { NAV_BY_ROLE } from "@/lib/nav/config";
+import { requireValidSession } from "@/lib/auth/require-valid-session";
 
-const links = [
-  { href: "/member", label: "Home" },
-  { href: "/member/payments", label: "Payments" },
-] as const;
-
-export default function MemberLayout({ children }: { children: React.ReactNode }) {
+export default async function MemberLayout({ children }: { children: React.ReactNode }) {
+  const session = await requireValidSession("member");
   return (
-    <div className="min-h-dvh bg-[var(--background)] pb-24">
-      <LogoutBar />
-      <div className="mx-auto w-full max-w-6xl px-3 pt-3 sm:px-4">{children}</div>
-      <RoleNav links={links} />
-    </div>
+    <AppShell role="member" links={NAV_BY_ROLE.member} actor={session.actor ?? null}>
+      {children}
+    </AppShell>
   );
 }

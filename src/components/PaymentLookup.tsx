@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatPeso } from "@/lib/format-peso";
+import { isApiResponse } from "@/lib/api/response";
 
 interface Member {
   id: string;
@@ -29,14 +30,10 @@ export default function PaymentLookup() {
   const [payments, setPayments] = useState<PaymentFull[]>([]);
 
   const load = useCallback(async () => {
-    const [mRes, sRes] = await Promise.all([
-      fetch("/api/admin/members?all=1", { credentials: "same-origin" }),
-      fetch("/api/admin/payment-structures", { credentials: "same-origin" }),
-    ]);
-    if (mRes.ok) {
-      const mj = (await mRes.json()) as { members: Member[] };
-      setMembers(mj.members ?? []);
-    }
+    // Structures only. Members come from /api/members/search as the admin types,
+    // because downloading the whole roll to filter in the browser stopped being
+    // possible once the member list became paginated.
+    const sRes = await fetch("/api/admin/payment-structures", { credentials: "same-origin" });
     if (sRes.ok) {
       const sj = (await sRes.json()) as { structures: StructureLookup[] };
       setStructures(sj.structures ?? []);
@@ -45,11 +42,38 @@ export default function PaymentLookup() {
 
   useEffect(() => { load(); }, [load]);
 
-  const filteredMembers = useMemo(() => {
-    if (!search.trim() || selectedMember) return [];
-    const q = search.toLowerCase();
-    return members.filter((m) => m.full_name.toLowerCase().includes(q));
-  }, [search, members, selectedMember]);
+  useEffect(() => {
+    const q = search.trim();
+    if (q.length === 0 || selectedMember) {
+      setMembers([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void (async () => {
+        const res = await fetch(`/api/members/search?q=${encodeURIComponent(q)}`, {
+          credentials: "same-origin",
+        });
+        if (!res.ok) return;
+        const body: unknown = await res.json().catch(() => null);
+        if (cancelled) return;
+        if (isApiResponse<{ members: Member[] }>(body) && body.ok) {
+          setMembers(body.data.members ?? []);
+        } else if (typeof body === "object" && body !== null && "members" in body) {
+          setMembers((body as { members: Member[] }).members ?? []);
+        }
+      })();
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [search, selectedMember]);
+
+  const filteredMembers = useMemo(
+    () => (selectedMember ? [] : members),
+    [members, selectedMember],
+  );
 
   useEffect(() => {
     if (!selectedMember) { setPayments([]); return; }

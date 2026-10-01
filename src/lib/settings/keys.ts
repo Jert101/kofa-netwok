@@ -10,6 +10,21 @@ export const SETTING_KEYS = [
   "pin_officer_hash",
   "pin_treasurer_hash",
   "pin_super_admin_hash",
+  "sessions_valid_after_admin",
+  "sessions_valid_after_secretary",
+  "sessions_valid_after_member",
+  "sessions_valid_after_officer",
+  "sessions_valid_after_treasurer",
+  "sessions_valid_after_super_admin",
+  "require_actor_name_admin",
+  "require_actor_name_secretary",
+  "require_actor_name_officer",
+  "require_actor_name_treasurer",
+  "require_actor_name_super_admin",
+  "require_actor_name_member",
+  "audit_retention_months",
+  /** ATT-2: the weekly cron creates Sunday sessions only when this is 'true'. */
+  "auto_create_sunday_sessions",
 ] as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[number];

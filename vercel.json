@@ -3,6 +3,14 @@
     {
       "path": "/api/cron/birthday",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/maintenance",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/sessions",
+      "schedule": "0 0 * * 4"
     }
   ]
 }

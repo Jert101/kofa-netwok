@@ -3,6 +3,8 @@ import { requireRole } from "@/lib/api/guard";
 import { notifyAttendanceSessionUpdated } from "@/lib/push/attendance-notify";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { guardReportNotGenerated } from "@/lib/reports/check-report-lock";
+import { getClientIp } from "@/lib/auth/ip-hash";
+import { logAudit } from "@/lib/audit/log-audit";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -72,6 +74,19 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   }
 
   void notifyAttendanceSessionUpdated(sessionId);
+
+  await logAudit({
+    action: "appeals_approved_all",
+    actor: {
+      role: g.session.role,
+      memberId: g.session.actor?.id ?? null,
+      name: g.session.actor?.name ?? null,
+    },
+    entityType: "attendance_session",
+    entityId: sessionId,
+    meta: { count: uniqueMembers.length, items: itemIds.length },
+    ip: getClientIp(req.headers),
+  });
 
   return NextResponse.json({ ok: true, approved_count: uniqueMembers.length });
 }

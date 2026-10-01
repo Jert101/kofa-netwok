@@ -1,64 +1,130 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/api/guard";
-import { formatMemberFullName } from "@/lib/members/name-format";
+import {
+  badRequest,
+  conflict,
+  internalError,
+  jsonOk,
+  validationFailed,
+  zodFields,
+} from "@/lib/api/response";
+import { getClientIp } from "@/lib/auth/ip-hash";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import {
+  deactivateMember,
+  deactivateSchema,
+  editMember,
+  memberEditSchema,
+  reactivateMember,
+} from "@/features/members/server/write-member";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-const patchSchema = z.object({
-  full_name: z.string().min(1).max(160).trim().optional(),
-  is_active: z.boolean().optional(),
-  date_of_birth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-  gender: z.enum(["male", "female"]).optional().nullable(),
-  contact_number: z.string().max(20).trim().optional().nullable(),
-  batch: z.string().regex(/^\d{4}$/).optional().nullable(),
+const bodySchema = z.object({
+  action: z.enum(["update", "deactivate", "reactivate"]).default("update"),
 });
+
+/** MEM-4 section 1. */
+export async function GET(req: NextRequest, ctx: Ctx) {
+  const g = await requireRole(req.headers.get("cookie"), [
+    "admin",
+    "treasurer",
+    "member",
+    "officer",
+    "secretary",
+  ]);
+  if (!g.ok) return g.response;
+
+  const { id } = await ctx.params;
+
+  const { data, error } = await getSupabaseAdmin()
+    .from("members")
+    .select(
+      `id, full_name, date_of_birth, gender, contact_number, batch, is_active,
+       deactivated_at, deactivation_reason, created_at`,
+    )
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) return internalError("Could not load that member.");
+  if (!data) return badRequest("That member no longer exists.");
+
+  return jsonOk({ member: data });
+}
 
 export async function PATCH(req: NextRequest, ctx: Ctx) {
   const g = await requireRole(req.headers.get("cookie"), ["admin"]);
   if (!g.ok) return g.response;
 
   const { id } = await ctx.params;
+
   let json: unknown;
   try {
     json = await req.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
-  const parsed = patchSchema.safeParse(json);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid body" }, { status: 400 });
+    return badRequest("Could not read the request.");
   }
 
-  const { full_name, is_active, date_of_birth, gender, contact_number, batch } = parsed.data;
+  const shape = bodySchema.safeParse(json);
+  if (!shape.success) {
+    return validationFailed("Check the details and try again.", zodFields(shape.error));
+  }
 
-  const updatePayload: Record<string, unknown> = {};
-  if (full_name !== undefined) {
-    const formatted = formatMemberFullName(full_name);
-    if (!formatted) {
-      return NextResponse.json({ error: "Invalid name" }, { status: 400 });
+  const { action } = shape.data;
+  const actor = {
+    role: g.session.role,
+    memberId: g.session.actor?.id ?? null,
+    name: g.session.actor?.name ?? null,
+  };
+  const ip = getClientIp(req.headers);
+  const body = json as Record<string, unknown>;
+
+  if (action === "update") {
+    const parsed = memberEditSchema.safeParse(body);
+    if (!parsed.success) {
+      return validationFailed("Check the details and try again.", zodFields(parsed.error));
     }
-    updatePayload.full_name = formatted;
+    const result = await editMember({ id, changes: parsed.data, actor, ip });
+    return respond(result, id);
   }
-  if (is_active !== undefined) updatePayload.is_active = is_active;
-  if (date_of_birth !== undefined) updatePayload.date_of_birth = date_of_birth || null;
-  if (gender !== undefined) updatePayload.gender = gender || null;
-  if (contact_number !== undefined) updatePayload.contact_number = contact_number || null;
-  if (batch !== undefined) updatePayload.batch = batch || null;
-  updatePayload.updated_at = new Date().toISOString();
 
-  const sb = getSupabaseAdmin();
-  const { error } = await sb
-    .from("members")
-    .update(updatePayload)
-    .eq("id", id);
-
-  if (error) {
-    if (error.code === "23505") {
-      return NextResponse.json({ error: "An active member with this name already exists" }, { status: 409 });
+  if (action === "deactivate") {
+    const parsed = deactivateSchema.safeParse(body);
+    if (!parsed.success) {
+      return validationFailed("Check the reason and try again.", zodFields(parsed.error));
     }
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    const result = await deactivateMember({
+      id,
+      reason: parsed.data.reason,
+      note: parsed.data.note,
+      actor,
+      ip,
+    });
+    return respond(result, id);
   }
-  return NextResponse.json({ ok: true });
+
+  const result = await reactivateMember({ id, actor, ip });
+  return respond(result, id);
+}
+
+function respond(
+  result: Awaited<ReturnType<typeof editMember>>,
+  id: string,
+): ReturnType<typeof jsonOk> {
+  if (result.ok) return jsonOk({ id });
+
+  if (result.code === "conflict") {
+    return conflict("CONFLICT", result.message, {
+      conflict_member_id: result.conflictId,
+      conflict_name: result.conflictName,
+    });
+  }
+  if (result.code === "missing") {
+    return badRequest(result.message);
+  }
+  if (result.code === "invalid" && result.fields) {
+    return validationFailed(result.message, result.fields);
+  }
+  return internalError(result.message);
 }

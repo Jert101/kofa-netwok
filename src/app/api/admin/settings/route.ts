@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/api/guard";
 import { getAllSettings, upsertSettings } from "@/lib/settings/store";
+import {
+  MAX_AUDIT_RETENTION_MONTHS,
+  MIN_AUDIT_RETENTION_MONTHS,
+  parseAuditRetentionMonths,
+} from "@/lib/maintenance/retention";
 
 const patchSchema = z.object({
   church_name: z.string().min(1).max(200).optional(),
@@ -9,6 +14,12 @@ const patchSchema = z.object({
   report_title: z.string().min(1).max(200).optional(),
   report_timezone: z.string().min(1).max(80).optional(),
   attendance_auto_approve_appeals: z.boolean().optional(),
+  audit_retention_months: z
+    .number()
+    .int()
+    .min(MIN_AUDIT_RETENTION_MONTHS)
+    .max(MAX_AUDIT_RETENTION_MONTHS)
+    .optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -22,6 +33,7 @@ export async function GET(req: NextRequest) {
     report_title: all.report_title ?? "",
     report_timezone: all.report_timezone ?? "UTC",
     attendance_auto_approve_appeals: all.attendance_auto_approve_appeals === "true",
+    audit_retention_months: parseAuditRetentionMonths(all.audit_retention_months),
   });
 }
 
@@ -47,6 +59,9 @@ export async function PATCH(req: NextRequest) {
   if (parsed.data.report_timezone !== undefined) payload.report_timezone = parsed.data.report_timezone;
   if (parsed.data.attendance_auto_approve_appeals !== undefined) {
     payload.attendance_auto_approve_appeals = parsed.data.attendance_auto_approve_appeals ? "true" : "false";
+  }
+  if (parsed.data.audit_retention_months !== undefined) {
+    payload.audit_retention_months = String(parsed.data.audit_retention_months);
   }
 
   await upsertSettings(payload as Parameters<typeof upsertSettings>[0]);

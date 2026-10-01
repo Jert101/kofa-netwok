@@ -1,7 +1,8 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { SecretaryAttendanceForm } from "@/components/SecretaryAttendanceForm";
+import { Button } from "@/components/ui/button";
+import { AddSession } from "@/features/attendance/ui/AddSession";
 
 export default function SecretaryAddPage() {
   const params = useParams();
@@ -15,15 +16,11 @@ export default function SecretaryAddPage() {
 
   return (
     <div>
-      <button
-        type="button"
-        onClick={() => router.back()}
-        className="mb-3 min-h-11 text-sm font-medium text-[var(--accent)]"
-      >
+      <Button type="button" variant="ghost" size="sm" onClick={() => router.back()} className="mb-3">
         ← Back
-      </button>
-      <h1 className="mb-4 text-lg font-semibold">Add attendance</h1>
-      <SecretaryAttendanceForm mode="create" sessionDate={date} />
+      </Button>
+      <h1 className="mb-4 text-lg font-semibold">Add session</h1>
+      <AddSession sessionDate={date} />
     </div>
   );
 }

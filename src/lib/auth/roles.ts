@@ -1,5 +1,14 @@
 export type Role = "admin" | "secretary" | "member" | "officer" | "treasurer" | "super_admin";
 
+export const ROLE_ORDER: readonly Role[] = [
+  "admin",
+  "secretary",
+  "member",
+  "officer",
+  "treasurer",
+  "super_admin",
+];
+
 export const ROLE_PATH: Record<Role, string> = {
   admin: "/admin",
   secretary: "/secretary",

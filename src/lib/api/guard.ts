@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { SESSION_COOKIE } from "@/lib/auth/constants";
 import { verifySessionToken, type SessionPayload } from "@/lib/auth/session";
+import { isSessionValidForRole } from "@/lib/auth/session-valid";
 import type { Role } from "@/lib/auth/roles";
 
 export type GuardResult =
@@ -17,6 +18,13 @@ export async function requireRole(
     return {
       ok: false,
       response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+    };
+  }
+  // AUTH-3: a PIN change or "sign out all devices" invalidates older cookies.
+  if (!(await isSessionValidForRole(session))) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: "Session expired" }, { status: 401 }),
     };
   }
   return { ok: true, session };

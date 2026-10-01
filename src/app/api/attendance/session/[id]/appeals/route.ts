@@ -5,6 +5,8 @@ import { getSetting } from "@/lib/settings/store";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { notifyAttendanceSessionUpdated } from "@/lib/push/attendance-notify";
 import { guardReportNotGenerated } from "@/lib/reports/check-report-lock";
+import { checkSubmitAllowed, recordAttempt } from "@/lib/auth/throttle";
+import { getClientIp } from "@/lib/auth/ip-hash";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -57,6 +59,20 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   const g = await requireRole(req.headers.get("cookie"), ["member"]);
   if (!g.ok) return g.response;
 
+  // AUTH-2: appeals are public-facing and member-only, so keep spam and mass
+  // submission bounded per client.
+  const ip = getClientIp(req.headers);
+  const submitGate = await checkSubmitAllowed("appeal", ip);
+  if (submitGate.blocked) {
+    await recordAttempt("appeal", ip, false);
+    return NextResponse.json(
+      {
+        error: `Too many appeal attempts. Try again in ${Math.ceil(submitGate.retryAfterSeconds / 60)} minute(s).`,
+      },
+      { status: 429 }
+    );
+  }
+
   const { id: sessionId } = await ctx.params;
   let json: unknown;
   try {
@@ -95,12 +111,22 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
   const toAppeal = uniqueMemberIds.filter((id) => !onRoster.has(id) && !pendingAppeal.has(id));
   if (toAppeal.length !== uniqueMemberIds.length) {
+    await recordAttempt("appeal", ip, false);
     return NextResponse.json(
       {
         error:
           "One or more selected names are already on the attendance list or already have a pending appeal for this Mass.",
       },
       { status: 400 }
+    );
+  }
+
+  // The member picked names that are not theirs to appeal for.
+  if (g.session.actor && toAppeal.some((id) => id !== g.session.actor?.id)) {
+    await recordAttempt("appeal", ip, false);
+    return NextResponse.json(
+      { error: "You can only appeal your own attendance." },
+      { status: 403 }
     );
   }
 
@@ -112,8 +138,12 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         toAppeal.map((memberId) => ({ session_id: sessionId, member_id: memberId })),
         { onConflict: "session_id,member_id", ignoreDuplicates: true }
       );
-    if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
+    if (upErr) {
+      await recordAttempt("appeal", ip, false);
+      return NextResponse.json({ error: upErr.message }, { status: 500 });
+    }
     void notifyAttendanceSessionUpdated(sessionId);
+    await recordAttempt("appeal", ip, true);
     return NextResponse.json({
       ok: true,
       auto_approved: true,
@@ -134,7 +164,11 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       member_id: memberId,
     }))
   );
-  if (iErr) return NextResponse.json({ error: iErr.message }, { status: 500 });
+  if (iErr) {
+    await recordAttempt("appeal", ip, false);
+    return NextResponse.json({ error: iErr.message }, { status: 500 });
+  }
 
+  await recordAttempt("appeal", ip, true);
   return NextResponse.json({ ok: true, appeal_id: appeal.id, submitted_count: toAppeal.length });
 }

@@ -1,6 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Smartphone } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { SidebarMenuButton } from "@/components/ui/sidebar";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -187,84 +194,75 @@ export function PwaHub() {
   const canInstallChrome = Boolean(deferred);
 
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="fixed bottom-4 right-4 z-[60] flex h-12 min-h-12 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-4 text-sm font-medium text-[var(--text)] shadow-lg"
-        aria-expanded={open}
-        aria-controls="pwa-hub-panel"
-      >
-        App
-      </button>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <SidebarMenuButton tooltip="Install &amp; notifications">
+          <Smartphone className="size-4" />
+          <span>App</span>
+        </SidebarMenuButton>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="top" align="center" className="w-[min(92vw,20rem)] rounded-2xl p-4">
+        <p className="text-xs font-semibold text-[var(--accent)]">Install &amp; notifications</p>
+        <p className="mt-1 text-xs text-[var(--muted)]">
+          Works even when you are signed out. Allow notifications when prompted.
+        </p>
 
-      {open ? (
-        <div
-          id="pwa-hub-panel"
-          className="fixed bottom-20 right-4 z-[60] w-[min(100vw-2rem,20rem)] rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-xl"
-        >
-          <p className="text-xs font-semibold text-[var(--accent)]">Install &amp; notifications</p>
-          <p className="mt-1 text-xs text-[var(--muted)]">
-            Works even when you are signed out. Allow notifications when prompted.
-          </p>
-
-          {showInstallUi ? (
-            <div className="mt-3 space-y-2 border-t border-[var(--border)] pt-3">
-              <p className="text-xs font-medium text-[var(--text)]">Install app</p>
-              {canInstallChrome ? (
-                <button
-                  type="button"
-                  disabled={installBusy}
-                  onClick={() => void onInstall()}
-                  className="min-h-10 w-full rounded-xl bg-[var(--accent)] text-sm font-medium text-white disabled:opacity-40"
-                >
-                  {installBusy ? "Installing…" : "Install KofA AMS"}
-                </button>
-              ) : isIos() ? (
-                <p className="text-xs text-[var(--muted)]">
-                  On iPhone/iPad: tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>. Web push on iOS
-                  works after the app is installed from that screen (iOS 16.4+).
-                </p>
-              ) : (
-                <p className="text-xs text-[var(--muted)]">
-                  Use your browser menu: look for &quot;Install app&quot;, &quot;Add to Home screen&quot;, or similar.
-                </p>
-              )}
-            </div>
-          ) : null}
-
+        {showInstallUi ? (
           <div className="mt-3 space-y-2 border-t border-[var(--border)] pt-3">
-            <p className="text-xs font-medium text-[var(--text)]">Push notifications</p>
-            {perm === "unsupported" ? (
-              <p className="text-xs text-[var(--muted)]">Notifications are not supported in this browser.</p>
-            ) : subscribed ? (
+            <p className="text-xs font-medium text-[var(--text)]">Install app</p>
+            {canInstallChrome ? (
               <button
                 type="button"
-                disabled={pushBusy}
-                onClick={() => void disableNotifications()}
-                className="min-h-10 w-full rounded-xl border border-[var(--border)] text-sm font-medium text-[var(--text)] disabled:opacity-40"
-              >
-                {pushBusy ? "Working…" : "Turn off notifications"}
-              </button>
-            ) : (
-              <button
-                type="button"
-                disabled={pushBusy || perm === "denied"}
-                onClick={() => void enableNotifications()}
+                disabled={installBusy}
+                onClick={() => void onInstall()}
                 className="min-h-10 w-full rounded-xl bg-[var(--accent)] text-sm font-medium text-white disabled:opacity-40"
               >
-                {pushBusy ? "Enabling…" : "Enable notifications"}
+                {installBusy ? "Installing…" : "Install KofA AMS"}
               </button>
-            )}
-            {perm === "denied" && !subscribed ? (
-              <p className="text-xs text-[var(--danger)]">
-                Notifications are blocked. Enable them in your browser settings for this site.
+            ) : isIos() ? (
+              <p className="text-xs text-[var(--muted)]">
+                On iPhone/iPad: tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>. Web push on iOS
+                works after the app is installed from that screen (iOS 16.4+).
               </p>
-            ) : null}
-            {pushMsg ? <p className="text-xs text-[var(--muted)]">{pushMsg}</p> : null}
+            ) : (
+              <p className="text-xs text-[var(--muted)]">
+                Use your browser menu: look for &quot;Install app&quot;, &quot;Add to Home screen&quot;, or similar.
+              </p>
+            )}
           </div>
+        ) : null}
+
+        <div className="mt-3 space-y-2 border-t border-[var(--border)] pt-3">
+          <p className="text-xs font-medium text-[var(--text)]">Push notifications</p>
+          {perm === "unsupported" ? (
+            <p className="text-xs text-[var(--muted)]">Notifications are not supported in this browser.</p>
+          ) : subscribed ? (
+            <button
+              type="button"
+              disabled={pushBusy}
+              onClick={() => void disableNotifications()}
+              className="min-h-10 w-full rounded-xl border border-[var(--border)] text-sm font-medium text-[var(--text)] disabled:opacity-40"
+            >
+              {pushBusy ? "Working…" : "Turn off notifications"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={pushBusy || perm === "denied"}
+              onClick={() => void enableNotifications()}
+              className="min-h-10 w-full rounded-xl bg-[var(--accent)] text-sm font-medium text-white disabled:opacity-40"
+            >
+              {pushBusy ? "Enabling…" : "Enable notifications"}
+            </button>
+          )}
+          {perm === "denied" && !subscribed ? (
+            <p className="text-xs text-[var(--danger)]">
+              Notifications are blocked. Enable them in your browser settings for this site.
+            </p>
+          ) : null}
+          {pushMsg ? <p className="text-xs text-[var(--muted)]">{pushMsg}</p> : null}
         </div>
-      ) : null}
-    </>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

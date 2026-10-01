@@ -1,71 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-
-type PinRole = "admin" | "secretary" | "member" | "officer" | "treasurer" | "super_admin";
-
-function SinglePinForm({ role, label }: { role: PinRole; label: string }) {
-  const [pin, setPin] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [msg, setMsg] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setMsg(null);
-    setBusy(true);
-    try {
-      const res = await fetch("/api/admin/pins", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({ role, pin, confirm }),
-      });
-      const j = (await res.json()) as { error?: string };
-      if (!res.ok) {
-        setMsg(j.error ?? "Could not update PIN");
-        return;
-      }
-      setMsg(`${label} PIN updated. Anyone using the old PIN must sign in again.`);
-      setPin("");
-      setConfirm("");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <form onSubmit={onSubmit} className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4 space-y-2">
-      <h3 className="text-sm font-medium text-[var(--text)]">{label}</h3>
-      <input
-        type="password"
-        inputMode="numeric"
-        className="w-full min-h-12 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3"
-        placeholder="New PIN"
-        value={pin}
-        onChange={(e) => setPin(e.target.value)}
-        autoComplete="new-password"
-      />
-      <input
-        type="password"
-        inputMode="numeric"
-        className="w-full min-h-12 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3"
-        placeholder="Confirm new PIN"
-        value={confirm}
-        onChange={(e) => setConfirm(e.target.value)}
-        autoComplete="new-password"
-      />
-      <button
-        type="submit"
-        disabled={busy || pin.length < 4 || confirm.length < 4}
-        className="min-h-11 w-full rounded-xl bg-[var(--accent)] text-sm font-semibold text-white disabled:opacity-40"
-      >
-        {busy ? "Saving…" : `Update ${label} PIN`}
-      </button>
-      {msg ? <p className="text-xs text-[var(--muted)]">{msg}</p> : null}
-    </form>
-  );
-}
+import Link from "next/link";
+import {
+  MAX_AUDIT_RETENTION_MONTHS,
+  MIN_AUDIT_RETENTION_MONTHS,
+} from "@/lib/maintenance/retention";
 
 function BatchManager() {
   const [batches, setBatches] = useState<{ id: string; year: string }[]>([]);
@@ -160,6 +100,7 @@ export default function AdminSettingsPage() {
   const [report_title, setReportTitle] = useState("");
   const [report_timezone, setReportTimezone] = useState("Asia/Manila");
   const [attendance_auto_approve_appeals, setAttendanceAutoApproveAppeals] = useState(false);
+  const [auditRetentionMonths, setAuditRetentionMonths] = useState(12);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -172,12 +113,14 @@ export default function AdminSettingsPage() {
         report_title: string;
         report_timezone: string;
         attendance_auto_approve_appeals?: boolean;
+        audit_retention_months?: number;
       };
       setChurchName(j.church_name);
       setChurchAddress(j.church_address);
       setReportTitle(j.report_title);
       setReportTimezone(j.report_timezone);
       setAttendanceAutoApproveAppeals(j.attendance_auto_approve_appeals === true);
+      setAuditRetentionMonths(j.audit_retention_months ?? 12);
     })();
   }, []);
 
@@ -194,6 +137,7 @@ export default function AdminSettingsPage() {
         report_title,
         report_timezone,
         attendance_auto_approve_appeals,
+        audit_retention_months: auditRetentionMonths,
       }),
     });
     setSaved(true);
@@ -252,6 +196,32 @@ export default function AdminSettingsPage() {
               </span>
             </span>
           </label>
+          <label className="block text-sm">
+            <span className="text-[var(--muted)]">Audit log retention (months)</span>
+            <input
+              type="number"
+              inputMode="numeric"
+              min={MIN_AUDIT_RETENTION_MONTHS}
+              max={MAX_AUDIT_RETENTION_MONTHS}
+              className="mt-1 w-full min-h-12 rounded-xl border border-[var(--border)] bg-[var(--background)] px-3"
+              value={auditRetentionMonths}
+              onChange={(e) =>
+                setAuditRetentionMonths(
+                  Math.min(
+                    MAX_AUDIT_RETENTION_MONTHS,
+                    Math.max(
+                      MIN_AUDIT_RETENTION_MONTHS,
+                      Number.parseInt(e.target.value.replace(/\D/g, ""), 10) || MIN_AUDIT_RETENTION_MONTHS,
+                    ),
+                  ),
+                )
+              }
+            />
+            <span className="mt-1 block text-xs text-[var(--muted)]">
+              How long activity records are kept before the daily sweep removes them. Shorter keeps
+              less personal data; the default is 12 months.
+            </span>
+          </label>
           <button type="submit" className="min-h-12 w-full rounded-xl bg-[var(--accent)] font-semibold text-white">
             Save header
           </button>
@@ -270,18 +240,16 @@ export default function AdminSettingsPage() {
       </section>
 
       <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
-        <h2 className="font-semibold">PIN management</h2>
+        <h2 className="font-semibold">Security</h2>
         <p className="mt-2 text-sm text-[var(--muted)]">
-          Update one role at a time. PINs must be 4–12 characters and match confirmation. Stored hashed on the server.
+          Role PINs, device sign-outs and login lockouts moved to their own page.
         </p>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <SinglePinForm role="admin" label="Admin" />
-          <SinglePinForm role="secretary" label="Secretary" />
-          <SinglePinForm role="member" label="Member" />
-          <SinglePinForm role="officer" label="Officer" />
-          <SinglePinForm role="treasurer" label="Treasurer" />
-          <SinglePinForm role="super_admin" label="Super Admin (report approval)" />
-        </div>
+        <Link
+          href="/admin/security"
+          className="mt-3 inline-flex min-h-11 items-center rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white"
+        >
+          Open Security
+        </Link>
       </section>
     </div>
   );

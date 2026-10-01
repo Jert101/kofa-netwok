@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/api/guard";
+import { canEncodeSession } from "@/lib/attendance/future-session";
+import { guardSessionWrite } from "@/lib/attendance/guard-session-write";
 import { deleteLiturgyLinkedAnnouncement } from "@/lib/attendance/liturgy-announcement";
+import { monthBounds, monthLabel } from "@/lib/reports/report-lock";
 import { notifyAttendanceSessionUpdated } from "@/lib/push/attendance-notify";
+import { loadRoster } from "@/features/attendance/server/load-roster";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { getSetting } from "@/lib/settings/store";
 import { guardReportNotGenerated } from "@/lib/reports/check-report-lock";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -85,6 +90,16 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     }
   }
 
+  // ATT-7 and ATT-8, sent with the session so the screen can show its banner and
+  // disable its toggles on first paint rather than after a failed tap. The server
+  // guard remains the source of truth; this is only what the UI mirrors.
+  const timeZone = await getSetting("report_timezone");
+  const { roster } = await loadRoster(sb, id, timeZone);
+  const guard = await guardReportNotGenerated(sb, String(session.session_date));
+  const future = canEncodeSession(session.session_date as string, new Date(), timeZone);
+
+  const { monthStart, monthEnd } = monthBounds(session.session_date as string);
+
   const payload: Record<string, unknown> = {
     session: {
       id: session.id,
@@ -95,6 +110,15 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     },
     members,
     liturgy_servers,
+    roster,
+    locked: guard.blocked,
+    locked_reason: guard.reason,
+    locked_message: guard.message,
+    is_future: !future.allowed,
+    future_message: future.allowed ? null : future.message,
+    month_label: monthLabel(monthStart),
+    month_start: monthStart,
+    month_end: monthEnd,
   };
 
   if (g.session.role === "member") {
@@ -115,8 +139,21 @@ export async function GET(req: NextRequest, ctx: Ctx) {
   return NextResponse.json(payload);
 }
 
+/**
+ * Two different jobs on one route, because both are edits to the session and both
+ * belong behind the same guards:
+ *
+ * `notes` — a free-text note, saved on blur by the roster screen.
+ * `member_ids` — replace the whole roster. Kept for admin repair and imports, and is
+ * the reason the shared screen does not use it for ordinary taps.
+ *
+ * Notes are allowed on a locked month, unlike roster changes. A report being approved
+ * does not make the note describing that Mass wrong, and the secretary typing a note
+ * should not be turned away. Attendance is what the lock protects.
+ */
 const patchSchema = z.object({
-  member_ids: z.array(z.string().uuid()),
+  member_ids: z.array(z.string().uuid()).optional(),
+  notes: z.string().max(2_000).nullable().optional(),
 });
 
 export async function PATCH(req: NextRequest, ctx: Ctx) {
@@ -135,24 +172,35 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   }
 
-  const unique = [...new Set(parsed.data.member_ids)];
+  const replacingRoster = parsed.data.member_ids !== undefined;
   const sb = getSupabaseAdmin();
 
-  const { data: session, error: sErr } = await sb.from("attendance_sessions").select("id, session_date").eq("id", id).maybeSingle();
-  if (sErr) {
-    return NextResponse.json({ error: sErr.message }, { status: 500 });
-  }
-  if (!session) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!replacingRoster) {
+    const blocked = await guardSessionWrite({ sb, sessionId: id, notesOnly: true });
+    if (blocked) return blocked;
+
+    const { error } = await sb
+      .from("attendance_sessions")
+      .update({ notes: parsed.data.notes ?? null })
+      .eq("id", id);
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true });
   }
 
-  const guard = await guardReportNotGenerated(sb, session.session_date as string);
-  if (guard.blocked) return NextResponse.json({ error: guard.message }, { status: 409 });
+  // Admin repair, so the lock and future-date guards are both enforced. The spec
+  // keeps this endpoint for replacing a whole roster by hand, which is still the way
+  // to fix a session that was encoded against a stale member list — but it must not
+  // become the way around a locked month.
+  const blocked = await guardSessionWrite({ sb, sessionId: id });
+  if (blocked) return blocked;
 
+  const unique = [...new Set(parsed.data.member_ids ?? [])];
   await sb.from("attendance_records").delete().eq("session_id", id);
 
   if (unique.length) {
-    const rows = unique.map((member_id) => ({ session_id: id, member_id }));
+    const rows = unique.map((member_id) => ({ session_id: id, member_id, source: "encoded" }));
     const { error: iErr } = await sb.from("attendance_records").insert(rows);
     if (iErr) {
       if (iErr.code === "23505") {
@@ -162,32 +210,90 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     }
   }
 
+  if (parsed.data.notes !== undefined) {
+    await sb.from("attendance_sessions").update({ notes: parsed.data.notes ?? null }).eq("id", id);
+  }
+
   void notifyAttendanceSessionUpdated(id);
 
   return NextResponse.json({ ok: true });
 }
 
+/**
+ * ATT-9: delete a session, but only an empty one.
+ *
+ * Restricted to admin. A secretary creates a session by mistake fairly often, but
+ * they also encode attendance all day, and the failure mode of letting them delete
+ * is worse than the failure mode of leaving a stray empty Mass on the calendar.
+ *
+ * "Empty" means no attendance records, no appeals and no liturgy rows. The old
+ * version deleted whatever it was pointed at with no check at all, so a stray tap
+ * could destroy an encoded Mass.
+ *
+ * Safe to recreate afterwards: the (session_date, mass_id) unique key from migration
+ * 027 means a deleted session leaves nothing blocking a new one.
+ */
 export async function DELETE(req: NextRequest, ctx: Ctx) {
-  const g = await requireRole(req.headers.get("cookie"), ["secretary"]);
+  const g = await requireRole(req.headers.get("cookie"), ["admin"]);
   if (!g.ok) return g.response;
 
   const { id } = await ctx.params;
   const sb = getSupabaseAdmin();
 
-  const { data: sess } = await sb
-    .from("attendance_sessions")
-    .select("session_date, mass_id")
-    .eq("id", id)
-    .maybeSingle();
-  if (sess) {
+  try {
+    const { data: sess, error: sErr } = await sb
+      .from("attendance_sessions")
+      .select("session_date, mass_id")
+      .eq("id", id)
+      .maybeSingle();
+    if (sErr) {
+      return NextResponse.json({ error: sErr.message }, { status: 500 });
+    }
+    if (!sess) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
     const guard = await guardReportNotGenerated(sb, sess.session_date as string);
     if (guard.blocked) return NextResponse.json({ error: guard.message }, { status: 409 });
-    await deleteLiturgyLinkedAnnouncement(sb, String(sess.session_date), sess.mass_id as string);
-  }
 
-  const { error } = await sb.from("attendance_sessions").delete().eq("id", id);
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    // Counted rather than inferred from the roster payload, because the client may
+    // have been holding stale data when it asked.
+    const [records, appeals, liturgy] = await Promise.all([
+      sb.from("attendance_records").select("id", { count: "exact", head: true }).eq("session_id", id),
+      sb.from("attendance_appeals").select("id", { count: "exact", head: true }).eq("session_id", id),
+      sb.from("session_liturgy_servers").select("id", { count: "exact", head: true }).eq("session_id", id),
+    ]);
+
+    const attendanceCount = records.count ?? 0;
+    const appealCount = appeals.count ?? 0;
+    const liturgyCount = liturgy.count ?? 0;
+
+    if (attendanceCount || appealCount || liturgyCount) {
+      return NextResponse.json(
+        {
+          error:
+            attendanceCount || appealCount
+              ? "This session has attendance recorded, so it cannot be deleted."
+              : "This session has liturgy servers, so it cannot be deleted.",
+          counts: {
+            attendance_records: attendanceCount,
+            appeals: appealCount,
+            liturgy_servers: liturgyCount,
+          },
+        },
+        { status: 409 },
+      );
+    }
+
+    await deleteLiturgyLinkedAnnouncement(sb, String(sess.session_date), sess.mass_id as string);
+
+    const { error } = await sb.from("attendance_sessions").delete().eq("id", id);
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    console.error("[attendance/session] delete failed:", e instanceof Error ? e.message : e);
+    return NextResponse.json({ error: "Delete failed" }, { status: 500 });
   }
-  return NextResponse.json({ ok: true });
 }

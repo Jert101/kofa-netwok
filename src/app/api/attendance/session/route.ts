@@ -1,10 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/api/guard";
-import { copyPlannedLiturgyToSession } from "@/lib/attendance/copy-planned-liturgy";
-import { notifyAttendanceSessionUpdated } from "@/lib/push/attendance-notify";
-import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { internalError, jsonOk, reportLocked, sessionExists, validationFailed } from "@/lib/api/response";
 import { guardReportNotGenerated } from "@/lib/reports/check-report-lock";
+import { createSessionAtDate } from "@/features/attendance/server/create-session";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+
+export const dynamic = "force-dynamic";
 
 const postSchema = z.object({
   session_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -12,6 +14,14 @@ const postSchema = z.object({
   member_ids: z.array(z.string().uuid()).default([]),
 });
 
+/**
+ * Creates a session, or hands back the one that already exists for that date and
+ * Mass.
+ *
+ * Sessions for future dates are allowed here on purpose. ATT-8 blocks *encoding*
+ * attendance for a Mass that has not happened; it does not stop the parish from
+ * setting up next Sunday's sessions in advance, which is how the weekend cron works.
+ */
 export async function POST(req: NextRequest) {
   const g = await requireRole(req.headers.get("cookie"), ["secretary"]);
   if (!g.ok) return g.response;
@@ -20,52 +30,47 @@ export async function POST(req: NextRequest) {
   try {
     json = await req.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    return validationFailed("Invalid body.", {});
   }
+
   const parsed = postSchema.safeParse(json);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid body" }, { status: 400 });
-  }
+  if (!parsed.success) return validationFailed("Invalid body.", {});
 
   const sb = getSupabaseAdmin();
 
-  const guard = await guardReportNotGenerated(sb, parsed.data.session_date);
-  if (guard.blocked) return NextResponse.json({ error: guard.message }, { status: 409 });
+  try {
+    const guard = await guardReportNotGenerated(sb, parsed.data.session_date);
+    if (guard.blocked) return reportLocked(guard.message ?? "Attendance is locked for this month.");
 
-  const unique = [...new Set(parsed.data.member_ids)];
+    const { data: mass } = await sb
+      .from("masses")
+      .select("id, is_active")
+      .eq("id", parsed.data.mass_id)
+      .maybeSingle();
 
-  const { data: mass, error: mErr } = await sb.from("masses").select("id").eq("id", parsed.data.mass_id).maybeSingle();
-  if (mErr || !mass) {
-    return NextResponse.json({ error: "Invalid mass" }, { status: 400 });
-  }
+    if (!mass) return validationFailed("Invalid mass.", {});
 
-  const { data: created, error: cErr } = await sb
-    .from("attendance_sessions")
-    .insert({
-      session_date: parsed.data.session_date,
-      mass_id: parsed.data.mass_id,
-    })
-    .select("id")
-    .single();
-
-  if (cErr || !created) {
-    return NextResponse.json({ error: cErr?.message ?? "Create failed" }, { status: 500 });
-  }
-
-  const id = created.id as string;
-
-  await copyPlannedLiturgyToSession(sb, id, parsed.data.session_date, parsed.data.mass_id);
-
-  if (unique.length) {
-    const rows = unique.map((member_id) => ({ session_id: id, member_id }));
-    const { error: iErr } = await sb.from("attendance_records").insert(rows);
-    if (iErr) {
-      await sb.from("attendance_sessions").delete().eq("id", id);
-      return NextResponse.json({ error: iErr.message }, { status: 400 });
+    // A deactivated Mass keeps its history and stays editable, but new sessions for
+    // it stop. Otherwise deactivating would be undone by the weekend cron.
+    if (!mass.is_active) {
+      return validationFailed("That Mass is deactivated, so new sessions cannot be created for it.", {});
     }
+
+    const result = await createSessionAtDate(sb, {
+      sessionDate: parsed.data.session_date,
+      massId: parsed.data.mass_id,
+      memberIds: parsed.data.member_ids,
+    });
+
+    if (result.status === "exists") {
+      // 409 with the id, so the client opens the existing session instead of making
+      // the secretary hunt for it on the calendar.
+      return sessionExists(result.id);
+    }
+
+    return jsonOk({ id: result.id });
+  } catch (e) {
+    console.error("[attendance/sessions] create failed:", e instanceof Error ? e.message : e);
+    return internalError();
   }
-
-  void notifyAttendanceSessionUpdated(id);
-
-  return NextResponse.json({ id });
 }

@@ -1,60 +1,58 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { requireRole } from "@/lib/api/guard";
-import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { internalError, validationFailed, zodFields } from "@/lib/api/response";
 import { getAllSettings } from "@/lib/settings/store";
 import { formatNameLastFirst } from "@/lib/members/name-format";
 import { buildActiveMembersPdf } from "@/lib/reports/members-pdf";
+import { fetchAllMembers, safeParseMemberQuery } from "@/features/members/member-query";
 
+const MONTHS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+/**
+ * MEM-7: the PDF keeps its header and columns, and now honours the same filter as
+ * the directory page so the two can never show different people.
+ */
 export async function GET(req: NextRequest) {
   const g = await requireRole(req.headers.get("cookie"), ["admin"]);
   if (!g.ok) return g.response;
 
   const url = new URL(req.url);
-  const filterBatch = url.searchParams.get("batch");
-  const filterGender = url.searchParams.get("gender");
-  const filterStatus = url.searchParams.get("status");
-  const filterBirthMonth = url.searchParams.get("birth_month");
+  const parsed = safeParseMemberQuery(url.searchParams);
+  if (!parsed.success) {
+    return validationFailed("Check the filters and try again.", zodFields(parsed.error));
+  }
+  const query = parsed.data;
 
-  const sb = getSupabaseAdmin();
-  let query = sb
-    .from("members")
-    .select("full_name, is_active, gender, date_of_birth, batch, contact_number");
-
-  if (filterBatch) query = query.eq("batch", filterBatch);
-  if (filterGender) query = query.eq("gender", filterGender);
-  if (filterStatus === "active") query = query.eq("is_active", true);
-  else if (filterStatus === "inactive") query = query.eq("is_active", false);
-  else query = query.eq("is_active", true);
-
-  const { data, error } = await query.order("full_name", { ascending: true });
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  let filtered = data ?? [];
-  if (filterBirthMonth) {
-    const month = filterBirthMonth.padStart(2, "0");
-    filtered = filtered.filter((m) => (m.date_of_birth as string)?.slice(5, 7) === month);
+  let members: Awaited<ReturnType<typeof fetchAllMembers>>;
+  try {
+    members = await fetchAllMembers(query);
+  } catch (e) {
+    console.error("[admin/members/pdf] failed:", e instanceof Error ? e.message : e);
+    return internalError("Could not build the PDF.");
   }
 
-  const rows = filtered
+  const rows = members
     .map((m) => ({
-      name: formatNameLastFirst((m.full_name as string) ?? ""),
-      date_of_birth: (m.date_of_birth as string | null) ?? null,
-      gender: (m.gender as string | null) ?? null,
-      batch: (m.batch as string | null) ?? null,
-      contact_number: (m.contact_number as string | null) ?? null,
+      name: formatNameLastFirst(m.full_name ?? ""),
+      date_of_birth: m.date_of_birth,
+      gender: m.gender,
+      batch: m.batch,
+      contact_number: m.contact_number,
     }))
-    .filter((r) => r.name)
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .filter((r) => r.name);
 
   const parts: string[] = [];
-  if (filterBatch) parts.push(`Batch ${filterBatch}`);
-  if (filterGender) parts.push(filterGender);
-  if (filterStatus) parts.push(filterStatus);
-  if (filterBirthMonth) {
-    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-    parts.push(`${months[parseInt(filterBirthMonth) - 1]} birthdays`);
+  if (query.batch) parts.push(`Batch ${query.batch}`);
+  if (query.gender) parts.push(query.gender);
+  if (query.status !== "all") parts.push(query.status);
+  if (query.birth_month) {
+    parts.push(`${MONTHS[Number(query.birth_month) - 1]} birthdays`);
   }
+  if (query.q.trim()) parts.push(`matching "${query.q.trim()}"`);
+
   const suffix = parts.length > 0 ? ` (${parts.join(", ")})` : "";
   const title = `Members List${suffix}`;
   const label = `Total members: ${rows.length}`;
@@ -64,7 +62,7 @@ export async function GET(req: NextRequest) {
     const settings = await getAllSettings();
     churchName = settings.church_name || churchName;
   } catch {
-    // keep fallback name
+    // The fallback is fine; a settings read failure should not block the export.
   }
 
   const pdf = buildActiveMembersPdf({
@@ -74,13 +72,12 @@ export async function GET(req: NextRequest) {
     generatedAt: new Date(),
     rows,
   });
-  const body = Buffer.from(pdf);
 
-  return new NextResponse(body, {
+  return new Response(Buffer.from(pdf), {
     status: 200,
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": 'attachment; filename="active-members-list.pdf"',
+      "Content-Disposition": 'attachment; filename="members-list.pdf"',
       "Cache-Control": "no-store",
     },
   });

@@ -5,6 +5,8 @@ import { requireRole } from "@/lib/api/guard";
 import { notifyAttendanceSessionUpdated } from "@/lib/push/attendance-notify";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { guardReportNotGenerated } from "@/lib/reports/check-report-lock";
+import { getClientIp } from "@/lib/auth/ip-hash";
+import { logAudit } from "@/lib/audit/log-audit";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -100,6 +102,18 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 
     await pruneEmptyAppealParents(sb, affectedAppealIds);
     void notifyAttendanceSessionUpdated(sessionId);
+    await logAudit({
+      action: "appeal_approved",
+      actor: {
+        role: g.session.role,
+        memberId: g.session.actor?.id ?? null,
+        name: g.session.actor?.name ?? null,
+      },
+      entityType: "attendance_appeal_item",
+      entityId: id,
+      meta: { sessionId, memberId: item.member_id, resolved: ids.length },
+      ip: getClientIp(req.headers),
+    });
     return NextResponse.json({ ok: true });
   }
 
@@ -107,5 +121,17 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   if (dErr) return NextResponse.json({ error: dErr.message }, { status: 500 });
 
   await pruneEmptyAppealParents(sb, [appealId]);
+  await logAudit({
+    action: "appeal_rejected",
+    actor: {
+      role: g.session.role,
+      memberId: g.session.actor?.id ?? null,
+      name: g.session.actor?.name ?? null,
+    },
+    entityType: "attendance_appeal_item",
+    entityId: id,
+    meta: { sessionId, memberId: item.member_id },
+    ip: getClientIp(req.headers),
+  });
   return NextResponse.json({ ok: true });
 }

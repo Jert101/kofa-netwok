@@ -1,19 +1,12 @@
-import { LogoutBar } from "@/components/LogoutBar";
-import { RoleNav } from "@/components/RoleNav";
+import { AppShell } from "@/components/layout/AppShell";
+import { NAV_BY_ROLE } from "@/lib/nav/config";
+import { requireValidSession } from "@/lib/auth/require-valid-session";
 
-const links = [
-  { href: "/secretary", label: "Calendar" },
-  { href: "/secretary/inbox", label: "Inbox" },
-  { href: "/secretary/payments", label: "Payments" },
-  { href: "/secretary/reports", label: "Reports" },
-] as const;
-
-export default function SecretaryLayout({ children }: { children: React.ReactNode }) {
+export default async function SecretaryLayout({ children }: { children: React.ReactNode }) {
+  const session = await requireValidSession("secretary");
   return (
-    <div className="min-h-dvh bg-[var(--background)] pb-24">
-      <LogoutBar />
-      <div className="mx-auto w-full max-w-6xl px-3 pt-3 sm:px-4">{children}</div>
-      <RoleNav links={links} />
-    </div>
+    <AppShell role="secretary" links={NAV_BY_ROLE.secretary} actor={session.actor ?? null}>
+      {children}
+    </AppShell>
   );
 }
