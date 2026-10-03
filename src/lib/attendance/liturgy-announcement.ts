@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { broadcastPush } from "@/lib/push/broadcast";
+import { notify } from "@/lib/notify/notify";
 
 export type LiturgySlotLine = {
   position_label: string;
@@ -58,15 +58,6 @@ export async function fetchSessionSlotLines(sb: SupabaseClient, sessionId: strin
   return mapJoinedRows(data);
 }
 
-function formatBody(slots: LiturgySlotLine[]): string {
-  return slots
-    .map((s) => {
-      const who = [s.member_name, s.free_text].filter(Boolean).join(" · ") || "—";
-      return `${s.position_label}: ${who}`;
-    })
-    .join("\n");
-}
-
 export function liturgyPushNotificationTitle(sessionDate: string, massName: string): string {
   return `Servers · ${sessionDate} · ${massName}`;
 }
@@ -84,7 +75,14 @@ export async function deleteLiturgyLinkedAnnouncement(
     .eq("liturgy_mass_id", massId);
 }
 
-/** Web push only — liturgy assignments are not stored as announcements. */
+/**
+ * Web push only — liturgy assignments are not stored as announcements.
+ *
+ * The wording is the catalog's, not this file's. The old version built "Servers · date · mass" here
+ * and appended the entire roster, so the parish read other people's names on a lock screen and the
+ * body overran the tray on any phone with four lines of service. The event now says how many
+ * positions changed and links to the day, which is what the recipient wanted anyway.
+ */
 export async function pushLiturgyAssignmentsNotification(params: {
   sessionDate: string;
   massName: string;
@@ -93,13 +91,11 @@ export async function pushLiturgyAssignmentsNotification(params: {
 }): Promise<void> {
   const { sessionDate, massName, slots, sendPush } = params;
   if (!sendPush || slots.length === 0) return;
-  const title = liturgyPushNotificationTitle(sessionDate, massName);
-  const body = formatBody(slots);
-  const preview = body.length > 160 ? `${body.slice(0, 157)}…` : body;
-  void broadcastPush({
-    title,
-    body: preview,
-    url: "/member",
+
+  await notify("liturgy_servers_assigned", {
+    date: sessionDate,
+    mass_label: massName,
+    slot_count: slots.length,
   });
 }
 

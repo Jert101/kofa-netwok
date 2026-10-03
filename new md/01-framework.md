@@ -1,6 +1,6 @@
 # 01 — Framework
 
-**Status:** In progress. shadcn setup, theme mapping, the `sidebar-07` desktop sidebar (demo data stripped), a phone drawer that slides over the content (the bottom tab bar was removed), six role layouts, a shared `lib/nav/config.ts`, the `/login` and `/register` rebuilds, and the PWA App menu inside the sidebar footer are written. Vitest is set up and `tsc`, `lint`, `test` and `build` pass. No visual QA has been done yet. The theme toggle, the rest of the shared kit, the `--accent`/`--muted` rename, and Playwright remain.
+**Status:** Code complete. shadcn setup, theme mapping, the `sidebar-07` desktop sidebar (demo data stripped), a phone drawer (the bottom tab bar was removed), six role layouts, a shared `lib/nav/config.ts`, the `/login` and `/register` rebuilds, the PWA App menu, the dark-mode toggle (Light/Dark/System, persisted, in the account menu and on `/login`), and the `--accent`/`--muted` token rename to `--brand`/`--text-muted`. `tsc`, `lint`, 1209 unit tests and `build` all pass, as do all 42 Playwright tests (21 flows at 375px and 1280px) run locally against the real database. **Visual QA at 375px and 1280px is outstanding** -- no page has been checked by eye.
 **Roles:** all
 **Depends on:** nothing
 **Size:** M
@@ -124,15 +124,18 @@ None.
 ## 10. Acceptance criteria
 
 - [x] `npx shadcn@latest init` is done and `components.json` exists. Theme matches the current maroon and gold in light and dark.
-- [ ] Legacy `--accent` and `--muted` usages are renamed to `--brand` and `--text-muted`; no page lost its colors.
+- [x] Legacy `--accent` and `--muted` usages are renamed to `--brand` and `--text-muted`; no page lost its colors. 148 `--accent` and 444 `--muted` references, renamed by exact-match `var()` substitution so shadcn's own `--color-accent` primitive could not be caught. `--accent-soft` went with them as `--brand-soft`, because leaving one behind next to `--brand` would have been worse.
 - [x] All six roles render inside the new shell. Each shows its own menu.
 - [x] The bottom tab bar was removed at the owner's request. Navigation is one flush sidebar (drawer on phones) from `lib/nav/config.ts`.
 - [ ] Every page shows the correct active item, including day and session pages. (Pending visual QA.)
 - [ ] Login accepts a valid PIN and redirects by role. Wrong PIN and network errors show the messages above. (Pending live-device check.)
 - [ ] Register validates all seven fields, submits, and shows the confirmation card. (Pending live-device check.)
-- [ ] Theme switch works and persists. No flash of the wrong theme on reload.
+- [x] Theme switch works and persists. No flash of the wrong theme on reload. `next-themes` with `enableSystem`, wired into `AppProviders`, and a `.dark` block in `globals.css` that is a copy of the media-query palette rather than a reference to it -- because `.dark` and `prefers-color-scheme` have to be able to disagree.
 - [x] `RoleNav` and `LogoutBar` are deleted and nothing imports them.
-- [ ] Vitest and Playwright run with `npm test` and `npm run e2e`.
+- [x] Vitest and Playwright run with `npm test` and `npm run e2e`. Chromium only, at 375px and 1280px, one worker because they share a database. 21 flows x 2 viewports = 42 tests, all passing. The PINs come from `E2E_PIN_<ROLE>` env vars set in the shell that runs the suite, not from `.env.local`, so real PINs never land in a file. Without them the suite falls back to `1234` and the signed-in flows fail.
+  - Six flows need no database and no PINs (sign-in page, theme switch, dark persistence, registration, signed-out deep link, unknown path). They are the floor: if these fail the build is broken, as opposed to the database being unready.
+  - Two flows cover the AUTH-4 actor step, which is on for every role except `member` and renders on `/login` itself. Both halves matter: the whole staff half of the suite once timed out waiting for a redirect that the un-answered dialog was holding back.
+  - The shell and navigation flows call `openSidebar()` first. Below `md` the sidebar is a `Sheet` that unmounts when closed, so its links are absent from the DOM rather than merely hidden.
 
 ## 11. Build tasks
 

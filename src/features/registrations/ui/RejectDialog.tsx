@@ -76,7 +76,7 @@ export function RejectDialog({
                 value={preset}
                 checked={reason === preset}
                 onChange={() => setReason(preset)}
-                className="size-4 accent-[var(--accent)]"
+                className="size-4 accent-[var(--brand)]"
               />
               {preset}
             </label>
@@ -95,7 +95,7 @@ export function RejectDialog({
             onChange={(e) => setNote(e.target.value)}
             aria-invalid={noteTooLong}
           />
-          <p className="text-xs text-[var(--muted)]">
+          <p className="text-xs text-[var(--text-muted)]">
             {note.trim().length}/{REJECT_REASON_MAX}
           </p>
         </div>

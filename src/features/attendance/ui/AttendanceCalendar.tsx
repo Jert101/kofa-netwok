@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { format } from "date-fns";
 import { MonthCalendar, type MonthIndicator } from "@/features/attendance/ui/MonthCalendar";
+import { dataOf, readEnvelope } from "@/lib/api/client";
 
 type Payload = {
   month: string;
@@ -43,7 +44,12 @@ export function AttendanceCalendar({
         return;
       }
       setFailed(false);
-      setData((await res.json()) as Payload);
+      // Enveloped: the calendar's numbers sit under `data`. Read off the top level, `data.indicators`
+      // was undefined, so `?? []` gave the calendar no indicators at all -- which is why the red
+      // pending-appeal dot never appeared even though the route reported `pending_appeals: 1`. The
+      // same read also silently emptied the session counts and the "today" highlight, since `today`
+      // and `locked` were undefined too.
+      setData(dataOf(await readEnvelope<Payload>(res)));
     } catch {
       setFailed(true);
     }
@@ -70,9 +76,9 @@ export function AttendanceCalendar({
         onMonthChange={setMonth}
       />
       {data?.locked_message ? (
-        <p className="mt-2 text-sm text-[var(--muted)]">{data.locked_message}</p>
+        <p className="mt-2 text-sm text-[var(--text-muted)]">{data.locked_message}</p>
       ) : null}
-      <p className="mt-2 text-xs text-[var(--muted)]">
+      <p className="mt-2 text-xs text-[var(--text-muted)]">
         <span className="font-medium">Green dot</span> attendance recorded ·{" "}
         <span className="font-medium">amber dot</span> needs encoding
         {role === "secretary" || role === "admin" ? (

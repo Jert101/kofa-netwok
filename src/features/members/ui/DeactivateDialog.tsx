@@ -74,7 +74,7 @@ export function DeactivateDialog({
                 value={preset}
                 checked={reason === preset}
                 onChange={() => setReason(preset)}
-                className="size-4 accent-[var(--accent)]"
+                className="size-4 accent-[var(--brand)]"
               />
               {preset}
             </label>

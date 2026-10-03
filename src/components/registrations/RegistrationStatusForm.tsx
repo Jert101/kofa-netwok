@@ -25,13 +25,13 @@ const STATUS_COPY = {
     icon: Clock,
     title: "Still under review",
     body: "An admin has not looked at this application yet. You do not need to apply again.",
-    tone: "text-[var(--muted)]",
+    tone: "text-[var(--text-muted)]",
   },
   approved: {
     icon: CheckCircle2,
     title: "Approved",
     body: "This application was approved. Sign in with your role PIN to continue.",
-    tone: "text-[var(--accent)]",
+    tone: "text-[var(--brand)]",
   },
   rejected: {
     icon: XCircle,
@@ -132,7 +132,7 @@ export function RegistrationStatusForm({ initialCode = "" }: { initialCode?: str
         >
           <div>
             <label htmlFor="code" className="text-sm">
-              <span className="text-[var(--muted)]">Reference code</span>
+              <span className="text-[var(--text-muted)]">Reference code</span>
             </label>
             <Input
               id="code"
@@ -147,7 +147,7 @@ export function RegistrationStatusForm({ initialCode = "" }: { initialCode?: str
               onBlur={() => setTouched(true)}
               aria-describedby="code-hint"
             />
-            <p id="code-hint" aria-live="polite" className="mt-1 text-xs text-[var(--muted)]">
+            <p id="code-hint" aria-live="polite" className="mt-1 text-xs text-[var(--text-muted)]">
               {hint ?? "Codes are letters and numbers only."}
             </p>
           </div>
@@ -182,13 +182,13 @@ export function RegistrationStatusForm({ initialCode = "" }: { initialCode?: str
                     {copy.title}
                   </p>
                   <p className="mt-1 text-sm text-[var(--text)]">{copy.body}</p>
-                  <p className="mt-2 text-xs text-[var(--muted)]">
+                  <p className="mt-2 text-xs text-[var(--text-muted)]">
                     Applied {formatDate(result.submittedAt)}
                     {result.reviewedAt ? ` · Reviewed ${formatDate(result.reviewedAt)}` : ""}
                   </p>
                   {result.status === "rejected" && result.rejectReason ? (
                     <p className="mt-2 text-sm text-[var(--text)]">
-                      <span className="text-[var(--muted)]">Reason: </span>
+                      <span className="text-[var(--text-muted)]">Reason: </span>
                       {result.rejectReason}
                     </p>
                   ) : null}

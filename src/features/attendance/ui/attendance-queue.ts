@@ -22,6 +22,7 @@ import {
   settle,
   type QueueEntry,
 } from "@/lib/attendance/retry-queue";
+import { messageOf, readEnvelope } from "@/lib/api/client";
 
 const KEY = "kofa.attendance.retry.v1";
 
@@ -95,9 +96,7 @@ export async function sendPresence(
 
     if (res.ok) return { ok: true };
 
-    const body = (await res.json().catch(() => null)) as
-      | { message?: string; error?: string }
-      | null;
+    const env = await readEnvelope(res);
 
     // A 4xx means the server refuses for a reason that will still be true in ten
     // seconds: the month is locked, the Mass is in the future, the member is gone.
@@ -106,7 +105,9 @@ export async function sendPresence(
     // 429 is the exception: that is "slow down", not "no".
     if (res.status === 429) return { ok: false, reason: "network" };
     if (res.status >= 400 && res.status < 500) {
-      return { ok: false, reason: "rejected", message: body?.message ?? body?.error };
+      // The text is at error.message. Reading `error` itself handed an object to a field typed as
+      // a string, so the rejection toast said "[object Object]" instead of why it was refused.
+      return { ok: false, reason: "rejected", message: messageOf(env, "The server refused that change.") };
     }
 
     return { ok: false, reason: "network" };

@@ -1,13 +1,10 @@
-"use client";
-
-import PaymentLookup from "@/components/PaymentLookup";
+import { PaymentLookupPage } from "@/features/payments/PaymentLookupPage";
 
 export default function AdminPaymentsPage() {
   return (
-    <div className="space-y-6 pb-8">
-      <h1 className="text-lg font-semibold">Payments</h1>
-      <p className="text-sm text-[var(--muted)]">Search a member to view their payment status.</p>
-      <PaymentLookup />
-    </div>
+    <PaymentLookupPage
+      heading="Payments"
+      description="Search a member to see their payment record. Amounts are visible to you as admin."
+    />
   );
 }

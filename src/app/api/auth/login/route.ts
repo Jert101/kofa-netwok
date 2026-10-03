@@ -15,7 +15,7 @@ import {
 import { checkLoginAllowed, recordAttempt } from "@/lib/auth/throttle";
 import { getClientIp } from "@/lib/auth/ip-hash";
 import { isActorRequired } from "@/lib/auth/session-valid";
-import { getAllSettings } from "@/lib/settings/store";
+import { getAllInternalSettings } from "@/lib/settings/store";
 import { logAudit } from "@/lib/audit/log-audit";
 import { findRolesOnDefaultPin } from "@/lib/auth/pin-service";
 import type { Role } from "@/lib/auth/roles";
@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
 
   // AUTH-4: staff roles are asked who is using the device. Member sessions are
   // logged without an actor, matching today's anonymous behaviour.
-  const settings = await getAllSettings().catch(() => ({} as Record<string, string>));
+  const settings = await getAllInternalSettings().catch(() => ({} as Record<string, string>));
   const actorRequired = isActorRequired(role, settings);
   if (role !== "member") {
     await logAudit({ action: "login_succeeded", actor: { role, memberId: null, name: null }, ip });

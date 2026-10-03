@@ -19,7 +19,7 @@ export function PageHeader({
       {backHref ? (
         <Link
           href={backHref}
-          className="mb-2 inline-flex min-h-11 items-center gap-1 text-sm font-medium text-[var(--muted)] hover:text-[var(--accent)]"
+          className="mb-2 inline-flex min-h-11 items-center gap-1 text-sm font-medium text-[var(--text-muted)] hover:text-[var(--brand)]"
         >
           <ChevronLeft className="size-4" aria-hidden />
           {backLabel}
@@ -29,7 +29,7 @@ export function PageHeader({
         <div className="min-w-0">
           <h1 className="text-xl font-semibold text-[var(--text)] sm:text-2xl">{title}</h1>
           {description ? (
-            <p className="mt-1 text-sm text-[var(--muted)]">{description}</p>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">{description}</p>
           ) : null}
         </div>
         {actions ? <div className="flex shrink-0 flex-wrap gap-2">{actions}</div> : null}

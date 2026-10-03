@@ -119,7 +119,7 @@ export function ActorDialog({
 
         <ul className="max-h-64 space-y-1 overflow-y-auto">
           {options.length === 0 ? (
-            <li className="px-2 py-6 text-center text-sm text-[var(--muted)]">
+            <li className="px-2 py-6 text-center text-sm text-[var(--text-muted)]">
               No members found.
             </li>
           ) : (
@@ -131,7 +131,7 @@ export function ActorDialog({
                   onClick={() => void choose(m.id)}
                   className="flex min-h-11 w-full items-center gap-2 rounded-xl px-3 text-left text-sm hover:bg-[var(--surface-2)] disabled:opacity-50"
                 >
-                  <Users aria-hidden className="size-4 shrink-0 text-[var(--muted)]" />
+                  <Users aria-hidden className="size-4 shrink-0 text-[var(--text-muted)]" />
                   <span className="flex-1 truncate">{m.name}</span>
                   {actor?.id === m.id ? <Check aria-hidden className="size-4" /> : null}
                 </button>

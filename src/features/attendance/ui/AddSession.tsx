@@ -18,6 +18,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { dataOf, fieldOf, messageOf, readEnvelope } from "@/lib/api/client";
 import {
   Select,
   SelectContent,
@@ -47,9 +48,10 @@ export function AddSession({ sessionDate }: { sessionDate: string }) {
     (async () => {
       try {
         const res = await fetch("/api/masses", { credentials: "same-origin" });
-        const body = (await res.json()) as { masses?: Mass[] };
+        const body = (await res.json()) as { data?: { masses?: Mass[] } };
         if (cancelled) return;
-        const active = (body.masses ?? []).filter((m) => m.is_active);
+        // Enveloped response: the array is under `data`. See admin/masses for why this is spelled out.
+        const active = (body.data?.masses ?? []).filter((m) => m.is_active);
         setMasses(active);
         setMassId(active[0]?.id ?? "");
       } catch {
@@ -76,23 +78,29 @@ export function AddSession({ sessionDate }: { sessionDate: string }) {
         body: JSON.stringify({ session_date: sessionDate, mass_id: massId, member_ids: [] }),
       });
 
-      const body = (await res.json().catch(() => null)) as
-        | { id?: string; message?: string; error?: string; fields?: Record<string, string> }
-        | null;
+      const env = await readEnvelope<{ id: string }>(res);
 
-      if (res.ok && body?.id) {
-        router.push(`/secretary/session/${body.id}`);
+      // Enveloped: the new session's id is under `data`. Reading it off the top level is undefined,
+      // so a successful create fell through to the error branch and the secretary was told "Could
+      // not create the session" for a session that really was written to the database. Retrying then
+      // produced a second Mass for the same date, which is how the calendar filled up with sessions
+      // nobody could open.
+      const created = dataOf(env);
+      if (res.ok && created?.id) {
+        router.push("/secretary/session/" + created.id);
         return;
       }
 
-      // Already there. Open it rather than making them find it on the calendar.
-      const existingId = body?.fields?.existing_session_id;
-      if (res.status === 409 && existingId) {
-        router.push(`/secretary/session/${existingId}`);
+      // Already there. Open it rather than making them find it on the calendar. The id rides along
+      // in error.fields, not at the top level. Keyed off the field rather than the status code so a
+      // session that already exists is still opened if the code ever changes.
+      const existingId = fieldOf(env, "existing_session_id");
+      if (existingId) {
+        router.push("/secretary/session/" + existingId);
         return;
       }
 
-      setError(body?.message ?? body?.error ?? "Could not create the session.");
+      setError(messageOf(env, "Could not create the session."));
     } catch {
       setError("Could not reach the server.");
     } finally {
@@ -100,12 +108,12 @@ export function AddSession({ sessionDate }: { sessionDate: string }) {
     }
   }
 
-  if (loading) return <p className="text-sm text-[var(--muted)]">Loading…</p>;
+  if (loading) return <p className="text-sm text-[var(--text-muted)]">Loading…</p>;
 
   return (
     <div className="space-y-4">
       <div>
-        <label htmlFor="add-session-mass" className="text-sm font-medium text-[var(--muted)]">
+        <label htmlFor="add-session-mass" className="text-sm font-medium text-[var(--text-muted)]">
           Mass
         </label>
         <Select value={massId} onValueChange={setMassId} disabled={saving}>
@@ -122,7 +130,7 @@ export function AddSession({ sessionDate }: { sessionDate: string }) {
           </SelectContent>
         </Select>
         {masses.length === 0 ? (
-          <p className="mt-2 text-sm text-[var(--muted)]">
+          <p className="mt-2 text-sm text-[var(--text-muted)]">
             No active Masses. An admin needs to add one first.
           </p>
         ) : null}

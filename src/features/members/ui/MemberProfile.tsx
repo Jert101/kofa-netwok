@@ -145,7 +145,7 @@ export function MemberProfile({ memberId }: MemberProfileProps) {
       ) : null}
 
       <section aria-labelledby="details-heading" className="space-y-3">
-        <h2 id="details-heading" className="text-sm font-semibold text-[var(--muted)]">
+        <h2 id="details-heading" className="text-sm font-semibold text-[var(--text-muted)]">
           Details
         </h2>
         <dl className="grid gap-x-6 gap-y-3 rounded-xl border border-[var(--border)] p-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -167,7 +167,7 @@ export function MemberProfile({ memberId }: MemberProfileProps) {
 
       <section aria-labelledby="attendance-heading" className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 id="attendance-heading" className="text-sm font-semibold text-[var(--muted)]">
+          <h2 id="attendance-heading" className="text-sm font-semibold text-[var(--text-muted)]">
             Attendance
           </h2>
           <div className="flex items-center gap-2">
@@ -183,7 +183,7 @@ export function MemberProfile({ memberId }: MemberProfileProps) {
         </div>
 
         {metrics === null ? (
-          <p className="text-sm text-[var(--muted)]">Loading…</p>
+          <p className="text-sm text-[var(--text-muted)]">Loading…</p>
         ) : (
           <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Stat
@@ -220,7 +220,7 @@ export function MemberProfile({ memberId }: MemberProfileProps) {
 
       {stats && stats.recent.length > 0 ? (
         <section aria-labelledby="recent-heading" className="space-y-3">
-          <h2 id="recent-heading" className="text-sm font-semibold text-[var(--muted)]">
+          <h2 id="recent-heading" className="text-sm font-semibold text-[var(--text-muted)]">
             Recent sessions
           </h2>
           <ul className="divide-y divide-[var(--border)] rounded-xl border border-[var(--border)]">
@@ -230,12 +230,12 @@ export function MemberProfile({ memberId }: MemberProfileProps) {
                   <p className="truncate text-sm font-medium">
                     {s.massName ?? "Mass"}
                     {s.archived ? (
-                      <span className="ml-1 text-xs font-normal text-[var(--muted)]">
+                      <span className="ml-1 text-xs font-normal text-[var(--text-muted)]">
                         (archived)
                       </span>
                     ) : null}
                   </p>
-                  <p className="text-xs text-[var(--muted)]">
+                  <p className="text-xs text-[var(--text-muted)]">
                     {s.sessionDate}
                     {s.sunday ? " · Sunday" : ""}
                   </p>
@@ -252,7 +252,7 @@ export function MemberProfile({ memberId }: MemberProfileProps) {
       {stats && stats.payments.length > 0 ? (
         <section aria-labelledby="payments-heading" className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 id="payments-heading" className="text-sm font-semibold text-[var(--muted)]">
+            <h2 id="payments-heading" className="text-sm font-semibold text-[var(--text-muted)]">
               Payments
             </h2>
             <Button asChild variant="ghost" size="sm">
@@ -276,7 +276,7 @@ export function MemberProfile({ memberId }: MemberProfileProps) {
                     <td className="px-4 py-2.5">
                       {p.structureName}
                       {!p.isActive ? (
-                        <span className="ml-1 text-xs text-[var(--muted)]">(closed)</span>
+                        <span className="ml-1 text-xs text-[var(--text-muted)]">(closed)</span>
                       ) : null}
                     </td>
                     <td className="px-4 py-2.5 tabular-nums">{p.amount}</td>
@@ -288,13 +288,13 @@ export function MemberProfile({ memberId }: MemberProfileProps) {
                         <span className="text-[var(--success)]">Settled</span>
                       )}
                     </td>
-                    <td className="px-4 py-2.5 text-[var(--muted)]">{p.lastPaidAt ?? "—"}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-muted)]">{p.lastPaidAt ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <p className="text-xs text-[var(--muted)]">
+          <p className="text-xs text-[var(--text-muted)]">
             Read only. Record payments in the ledger.
           </p>
         </section>
@@ -379,7 +379,7 @@ function capitalize(value: string): string {
 function Field({ label, value }: { label: string; value: string | null | undefined }) {
   return (
     <div>
-      <dt className="text-xs text-[var(--muted)]">{label}</dt>
+      <dt className="text-xs text-[var(--text-muted)]">{label}</dt>
       <dd className="text-sm">{value || "—"}</dd>
     </div>
   );
@@ -396,9 +396,9 @@ function Stat({
 }) {
   return (
     <div className="rounded-xl border border-[var(--border)] p-4">
-      <dt className="text-xs text-[var(--muted)]">{label}</dt>
+      <dt className="text-xs text-[var(--text-muted)]">{label}</dt>
       <dd className="text-2xl font-semibold tabular-nums">{value}</dd>
-      {hint ? <p className="mt-0.5 text-xs text-[var(--muted)]">{hint}</p> : null}
+      {hint ? <p className="mt-0.5 text-xs text-[var(--text-muted)]">{hint}</p> : null}
     </div>
   );
 }

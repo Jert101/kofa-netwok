@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { dataOf, messageOf, readEnvelope } from "@/lib/api/client";
 
 type Member = { id: string; full_name: string };
 
@@ -22,12 +23,20 @@ export function AttendanceAppealForm({
   const [saving, setSaving] = useState(false);
   const [modal, setModal] = useState<{ title: string; body: string } | null>(null);
   const [cannotAppealIds, setCannotAppealIds] = useState<Set<string>>(new Set());
+  /** APL-1: the member's own words, e.g. "Served as thurifer". */
+  const [note, setNote] = useState("");
+  /** APL-6: null while unknown, so the card does not claim the window is open before it is. */
+  const [windowInfo, setWindowInfo] = useState<{ open: boolean; closes_on: string | null } | null>(null);
 
   const loadAppealRestrictions = useCallback(async () => {
     const res = await fetch(`/api/attendance/session/${sessionId}`, { credentials: "same-origin" });
     if (!res.ok) return;
-    const j = (await res.json()) as { member_ids_cannot_appeal?: string[] };
+    const j = (await res.json()) as {
+      member_ids_cannot_appeal?: string[];
+      appeal_window?: { open: boolean; closes_on: string | null };
+    };
     setCannotAppealIds(new Set(j.member_ids_cannot_appeal ?? []));
+    if (j.appeal_window) setWindowInfo(j.appeal_window);
   }, [sessionId]);
 
   useEffect(() => {
@@ -81,19 +90,24 @@ export function AttendanceAppealForm({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ member_ids }),
+        body: JSON.stringify({ member_ids, note: note.trim() || null }),
       });
-      const j = (await res.json()) as { error?: string; auto_approved?: boolean; approved_count?: number };
+      const env = await readEnvelope<{ auto_approved?: boolean; approved_count?: number }>(res);
       if (!res.ok) {
         setModal({
           title: "Appeal not submitted",
-          body: j.error ?? "Could not submit appeal.",
+          // Enveloped: the text is at error.message. Reading `error` itself put an object into a
+          // field rendered as a React child, which throws "Objects are not valid as a React child"
+          // and took the whole form down rather than showing a message.
+          body: messageOf(env, "Could not submit appeal."),
         });
         return;
       }
+      const j = dataOf(env) ?? {};
       setSelected(new Map());
       setTerm("");
       setResults([]);
+      setNote("");
       if (j.auto_approved) {
         setModal({ title: "Appeal approved", body: "Attendance has been updated." });
       } else {
@@ -143,11 +157,11 @@ export function AttendanceAppealForm({
                 onClick={(e) => e.stopPropagation()}
               >
                 <p className="text-lg font-semibold text-[var(--text)]">{modal.title}</p>
-                <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">{modal.body}</p>
+                <p className="mt-2 text-sm leading-relaxed text-[var(--text-muted)]">{modal.body}</p>
                 <button
                   type="button"
                   onClick={() => setModal(null)}
-                  className="mt-5 min-h-11 w-full rounded-xl bg-[var(--accent)] text-sm font-semibold text-white"
+                  className="mt-5 min-h-11 w-full rounded-xl bg-[var(--brand)] text-sm font-semibold text-white"
                 >
                   OK
                 </button>
@@ -156,12 +170,41 @@ export function AttendanceAppealForm({
             document.body
           )
         : null}
-      <h2 className="text-sm font-semibold text-[var(--accent)]">Attendance appeal</h2>
-      <p className="mt-1 text-xs text-[var(--muted)]">
+      <h2 className="text-sm font-semibold text-[var(--brand)]">Attendance appeal</h2>
+      <p className="mt-1 text-xs text-[var(--text-muted)]">
         If a server is missing in this attendance, add one or more names and submit for review. You cannot appeal
         for someone already on the list or who already has a pending appeal for this Mass. Approved names appear in
         the attendance list above.
       </p>
+
+      {windowInfo ? (
+        <p className="mt-2 text-xs text-[var(--text-muted)]">
+          {windowInfo.open ? (
+            windowInfo.closes_on ? (
+              <>Appeals for this Mass close on {windowInfo.closes_on}.</>
+            ) : (
+              <>Appeals for this Mass are open with no deadline.</>
+            )
+          ) : windowInfo.closes_on ? (
+            <>Appeals for this Mass closed on {windowInfo.closes_on}.</>
+          ) : (
+            <>Appeals for this Mass are closed.</>
+          )}
+        </p>
+      ) : null}
+
+      <label className="sr-only" htmlFor={`appeal-note-${sessionId}`}>
+        Note for the reviewer (optional)
+      </label>
+      <textarea
+        id={`appeal-note-${sessionId}`}
+        className="mt-3 w-full min-h-20 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm"
+        placeholder="Anything the reviewer should know (optional)"
+        maxLength={200}
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+      />
+      <p className="mt-1 text-right text-xs text-[var(--text-muted)]">{note.trim().length}/200</p>
 
       <input
         className="mt-3 w-full min-h-12 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4"
@@ -197,13 +240,13 @@ export function AttendanceAppealForm({
           </li>
         ))}
         {term.trim().length > 0 && results.length === 0 ? (
-          <li className="px-4 py-3 text-sm text-[var(--muted)]">No results</li>
+          <li className="px-4 py-3 text-sm text-[var(--text-muted)]">No results</li>
         ) : null}
       </ul>
 
       <div className="mt-3 flex flex-wrap gap-2">
         {[...selected.entries()].map(([id, name]) => (
-          <span key={id} className="inline-flex items-center gap-1 rounded-full bg-[var(--accent-soft)] px-3 py-2 text-sm">
+          <span key={id} className="inline-flex items-center gap-1 rounded-full bg-[var(--brand-soft)] px-3 py-2 text-sm">
             {name}
             <button
               type="button"
@@ -226,8 +269,8 @@ export function AttendanceAppealForm({
       <button
         type="button"
         onClick={submitAppeal}
-        disabled={saving || selected.size === 0}
-        className="mt-3 min-h-12 w-full rounded-xl bg-[var(--accent)] font-semibold text-white disabled:opacity-40"
+        disabled={saving || selected.size === 0 || (windowInfo !== null && !windowInfo.open)}
+        className="mt-3 min-h-12 w-full rounded-xl bg-[var(--brand)] font-semibold text-white disabled:opacity-40"
       >
         {saving ? "Submitting..." : "Submit appeal"}
       </button>

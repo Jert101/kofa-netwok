@@ -11,7 +11,9 @@ export const API_ERROR_CODES = [
   "REPORT_LOCKED",
   "SESSION_LOCKED",
   "SESSION_EXISTS",
-  "SESSION_IN_FUTURE",
+"SESSION_IN_FUTURE",
+  "APPEAL_WINDOW_CLOSED",
+  "ALREADY_RESOLVED",
   "PIN_IN_USE",
   "RATE_LIMITED",
   "STORAGE_UNAVAILABLE",
@@ -114,6 +116,26 @@ export function sessionInFuture(message = "This Mass hasn't happened yet."): Nex
   return jsonError("SESSION_IN_FUTURE", message, { status: 409 });
 }
 
+/** APL-6: the appeal window for this Mass has closed. */
+export function appealWindowClosed(
+  closesOn: string,
+  message = `Appeals for this Mass closed on ${closesOn}.`,
+): NextResponse {
+  return jsonError("APPEAL_WINDOW_CLOSED", message, { status: 400, fields: { closes_on: closesOn } });
+}
+
+/**
+ * APL-3: somebody already resolved this appeal item.
+ *
+ * 409 rather than 404 even though the row is still there. The reviewer's second tap is
+ * the common case — two people, or one person on a slow connection — and "already
+ * resolved" tells them their earlier action landed. A 404 would read as "this appeal
+ * vanished", which invites a second search for something that is right there.
+ */
+export function alreadyResolved(message = "This appeal was already reviewed."): NextResponse {
+  return jsonError("ALREADY_RESOLVED", message, { status: 409 });
+}
+
 export function rateLimited(message = "Too many attempts. Wait a moment and try again."): NextResponse {
   return jsonError("RATE_LIMITED", message, { status: 429 });
 }
@@ -139,7 +161,12 @@ export function statusForCode(code: ApiErrorCode): number {
     case "SESSION_EXISTS":
     case "SESSION_IN_FUTURE":
     case "PIN_IN_USE":
+    case "ALREADY_RESOLVED":
       return 409;
+    case "APPEAL_WINDOW_CLOSED":
+      // 400, not 409. The request was well-formed; what changed is the date. A conflict
+      // would suggest retrying, and retrying an expired window never works.
+      return 400;
     case "RATE_LIMITED":
       return 429;
     case "STORAGE_UNAVAILABLE":

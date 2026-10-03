@@ -137,8 +137,8 @@ export function LoginForm({
             />
           </div>
           <div className="space-y-1.5 text-center">
-            <CardTitle className="text-xl text-[var(--accent)]">Sign in</CardTitle>
-            <CardDescription className="text-[var(--muted)]">
+            <CardTitle as="h1" className="text-xl text-[var(--brand)]">Sign in</CardTitle>
+            <CardDescription className="text-[var(--text-muted)]">
               Knights of the Altar
             </CardDescription>
           </div>
@@ -177,7 +177,7 @@ export function LoginForm({
                     disabled={pending}
                     aria-label={shown ? "Hide PIN" : "Show PIN"}
                     aria-pressed={shown}
-                    className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-[var(--muted)] transition-colors hover:text-[var(--accent)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--accent)]/40 disabled:opacity-50"
+                    className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-[var(--text-muted)] transition-colors hover:text-[var(--brand)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--brand)]/40 disabled:opacity-50"
                   >
                     {shown ? (
                       <EyeOff className="size-5" aria-hidden />
@@ -195,7 +195,7 @@ export function LoginForm({
                 <Button
                   type="submit"
                   disabled={pending || pin.length < PIN_MIN}
-                  className="h-14 w-full rounded-xl bg-[var(--accent)] text-base font-semibold text-white hover:bg-[var(--accent)]/90"
+                  className="h-14 w-full rounded-xl bg-[var(--brand)] text-base font-semibold text-white hover:bg-[var(--brand)]/90"
                 >
                   {pending ? (
                     <>
@@ -206,11 +206,11 @@ export function LoginForm({
                     "Sign in"
                   )}
                 </Button>
-                <FieldDescription className="text-center text-[var(--muted)]">
+                <FieldDescription className="text-center text-[var(--text-muted)]">
                   Not yet a member?{" "}
                   <Link
                     href="/register"
-                    className="font-medium text-[var(--accent)] underline underline-offset-4"
+                    className="font-medium text-[var(--brand)] underline underline-offset-4"
                   >
                     Register here
                   </Link>
@@ -221,7 +221,7 @@ export function LoginForm({
         </CardContent>
       </Card>
 
-      <p className="mt-8 text-center text-xs text-[var(--muted)]">
+      <p className="mt-8 text-center text-xs text-[var(--text-muted)]">
         Knights of the Altar Attendance Monitoring System&trade; &middot; Created by
         Jerson Catadman &middot; {new Date().getFullYear()}
       </p>

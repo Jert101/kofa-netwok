@@ -130,7 +130,7 @@ export function BatchesPanel({ onChanged }: BatchesPanelProps) {
           <Plus aria-hidden className="size-4" />
           Add
         </Button>
-        <p className="text-xs text-[var(--muted)]">
+        <p className="text-xs text-[var(--text-muted)]">
           Batches are used by registration and by the payments scope.
         </p>
       </div>
@@ -152,9 +152,9 @@ export function BatchesPanel({ onChanged }: BatchesPanelProps) {
       ) : null}
 
       {batches === null ? (
-        <p className="text-sm text-[var(--muted)]">Loading…</p>
+        <p className="text-sm text-[var(--text-muted)]">Loading…</p>
       ) : batches.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-[var(--border)] py-10 text-center text-sm text-[var(--muted)]">
+        <p className="rounded-xl border border-dashed border-[var(--border)] py-10 text-center text-sm text-[var(--text-muted)]">
           No batch years yet.
         </p>
       ) : (

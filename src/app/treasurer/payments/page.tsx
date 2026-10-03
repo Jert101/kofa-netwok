@@ -1,50 +1,46 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import PaymentLookup from "@/components/PaymentLookup";
+import Link from "next/link";
+import {
+  RecordPaymentSheet,
+  VoidPaymentDialog,
+  type MemberOption,
+  type StructureOption,
+} from "@/features/payments/RecordPaymentSheet";
+import { LedgerView } from "@/features/payments/LedgerView";
 import ReceiptModal from "@/components/ReceiptModal";
-import ConfirmModal from "@/components/ConfirmModal";
 import { formatPeso } from "@/lib/format-peso";
+import { churchTodayLabel, truncateName } from "@/lib/time/church-time-labels";
 
-interface Member {
-  id: string;
-  full_name: string;
-}
-
-interface Structure {
-  id: string;
-  name: string;
-  amount: number;
-  for_all: boolean;
-  batch: string | null;
-  is_active: boolean;
-}
-
-interface Payment {
+type PaymentRow = {
   id: string;
   amount_paid: number;
-  paid_at: string;
-  notes?: string | null;
-  voided?: boolean;
+  paid_at: string | null;
+  notes: string | null;
+  voided: boolean;
+  void_reason: string | null;
+  void_note: string | null;
+  voided_at: string | null;
+  payment_structure_id: string;
+  member_id: string;
   members: { full_name: string } | null;
-  payment_structures: { name: string; amount: number } | null;
-}
+  payment_structures: { name: string } | null;
+};
 
-export default function PaymentsPage() {
-  const [members, setMembers] = useState<Member[]>([]);
-  const [structures, setStructures] = useState<Structure[]>([]);
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [search, setSearch] = useState("");
-  const [selectedMember, setSelectedMember] = useState<Member | null>(null);
-  const [selectedStructure, setSelectedStructure] = useState("");
-  const [amountPaid, setAmountPaid] = useState("");
-  const [paidAt, setPaidAt] = useState("");
-  const [notes, setNotes] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
-  const [voiding, setVoiding] = useState<string | null>(null);
-  const [confirmVoid, setConfirmVoid] = useState<string | null>(null);
+type StructureRow = StructureOption & { id: string; name: string; amount: number };
+
+export default function TreasurerPaymentsPage() {
+  const [structures, setStructures] = useState<StructureRow[]>([]);
+  const [members, setMembers] = useState<MemberOption[]>([]);
+  const [payments, setPayments] = useState<PaymentRow[]>([]);
+  const [today, setToday] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [showVoided, setShowVoided] = useState(true);
+  const [voidTarget, setVoidTarget] = useState<PaymentRow | null>(null);
+  const [voidBusy, setVoidBusy] = useState(false);
   const [receipt, setReceipt] = useState<{
     memberName: string;
     structureName: string;
@@ -52,344 +48,243 @@ export default function PaymentsPage() {
     date: string;
     receiptId: string;
   } | null>(null);
+  const [ledgerMemberId, setLedgerMemberId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [mRes, sRes] = await Promise.all([
-      fetch("/api/admin/members?all=1", { credentials: "same-origin" }),
-      fetch("/api/admin/payment-structures", { credentials: "same-origin" }),
-    ]);
-    if (mRes.ok) {
-      const mj = (await mRes.json()) as { members: Member[] };
-      setMembers(mj.members ?? []);
-    }
-    if (sRes.ok) {
-      const sj = (await sRes.json()) as { structures: Structure[] };
-      setStructures((sj.structures ?? []).filter((s) => s.is_active !== false));
-    }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  async function voidPayment(id: string) {
-    setVoiding(id);
+    setError(null);
     try {
-      const res = await fetch(`/api/admin/payments/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-      });
-      if (!res.ok) {
-        const j = (await res.json()) as { error?: string };
-        alert(j.error ?? "Could not void payment");
+      const [structureRes, memberRes, paymentRes] = await Promise.all([
+        fetch("/api/admin/payment-structures?all=1", { credentials: "same-origin", cache: "no-store" }),
+        fetch("/api/admin/members?all=1", { credentials: "same-origin", cache: "no-store" }),
+        fetch("/api/admin/payments?include_voided=1", { credentials: "same-origin", cache: "no-store" }),
+      ]);
+
+      if (!structureRes.ok || !memberRes.ok || !paymentRes.ok) {
+        setError("Could not load the payments pages.");
         return;
       }
-      setAllPayments((prev) => prev.filter((p) => p.id !== id));
-    } finally {
-      setVoiding(null);
-      setConfirmVoid(null);
-    }
-  }
 
-  useEffect(() => {
-    (async () => {
-      const res = await fetch("/api/admin/payments?include_voided=1", { credentials: "same-origin" });
-      if (!res.ok) return;
-      const j = (await res.json()) as { payments: Payment[] };
-      setAllPayments(j.payments ?? []);
-    })();
+      const [structureJson, memberJson, paymentJson] = await Promise.all([
+        structureRes.json() as Promise<{ structures?: Array<Record<string, unknown>> }>,
+        memberRes.json() as Promise<{ members?: Array<Record<string, unknown>> }>,
+        paymentRes.json() as Promise<{ payments?: PaymentRow[] }>,
+      ]);
+
+      setStructures((structureJson.structures ?? []) as unknown as StructureRow[]);
+      setMembers(
+        (memberJson.members ?? []).map((m) => ({
+          id: String(m.id),
+          full_name: String(m.full_name ?? ""),
+          batch: (m.batch as string | null) ?? null,
+          is_active: m.is_active !== false,
+          still_due: null,
+        })),
+      );
+      setPayments(paymentJson.payments ?? []);
+
+      // The church's date, from the same endpoint the record sheet's defaults use, so the date field
+      // does not open on the server's idea of today.
+      const tzRes = await fetch("/api/admin/settings", { credentials: "same-origin", cache: "no-store" });
+      if (tzRes.ok) {
+        const tzJson = (await tzRes.json()) as { data?: { report_timezone?: string } };
+        const zone = tzJson.data?.report_timezone ?? "Asia/Manila";
+        try {
+          setToday(new Intl.DateTimeFormat("en-CA", { timeZone: zone }).format(new Date()));
+        } catch {
+          setToday(new Date().toISOString().slice(0, 10));
+        }
+      }
+    } catch {
+      setError("Could not load the payments pages.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const filteredMembers = useMemo(() => {
-    if (!search.trim()) return [];
-    const q = search.toLowerCase();
-    return members.filter((m) => m.full_name.toLowerCase().includes(q));
-  }, [search, members]);
-
   useEffect(() => {
-    if (!selectedMember || !selectedStructure) {
-      setPayments([]);
-      return;
-    }
-    (async () => {
-      const res = await fetch(
-        `/api/admin/payments?member_id=${selectedMember.id}&structure_id=${selectedStructure}`,
-        { credentials: "same-origin" }
-      );
-      if (!res.ok) return;
-      const j = (await res.json()) as { payments: Payment[] };
-      setPayments(j.payments ?? []);
-    })();
-  }, [selectedMember, selectedStructure]);
+    void load();
+  }, [load]);
 
-  const structure = useMemo(
-    () => structures.find((s) => s.id === selectedStructure),
-    [structures, selectedStructure]
+  const visiblePayments = useMemo(
+    () => (showVoided ? payments : payments.filter((p) => !p.voided)),
+    [payments, showVoided],
   );
 
-  const totalPaid = useMemo(
-    () => payments.reduce((sum, p) => sum + Number(p.amount_paid), 0),
-    [payments]
-  );
-
-  const totalAmount = structure ? Number(structure.amount) : 0;
-  const remaining = totalAmount - totalPaid;
-
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!selectedMember || !selectedStructure) return;
-    setErr(null);
-    setSuccess(false);
-    setBusy(true);
+  async function confirmVoid(reason: string, note: string) {
+    if (!voidTarget) return;
+    setVoidBusy(true);
     try {
-      const body: Record<string, unknown> = {
-        member_id: selectedMember.id,
-        payment_structure_id: selectedStructure,
-        amount_paid: parseFloat(amountPaid),
-      };
-      if (paidAt) body.paid_at = paidAt;
-      if (notes.trim()) body.notes = notes.trim();
-      const res = await fetch("/api/admin/payments", {
+      const res = await fetch(`/api/treasurer/payments/${voidTarget.id}/void`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify(body),
+        body: JSON.stringify({ reason, note }),
       });
       if (!res.ok) {
-        const j = (await res.json()) as { error?: string };
-        setErr(j.error ?? "Could not record payment");
+        const json = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+        setError(json?.error?.message ?? "Could not void that payment.");
         return;
       }
-      const j = (await res.json()) as { id: string };
-      setSuccess(true);
-      setReceipt({
-        memberName: selectedMember!.full_name,
-        structureName: structure?.name ?? "",
-        amountPaid: parseFloat(amountPaid),
-        date: paidAt || new Date().toISOString().split("T")[0],
-        receiptId: j.id,
-      });
-      setAmountPaid("");
-      setPaidAt("");
-      setNotes("");
-      const refreshRes = await fetch("/api/admin/payments?include_voided=1", { credentials: "same-origin" });
-      if (refreshRes.ok) {
-        const rj = (await refreshRes.json()) as { payments: Payment[] };
-        setAllPayments(rj.payments ?? []);
-      }
+      // Marked locally rather than refetched, so the row the treasurer just acted on does not jump
+      // while they are still reading the dialog.
+      setPayments((prev) =>
+        prev.map((p) =>
+          p.id === voidTarget.id
+            ? { ...p, voided: true, void_reason: reason, void_note: note, voided_at: new Date().toISOString() }
+            : p,
+        ),
+      );
+      setVoidTarget(null);
     } finally {
-      setBusy(false);
+      setVoidBusy(false);
     }
   }
 
-  const [allPayments, setAllPayments] = useState<Payment[]>([]);
-  const [tab, setTab] = useState<"record" | "lookup">("record");
-
   return (
-    <div className="space-y-6 pb-8">
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => setTab("record")}
-          className={`min-h-10 rounded-xl px-4 text-sm font-semibold ${tab === "record" ? "bg-[var(--accent)] text-white" : "border border-[var(--border)] text-[var(--muted)]"}`}
-        >
-          Record
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("lookup")}
-          className={`min-h-10 rounded-xl px-4 text-sm font-semibold ${tab === "lookup" ? "bg-[var(--accent)] text-white" : "border border-[var(--border)] text-[var(--muted)]"}`}
-        >
-          Lookup
-        </button>
+    <div className="space-y-8 pb-8">
+      <div>
+        <h1 className="text-lg font-semibold">Payments</h1>
+        <p className="mt-1 text-sm text-[var(--text-muted)]">
+          Record a payment, and check what anybody owes on their ledger. Today is{" "}
+          {today ? churchTodayLabel(today) : "…"}.
+        </p>
       </div>
 
-      {tab === "record" ? (
-        <>
-          <h1 className="text-lg font-semibold">Record Payment</h1>
-
-      <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 space-y-4">
-        <div>
-          <label htmlFor="member-search" className="text-sm font-medium text-[var(--muted)]">Member</label>
-          <input
-            id="member-search"
-            type="search"
-            className="mt-1 w-full min-h-11 rounded-xl border border-[var(--border)] bg-[var(--background)] px-3"
-            placeholder="Search by name"
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setSelectedMember(null); }}
-            autoComplete="off"
-          />
-          {selectedMember ? (
-            <p className="mt-1 text-sm font-medium text-[var(--accent)]">{selectedMember.full_name}</p>
-          ) : search.trim() && filteredMembers.length > 0 ? (
-            <ul className="mt-1 max-h-48 overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface-2)]">
-              {filteredMembers.slice(0, 10).map((m) => (
-                <li key={m.id}>
-                  <button
-                    type="button"
-                    className="w-full px-3 py-2 text-left text-sm hover:bg-[var(--surface)]"
-                    onClick={() => { setSelectedMember(m); setSearch(m.full_name); }}
-                  >
-                    {m.full_name}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : search.trim() && filteredMembers.length === 0 ? (
-            <p className="mt-1 text-sm text-[var(--muted)]">No members found.</p>
-          ) : null}
-        </div>
-
-        <form onSubmit={onSubmit} className="space-y-4">
-          <label className="block text-sm">
-            <span className="font-medium text-[var(--muted)]">Payment type</span>
-            <select
-              required
-              className="mt-1 w-full min-h-11 rounded-xl border border-[var(--border)] bg-[var(--background)] px-3"
-              value={selectedStructure}
-              onChange={(e) => setSelectedStructure(e.target.value)}
-            >
-              <option value="">Select payment type</option>
-              {structures.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} — {formatPeso(Number(s.amount))}
-                  {s.for_all === false ? (s.batch ? ` (Batch ${s.batch})` : " (Selected)") : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {structure ? (
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3 space-y-1 text-sm">
-              <p>Total amount: <strong>{formatPeso(totalAmount)}</strong></p>
-              <p>Total paid: <strong>{formatPeso(totalPaid)}</strong></p>
-              <p>Remaining balance: <strong className={remaining <= 0 ? "text-green-600" : ""}>{formatPeso(Math.max(0, remaining))}</strong></p>
-            </div>
-          ) : null}
-
-          <label className="block text-sm">
-            <span className="font-medium text-[var(--muted)]">Amount to pay now</span>
-            <input
-              required
-              type="number"
-              step="0.01"
-              min="0.01"
-              className="mt-1 w-full min-h-11 rounded-xl border border-[var(--border)] bg-[var(--background)] px-3"
-              value={amountPaid}
-              onChange={(e) => setAmountPaid(e.target.value)}
-              placeholder="0.00"
-            />
-          </label>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-sm">
-              <span className="font-medium text-[var(--muted)]">Date paid (optional)</span>
-              <input
-                type="date"
-                className="mt-1 w-full min-h-11 rounded-xl border border-[var(--border)] bg-[var(--background)] px-3"
-                value={paidAt}
-                onChange={(e) => setPaidAt(e.target.value)}
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="font-medium text-[var(--muted)]">Notes (optional)</span>
-              <input
-                className="mt-1 w-full min-h-11 rounded-xl border border-[var(--border)] bg-[var(--background)] px-3"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Optional notes"
-              />
-            </label>
-          </div>
-
-          {err ? <p className="text-sm text-[var(--danger)]">{err}</p> : null}
-          {success ? <p className="text-sm text-green-600">Payment recorded!</p> : null}
-
-          <button
-            type="submit"
-            disabled={busy || !selectedMember || !selectedStructure}
-            className="min-h-12 w-full rounded-xl bg-[var(--accent)] text-sm font-semibold text-white disabled:opacity-40"
-          >
-            {busy ? "Recording…" : "Record payment"}
-          </button>
-        </form>
-      </div>
-
-      {selectedMember && selectedStructure ? (
-        <div>
-          <h2 className="font-semibold mb-2">Payment history for {selectedMember.full_name}</h2>
-          <div className="space-y-2">
-            {payments.length === 0 ? (
-              <p className="text-sm text-[var(--muted)]">No payments recorded yet.</p>
-            ) : (
-              payments.map((p) => (
-                <div key={p.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-sm">
-                  <span className="font-medium">{formatPeso(Number(p.amount_paid))}</span>
-                  <span className="text-[var(--muted)]"> on {p.paid_at}</span>
-                  {p.notes ? <span className="text-[var(--muted)]"> — {p.notes}</span> : null}
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+      {error ? (
+        <p role="alert" className="text-sm text-[var(--danger)]">
+          {error}
+        </p>
       ) : null}
 
-      <div>
-        <h2 className="font-semibold mb-2">All recorded payments</h2>
-        {allPayments.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-[var(--border)] py-10 text-center text-sm text-[var(--muted)]">No payments recorded yet.</p>
-        ) : (
-          <div className="space-y-2">
-            {allPayments.map((p) => (
-              <div key={p.id} className={`rounded-2xl border p-4 text-sm ${p.voided ? "border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950" : "border-[var(--border)] bg-[var(--surface)]"}`}>
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="font-medium">{p.members?.full_name ?? "Unknown"}</p>
-                    <p className="text-[var(--muted)]">{p.payment_structures?.name ?? "Unknown"} — {formatPeso(Number(p.amount_paid))}</p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    {p.voided ? (
-                      <span className="rounded bg-[var(--danger)] px-2 py-0.5 text-xs font-semibold text-white">VOIDED</span>
-                    ) : (
-                      <>
-                        <span className="text-xs text-[var(--muted)]">{p.paid_at}</span>
-                        <button
-                          type="button"
-                          onClick={() => setConfirmVoid(p.id)}
-                          className="min-h-8 rounded-lg border border-[var(--danger)] px-3 text-xs font-medium text-[var(--danger)]"
-                        >
-                          Void
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-                {p.notes ? <p className="mt-1 text-xs text-[var(--muted)]">Note: {p.notes}</p> : null}
-                {p.voided ? <p className="mt-1 text-xs text-[var(--muted)]">{p.paid_at}</p> : null}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-        </>
+      {loading ? (
+        <p className="text-sm text-[var(--text-muted)]">Loading…</p>
       ) : (
         <>
-          <h1 className="text-lg font-semibold">Payment Lookup</h1>
-          <PaymentLookup />
+          <RecordPaymentSheet
+            structures={structures}
+            members={members}
+            today={today}
+            onRecorded={(result) => {
+              setReceipt({
+                memberName: result.memberName,
+                structureName: result.structureName,
+                amountPaid: result.amount,
+                date: result.date,
+                receiptId: result.id,
+              });
+              void load();
+            }}
+          />
+
+          <section aria-labelledby="payments-list-heading">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 id="payments-list-heading" className="text-sm font-semibold text-[var(--brand)]">
+                All recorded payments
+              </h2>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex min-h-11 items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="size-5"
+                    checked={showVoided}
+                    onChange={(e) => setShowVoided(e.target.checked)}
+                  />
+                  Show voided
+                </label>
+                <Link
+                  href="/treasurer/payments/csv"
+                  className="min-h-11 rounded-xl border border-[var(--border)] px-3 text-sm font-medium leading-[2.75rem]"
+                >
+                  Export CSV
+                </Link>
+              </div>
+            </div>
+
+            {visiblePayments.length === 0 ? (
+              <p className="mt-3 text-sm text-[var(--text-muted)]">No payments recorded yet.</p>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {visiblePayments.map((p) => {
+                  const name = truncateName(p.members?.full_name ?? "Member");
+                  return (
+                    <li
+                      key={p.id}
+                      className={
+                        "rounded-xl border border-[var(--border)] p-3 " +
+                        (p.voided ? "bg-[var(--surface-2)] opacity-70" : "bg-[var(--surface)]")
+                      }
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-medium" title={name.truncated ? name.text + "…" : undefined}>
+                            {name.text}
+                          </p>
+                          <p className="text-sm text-[var(--text-muted)]">
+                            {p.payment_structures?.name ?? "Unknown structure"}
+                            {p.paid_at ? ` · ${churchTodayLabel(p.paid_at)}` : ""}
+                          </p>
+                          {p.notes ? <p className="mt-1 text-sm text-[var(--text-muted)]">{p.notes}</p> : null}
+                          {p.voided ? (
+                            <p className="mt-1 text-sm text-[var(--danger)]">
+                              Voided{p.void_reason ? `: ${p.void_reason}` : ""}
+                              {p.void_note ? ` — ${p.void_note}` : ""}
+                              {p.voided_at ? ` (${churchTodayLabel(p.voided_at)})` : ""}
+                            </p>
+                          ) : null}
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="font-semibold">
+                            {p.voided ? "" : formatPeso(p.amount_paid)}
+                            {p.voided ? (
+                              <span className="ml-2 text-xs uppercase tracking-wide text-[var(--danger)]">
+                                voided
+                              </span>
+                            ) : null}
+                          </span>
+                          {!p.voided ? (
+                            <button
+                              type="button"
+                              onClick={() => setVoidTarget(p)}
+                              className="min-h-11 rounded-xl border border-[var(--border)] px-3 text-sm"
+                            >
+                              Void
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => setLedgerMemberId(p.member_id)}
+                            className="min-h-11 rounded-xl border border-[var(--border)] px-3 text-sm"
+                          >
+                            Ledger
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
         </>
       )}
 
-      {confirmVoid ? (
-        <ConfirmModal
-          message="Are you sure you want to void this payment? This will remove it from the member's payment history."
-          confirmLabel="Yes, void payment"
-          busy={voiding === confirmVoid}
-          onConfirm={() => voidPayment(confirmVoid)}
-          onCancel={() => setConfirmVoid(null)}
+      {voidTarget ? (
+        <VoidPaymentDialog
+          memberName={voidTarget.members?.full_name ?? "This member"}
+          structureName={voidTarget.payment_structures?.name ?? "this structure"}
+          amount={voidTarget.amount_paid}
+          busy={voidBusy}
+          onConfirm={(reason, note) => void confirmVoid(reason, note)}
+          onCancel={() => setVoidTarget(null)}
         />
       ) : null}
+
       {receipt ? (
-        <ReceiptModal data={receipt} onClose={() => { setReceipt(null); setSuccess(false); }} />
+        <ReceiptModal data={receipt} onClose={() => setReceipt(null)} />
+      ) : null}
+
+      {ledgerMemberId ? (
+        <LedgerView memberId={ledgerMemberId} onClose={() => setLedgerMemberId(null)} />
       ) : null}
     </div>
   );

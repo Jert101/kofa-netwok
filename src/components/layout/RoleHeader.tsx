@@ -19,7 +19,7 @@ export function RoleHeader({ role }: { role: Role }) {
         height={26}
         className="shrink-0 rounded-full md:hidden"
       />
-      <span className="truncate text-sm font-semibold text-[var(--accent)] md:text-base">
+      <span className="truncate text-sm font-semibold text-[var(--brand)] md:text-base">
         {ROLE_LABEL[role]}
       </span>
     </header>

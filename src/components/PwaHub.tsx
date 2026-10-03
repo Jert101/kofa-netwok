@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Smartphone } from "lucide-react";
+import { Bell, Smartphone } from "lucide-react";
+import Link from "next/link";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,35 +17,33 @@ type BeforeInstallPromptEvent = Event & {
 
 function isStandalone(): boolean {
   if (typeof window === "undefined") return false;
-  const mq = window.matchMedia("(display-mode: standalone)");
-  if (mq.matches) return true;
+  if (window.matchMedia("(display-mode: standalone)").matches) return true;
   return Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
 }
 
 function isIos(): boolean {
   if (typeof navigator === "undefined") return false;
-  return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  return (
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  );
 }
 
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const raw = atob(base64);
-  const out = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
-  return out;
-}
-
+/**
+ * The install button, and nothing else.
+ *
+ * This used to also enable and disable push. That has moved to `/notifications`, which is the one
+ * place that answers "what will this phone tell me about" — including which topics are on and why a
+ * browser is refusing. Leaving a second enable button here meant two screens that both claimed to
+ * own the permission, and a device switched on here could not be configured anywhere.
+ *
+ * Install stays here because it is not a preference: it is a one-off action with no state worth
+ * storing, and it is the thing people reach for when they ask what the "App" button does.
+ */
 export function PwaHub() {
   const [standalone, setStandalone] = useState(false);
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
   const [installBusy, setInstallBusy] = useState(false);
-  const [open, setOpen] = useState(false);
-
-  const [perm, setPerm] = useState<NotificationPermission | "unsupported">("default");
-  const [pushBusy, setPushBusy] = useState(false);
-  const [pushMsg, setPushMsg] = useState<string | null>(null);
-  const [subscribed, setSubscribed] = useState(false);
 
   useEffect(() => {
     setStandalone(isStandalone());
@@ -56,33 +55,7 @@ export function PwaHub() {
     return () => window.removeEventListener("beforeinstallprompt", onBip);
   }, []);
 
-  useEffect(() => {
-    if (typeof window === "undefined" || !("Notification" in window)) {
-      setPerm("unsupported");
-      return;
-    }
-    setPerm(Notification.permission);
-  }, []);
-
-  const refreshSubscriptionState = useCallback(async () => {
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-      setSubscribed(false);
-      return;
-    }
-    try {
-      const reg = await navigator.serviceWorker.ready;
-      const sub = await reg.pushManager.getSubscription();
-      setSubscribed(Boolean(sub));
-    } catch {
-      setSubscribed(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void refreshSubscriptionState();
-  }, [refreshSubscriptionState, perm]);
-
-  async function onInstall() {
+  const onInstall = useCallback(async () => {
     if (!deferred) return;
     setInstallBusy(true);
     try {
@@ -93,174 +66,63 @@ export function PwaHub() {
     } finally {
       setInstallBusy(false);
     }
-  }
-
-  async function enableNotifications() {
-    setPushMsg(null);
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-      setPushMsg("This browser does not support web push.");
-      return;
-    }
-    const resKey = await fetch("/api/push/vapid-key");
-    if (!resKey.ok) {
-      setPushMsg("Notifications are not configured on the server yet.");
-      return;
-    }
-    const { publicKey } = (await resKey.json()) as { publicKey?: string };
-    if (!publicKey) {
-      setPushMsg("Missing push configuration.");
-      return;
-    }
-
-    setPushBusy(true);
-    try {
-      const permission = await Notification.requestPermission();
-      setPerm(permission);
-      if (permission !== "granted") {
-        setPushMsg("Permission was not granted.");
-        return;
-      }
-
-      const reg = await navigator.serviceWorker.ready;
-      let sub = await reg.pushManager.getSubscription();
-      if (!sub) {
-        const keyBytes = urlBase64ToUint8Array(publicKey);
-        sub = await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: keyBytes.buffer.slice(
-            keyBytes.byteOffset,
-            keyBytes.byteOffset + keyBytes.byteLength
-          ) as ArrayBuffer,
-        });
-      }
-
-      const j = sub.toJSON();
-      if (!j.endpoint || !j.keys?.p256dh || !j.keys?.auth) {
-        setPushMsg("Could not read subscription keys.");
-        return;
-      }
-
-      const save = await fetch("/api/push/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          endpoint: j.endpoint,
-          keys: { p256dh: j.keys.p256dh, auth: j.keys.auth },
-        }),
-        credentials: "same-origin",
-      });
-      if (!save.ok) {
-        const err = (await save.json()) as { error?: string };
-        setPushMsg(err.error ?? "Could not save subscription.");
-        return;
-      }
-      setSubscribed(true);
-      setPushMsg(
-        "You will get notified for announcements (including officer posts), attendance updates, and high-mass server assignment updates (push only)."
-      );
-    } catch (e) {
-      setPushMsg(e instanceof Error ? e.message : "Something went wrong.");
-    } finally {
-      setPushBusy(false);
-    }
-  }
-
-  async function disableNotifications() {
-    setPushMsg(null);
-    setPushBusy(true);
-    try {
-      const reg = await navigator.serviceWorker.ready;
-      const sub = await reg.pushManager.getSubscription();
-      if (sub) {
-        const endpoint = sub.endpoint;
-        await sub.unsubscribe();
-        await fetch("/api/push/unsubscribe", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ endpoint }),
-          credentials: "same-origin",
-        });
-      }
-      setSubscribed(false);
-      setPushMsg("Notifications turned off for this device.");
-    } catch (e) {
-      setPushMsg(e instanceof Error ? e.message : "Could not unsubscribe.");
-    } finally {
-      setPushBusy(false);
-    }
-  }
+  }, [deferred]);
 
   const showInstallUi = !standalone && (Boolean(deferred) || isIos());
-  const canInstallChrome = Boolean(deferred);
 
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
+    <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <SidebarMenuButton tooltip="Install &amp; notifications">
-          <Smartphone className="size-4" />
+        <SidebarMenuButton tooltip="Install & notifications">
+          <Smartphone aria-hidden className="size-4" />
           <span>App</span>
         </SidebarMenuButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="center" className="w-[min(92vw,20rem)] rounded-2xl p-4">
-        <p className="text-xs font-semibold text-[var(--accent)]">Install &amp; notifications</p>
-        <p className="mt-1 text-xs text-[var(--muted)]">
-          Works even when you are signed out. Allow notifications when prompted.
-        </p>
+        <p className="text-xs font-semibold text-[var(--brand)]">Install app</p>
 
         {showInstallUi ? (
-          <div className="mt-3 space-y-2 border-t border-[var(--border)] pt-3">
-            <p className="text-xs font-medium text-[var(--text)]">Install app</p>
-            {canInstallChrome ? (
+          <div className="mt-2 space-y-2 border-t border-[var(--border)] pt-3">
+            <p className="text-xs text-[var(--text-muted)]">
+              Works offline and shows on your home screen. Allow notifications when prompted.
+            </p>
+            {deferred ? (
               <button
                 type="button"
                 disabled={installBusy}
                 onClick={() => void onInstall()}
-                className="min-h-10 w-full rounded-xl bg-[var(--accent)] text-sm font-medium text-white disabled:opacity-40"
+                className="min-h-10 w-full rounded-xl bg-[var(--brand)] text-sm font-medium text-white disabled:opacity-40"
               >
-                {installBusy ? "Installing…" : "Install KofA AMS"}
+                {installBusy ? "Installing..." : "Install KofA AMS"}
               </button>
             ) : isIos() ? (
-              <p className="text-xs text-[var(--muted)]">
-                On iPhone/iPad: tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>. Web push on iOS
-                works after the app is installed from that screen (iOS 16.4+).
+              <p className="text-xs text-[var(--text-muted)]">
+                On iPhone or iPad: tap <strong>Share</strong>, then{" "}
+                <strong>Add to Home Screen</strong>. Web push works once the app is opened from that
+                icon (iOS 16.4 and later).
               </p>
             ) : (
-              <p className="text-xs text-[var(--muted)]">
-                Use your browser menu: look for &quot;Install app&quot;, &quot;Add to Home screen&quot;, or similar.
+              <p className="text-xs text-[var(--text-muted)]">
+                Use your browser menu: look for &quot;Install app&quot;, &quot;Add to Home screen&quot;, or
+                something close to that.
               </p>
             )}
           </div>
-        ) : null}
+        ) : (
+          <p className="mt-1 text-xs text-[var(--text-muted)]">Already installed on this device.</p>
+        )}
 
         <div className="mt-3 space-y-2 border-t border-[var(--border)] pt-3">
-          <p className="text-xs font-medium text-[var(--text)]">Push notifications</p>
-          {perm === "unsupported" ? (
-            <p className="text-xs text-[var(--muted)]">Notifications are not supported in this browser.</p>
-          ) : subscribed ? (
-            <button
-              type="button"
-              disabled={pushBusy}
-              onClick={() => void disableNotifications()}
-              className="min-h-10 w-full rounded-xl border border-[var(--border)] text-sm font-medium text-[var(--text)] disabled:opacity-40"
-            >
-              {pushBusy ? "Working…" : "Turn off notifications"}
-            </button>
-          ) : (
-            <button
-              type="button"
-              disabled={pushBusy || perm === "denied"}
-              onClick={() => void enableNotifications()}
-              className="min-h-10 w-full rounded-xl bg-[var(--accent)] text-sm font-medium text-white disabled:opacity-40"
-            >
-              {pushBusy ? "Enabling…" : "Enable notifications"}
-            </button>
-          )}
-          {perm === "denied" && !subscribed ? (
-            <p className="text-xs text-[var(--danger)]">
-              Notifications are blocked. Enable them in your browser settings for this site.
-            </p>
-          ) : null}
-          {pushMsg ? <p className="text-xs text-[var(--muted)]">{pushMsg}</p> : null}
+          <p className="text-xs font-medium text-[var(--text)]">Notifications</p>
+          <p className="text-xs text-[var(--text-muted)]">
+            Turn push on or off, and choose what to hear about, in Notifications settings.
+          </p>
+          <SidebarMenuButton asChild tooltip="Notification settings" className="min-h-10">
+            <Link href="/notifications">
+              <Bell aria-hidden className="size-4" />
+              <span>Open notification settings</span>
+            </Link>
+          </SidebarMenuButton>
         </div>
       </DropdownMenuContent>
     </DropdownMenu>

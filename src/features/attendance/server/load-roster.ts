@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { countRecentServers, RECENT_SERVERS_WEEKS } from "@/lib/attendance/roster-sort";
+import { countRecentServers, RECENT_SERVERS_WEEKS, type ServerCountInput } from "@/lib/attendance/roster-sort";
 import { todayInTimeZone } from "@/lib/attendance/metrics";
 
 /**
@@ -82,39 +82,31 @@ async function recentServerCounts(
     .toISOString()
     .slice(0, 10);
 
-  const [live, archived] = await Promise.all([
-    sb
-      .from("attendance_records")
-      .select("member_id, attendance_sessions!inner(session_date)")
-      .in("member_id", memberIds)
-      // gte, not eq: eq would match only the cutoff day itself and silently drop the
-      // other seven weeks of the window.
-      .gte("attendance_sessions.session_date", cutoff)
-      .limit(20_000),
-    sb
-      .from("attendance_records_archive")
-      .select("member_id, attendance_sessions_archive!inner(session_date)")
-      .in("member_id", memberIds)
-      .gte("attendance_sessions_archive.session_date", cutoff)
-      .limit(20_000),
-  ]);
+  // One query against the view, not two embeds.
+  //
+  // The archive half of this used to ask PostgREST to embed
+  // `attendance_sessions_archive!inner(session_date)`, which cannot work: `attendance_records_archive`
+  // stores a bare `session_id` with no foreign key, because the archive keys on `(id, archived_at)`
+  // and `id` alone is not unique there. PostgREST answered PGRST200 "no foreign key relationship",
+  // this function threw, and because the session GET route has no try/catch the whole screen 500'd
+  // with an empty body -- every session, every role, so attendance could not be recorded at all.
+  //
+  // `v_attendance_all` (migration 033) already performs that join correctly in SQL and reports
+  // `session_date` for both live and archived rows, so the count comes from one place.
+  const { data, error } = await sb
+    .from("v_attendance_all")
+    .select("member_id, session_date")
+    .in("member_id", memberIds)
+    // gte, not eq: eq would match only the cutoff day itself and silently drop the
+    // other seven weeks of the window.
+    .gte("session_date", cutoff)
+    .limit(20_000);
 
-  if (live.error) throw new Error(live.error.message);
-  if (archived.error) throw new Error(archived.error.message);
+  if (error) throw new Error(error.message);
 
-  const rows: { memberId: string; servedAt: string }[] = [];
-
-  for (const row of live.data ?? []) {
-    const nested = (row as { attendance_sessions?: { session_date?: string } | { session_date?: string }[] })
-      .attendance_sessions;
-    const sessionDate = Array.isArray(nested) ? nested[0]?.session_date : nested?.session_date;
-    if (sessionDate) rows.push({ memberId: row.member_id as string, servedAt: sessionDate });
-  }
-
-  for (const row of archived.data ?? []) {
-    const nested = (row as { attendance_sessions_archive?: { session_date?: string } | { session_date?: string }[] })
-      .attendance_sessions_archive;
-    const sessionDate = Array.isArray(nested) ? nested[0]?.session_date : nested?.session_date;
+  const rows: ServerCountInput[] = [];
+  for (const row of data ?? []) {
+    const sessionDate = row.session_date as string | null;
     if (sessionDate) rows.push({ memberId: row.member_id as string, servedAt: sessionDate });
   }
 

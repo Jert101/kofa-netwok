@@ -23,7 +23,13 @@ export async function GET(req: NextRequest) {
   const sb = getSupabaseAdmin();
   let q = sb
     .from("payments")
-    .select("id, amount_paid, paid_at, notes, voided, payment_structures(name, amount), members(full_name)")
+    // `payments` has three foreign keys to `members` -- member_id, recorded_by_member_id and
+    // voided_by_member_id -- so a bare `members(full_name)` is ambiguous and PostgREST rejects it with
+    // PGRST201 "more than one relationship was found". This embed had to name the constraint. Only the
+    // payer, never the recorder or the voider.
+    .select(
+      "id, amount_paid, paid_at, notes, voided, payment_structures(name, amount), members!payments_member_id_fkey(full_name)",
+    )
     .order("paid_at", { ascending: false })
     .order("created_at", { ascending: false });
 

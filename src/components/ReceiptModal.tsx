@@ -262,7 +262,7 @@ export default function ReceiptModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-sm rounded-2xl bg-[var(--surface)] p-6 shadow-xl">
-        <h2 className="text-lg font-semibold text-[var(--accent)]">Payment Receipt</h2>
+        <h2 className="text-lg font-semibold text-[var(--brand)]">Payment Receipt</h2>
         <div className="mt-4">
           <canvas
             ref={canvasRef}
@@ -274,14 +274,14 @@ export default function ReceiptModal({
           <button
             type="button"
             onClick={downloadPng}
-            className="min-h-11 flex-1 rounded-xl bg-[var(--accent)] text-sm font-semibold text-white"
+            className="min-h-11 flex-1 rounded-xl bg-[var(--brand)] text-sm font-semibold text-white"
           >
             Download PNG
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="min-h-11 flex-1 rounded-xl border border-[var(--border)] text-sm font-medium text-[var(--muted)]"
+            className="min-h-11 flex-1 rounded-xl border border-[var(--border)] text-sm font-medium text-[var(--text-muted)]"
           >
             Close
           </button>

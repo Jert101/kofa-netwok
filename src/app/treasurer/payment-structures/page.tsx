@@ -50,8 +50,10 @@ export default function PaymentStructuresPage() {
       setStructures(j.structures ?? []);
     }
     if (bRes.ok) {
-      const j = (await bRes.json()) as { batches: Batch[] };
-      setBatches(j.batches ?? []);
+      // `/api/admin/member-batches` is enveloped; `/api/admin/payment-structures` above is plain.
+      // Both are called here, so the two shapes differ deliberately.
+      const j = (await bRes.json()) as { data?: { batches?: Batch[] } };
+      setBatches(j.data?.batches ?? []);
     }
   }, []);
 
@@ -147,7 +149,7 @@ export default function PaymentStructuresPage() {
         <h2 className="font-semibold text-sm">Add payment type</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block text-sm">
-            <span className="text-[var(--muted)]">Name</span>
+            <span className="text-[var(--text-muted)]">Name</span>
             <input
               required
               className="mt-1 w-full min-h-11 rounded-xl border border-[var(--border)] bg-[var(--background)] px-3"
@@ -157,7 +159,7 @@ export default function PaymentStructuresPage() {
             />
           </label>
           <label className="block text-sm">
-            <span className="text-[var(--muted)]">Amount</span>
+            <span className="text-[var(--text-muted)]">Amount</span>
             <input
               required
               type="number"
@@ -172,7 +174,7 @@ export default function PaymentStructuresPage() {
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block text-sm">
-            <span className="text-[var(--muted)]">Deadline (optional)</span>
+            <span className="text-[var(--text-muted)]">Deadline (optional)</span>
             <input
               type="date"
               className="mt-1 w-full min-h-11 rounded-xl border border-[var(--border)] bg-[var(--background)] px-3"
@@ -181,7 +183,7 @@ export default function PaymentStructuresPage() {
             />
           </label>
           <label className="block text-sm">
-            <span className="text-[var(--muted)]">Installment months (optional)</span>
+            <span className="text-[var(--text-muted)]">Installment months (optional)</span>
             <input
               type="number"
               min="1"
@@ -199,15 +201,15 @@ export default function PaymentStructuresPage() {
               role="switch"
               aria-checked={forAll}
               onClick={() => { setForAll(!forAll); setSelectedBatch(""); }}
-              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${forAll ? "bg-[var(--accent)]" : "bg-[var(--border)]"}`}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${forAll ? "bg-[var(--brand)]" : "bg-[var(--border)]"}`}
             >
               <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${forAll ? "translate-x-5" : "translate-x-0"}`} />
             </button>
-            <span className="text-[var(--muted)]">For all members</span>
+            <span className="text-[var(--text-muted)]">For all members</span>
           </label>
           {!forAll ? (
             <label className="block text-sm">
-              <span className="text-[var(--muted)]">Batch (optional)</span>
+              <span className="text-[var(--text-muted)]">Batch (optional)</span>
               <select
                 className="mt-1 w-full min-h-11 rounded-xl border border-[var(--border)] bg-[var(--background)] px-3"
                 value={selectedBatch}
@@ -225,7 +227,7 @@ export default function PaymentStructuresPage() {
         <button
           type="submit"
           disabled={busy}
-          className="min-h-12 w-full rounded-xl bg-[var(--accent)] text-sm font-semibold text-white disabled:opacity-40"
+          className="min-h-12 w-full rounded-xl bg-[var(--brand)] text-sm font-semibold text-white disabled:opacity-40"
         >
           {busy ? "Adding…" : "Add payment type"}
         </button>
@@ -238,7 +240,7 @@ export default function PaymentStructuresPage() {
               <div className="space-y-3">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="block text-sm">
-                    <span className="text-[var(--muted)]">Name</span>
+                    <span className="text-[var(--text-muted)]">Name</span>
                     <input
                       className="mt-1 w-full min-h-10 rounded-lg border border-[var(--border)] bg-[var(--background)] px-2"
                       value={editName}
@@ -246,7 +248,7 @@ export default function PaymentStructuresPage() {
                     />
                   </label>
                   <label className="block text-sm">
-                    <span className="text-[var(--muted)]">Amount</span>
+                    <span className="text-[var(--text-muted)]">Amount</span>
                     <input
                       type="number"
                       step="0.01"
@@ -259,7 +261,7 @@ export default function PaymentStructuresPage() {
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="block text-sm">
-                    <span className="text-[var(--muted)]">Deadline</span>
+                    <span className="text-[var(--text-muted)]">Deadline</span>
                     <input
                       type="date"
                       className="mt-1 w-full min-h-10 rounded-lg border border-[var(--border)] bg-[var(--background)] px-2"
@@ -268,7 +270,7 @@ export default function PaymentStructuresPage() {
                     />
                   </label>
                   <label className="block text-sm">
-                    <span className="text-[var(--muted)]">Installment months</span>
+                    <span className="text-[var(--text-muted)]">Installment months</span>
                     <input
                       type="number"
                       min="1"
@@ -285,15 +287,15 @@ export default function PaymentStructuresPage() {
                       role="switch"
                       aria-checked={editForAll}
                       onClick={() => { setEditForAll(!editForAll); setEditBatch(""); }}
-                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${editForAll ? "bg-[var(--accent)]" : "bg-[var(--border)]"}`}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${editForAll ? "bg-[var(--brand)]" : "bg-[var(--border)]"}`}
                     >
                         <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${editForAll ? "translate-x-5" : "translate-x-0"}`} />
                     </button>
-                    <span className="text-[var(--muted)]">For all members</span>
+                    <span className="text-[var(--text-muted)]">For all members</span>
                   </label>
                   {!editForAll ? (
                     <label className="block text-sm">
-                      <span className="text-[var(--muted)]">Batch (optional)</span>
+                      <span className="text-[var(--text-muted)]">Batch (optional)</span>
                       <select
                         className="mt-1 w-full min-h-11 rounded-xl border border-[var(--border)] bg-[var(--background)] px-3"
                         value={editBatch}
@@ -311,14 +313,14 @@ export default function PaymentStructuresPage() {
                   <button
                     type="button"
                     onClick={() => saveEdit(s.id)}
-                    className="min-h-11 rounded-xl bg-[var(--accent)] px-4 text-sm font-medium text-white"
+                    className="min-h-11 rounded-xl bg-[var(--brand)] px-4 text-sm font-medium text-white"
                   >
                     Save
                   </button>
                   <button
                     type="button"
                     onClick={() => setEditing(null)}
-                    className="min-h-11 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 text-sm font-medium text-[var(--muted)] hover:bg-[var(--surface-2)]"
+                    className="min-h-11 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 text-sm font-medium text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
                   >
                     Cancel
                   </button>
@@ -328,25 +330,25 @@ export default function PaymentStructuresPage() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="font-medium">{s.name}</p>
-                  <p className="mt-0.5 text-sm text-[var(--muted)]">
+                  <p className="mt-0.5 text-sm text-[var(--text-muted)]">
                     {formatPeso(Number(s.amount))}
                     {s.installment_months ? ` / ${s.installment_months} months` : ""}
                     {s.deadline ? ` · Due: ${s.deadline}` : ""}
-                    {s.for_all === false ? <span className="ml-2 text-xs text-[var(--accent)]">{s.batch ? `Batch ${s.batch}` : "Selected members"}</span> : <span className="ml-2 text-xs text-[var(--muted)]">All members</span>}
+                    {s.for_all === false ? <span className="ml-2 text-xs text-[var(--brand)]">{s.batch ? `Batch ${s.batch}` : "Selected members"}</span> : <span className="ml-2 text-xs text-[var(--text-muted)]">All members</span>}
                     {!s.is_active ? <span className="ml-2 text-xs text-[var(--danger)]">Inactive</span> : null}
                   </p>
                 </div>
                 <div className="flex shrink-0 gap-2">
                   <a
                     href={`/api/admin/payment-structures/${s.id}/pdf`}
-                    className="inline-flex min-h-11 items-center rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-sm font-medium text-[var(--accent)] hover:bg-[var(--surface-2)]"
+                    className="inline-flex min-h-11 items-center rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-sm font-medium text-[var(--brand)] hover:bg-[var(--surface-2)]"
                   >
                     Report
                   </a>
                   <button
                     type="button"
                     onClick={() => startEdit(s)}
-                    className="min-h-11 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 text-sm font-medium text-[var(--accent)] hover:bg-[var(--surface-2)]"
+                    className="min-h-11 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 text-sm font-medium text-[var(--brand)] hover:bg-[var(--surface-2)]"
                   >
                     Edit
                   </button>
@@ -365,7 +367,7 @@ export default function PaymentStructuresPage() {
           </div>
         ))}
         {structures.length === 0 ? (
-          <p className="py-10 text-center text-sm text-[var(--muted)]">No payment structures yet.</p>
+          <p className="py-10 text-center text-sm text-[var(--text-muted)]">No payment structures yet.</p>
         ) : null}
       </div>
 

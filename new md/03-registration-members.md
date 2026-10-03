@@ -1,6 +1,6 @@
 # 03 — Registration & members
 
-**Status:** Not started
+**Status:** Code complete (registration, duplicate detection, member roll, batches, import, directory, search, per-role APIs). Unit tests and the four automated gates pass. Manual QA (section 12) not yet run.
 **Roles:** public applicant, admin (review and directory). Officers, secretaries and members use the member search only.
 **Depends on:** 01, 02
 **Size:** L

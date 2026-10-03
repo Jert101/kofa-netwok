@@ -17,6 +17,7 @@ import { checkSubmitAllowed, recordAttempt } from "@/lib/auth/throttle";
 import { getClientIp } from "@/lib/auth/ip-hash";
 import { REGISTER_MIN_FILL_MS } from "@/lib/auth/throttle-rules";
 import { generateReferenceCode } from "@/lib/registrations/generate";
+import { notify } from "@/lib/notify/notify";
 
 /** Honeypot: a real person never sees or fills this. */
 const HONEYPOT_FIELD = "company";
@@ -123,6 +124,12 @@ export async function POST(req: NextRequest) {
   }
 
   await recordAttempt("register", ip, true);
+
+  // COM-5: tell the office without giving the applicant anything to find out from. The name is what
+  // the secretary sees in their inbox; the reference code stays between the applicant and their own
+  // status page.
+  await notify("registration_submitted", { member_name: `${first_name} ${last_name}` });
+
   return jsonOk({ received: true, reference_code: referenceCode });
 }
 

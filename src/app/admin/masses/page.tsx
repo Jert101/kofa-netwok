@@ -47,9 +47,13 @@ export default function AdminMassesPage() {
         setMasses([]);
         return;
       }
-      const j = (await res.json()) as { masses: Mass[] };
+      // `/api/masses` answers with the standard envelope, `{ ok: true, data: { masses } }`, so the
+      // list lives under `data`. Reading `body.masses` here is undefined on every load, which made
+      // the whole catalog render as empty -- existing Masses looked deleted and newly added ones
+      // never appeared, even though the POST had succeeded and the row was in the database.
+      const j = (await res.json()) as { data?: { masses?: Mass[] } };
       setLoadFailed(false);
-      setMasses(j.masses ?? []);
+      setMasses(j.data?.masses ?? []);
     } catch {
       setLoadFailed(true);
       setMasses([]);
@@ -129,7 +133,7 @@ export default function AdminMassesPage() {
         </Button>
       </div>
 
-      <p className="text-sm text-[var(--muted)]">
+      <p className="text-sm text-[var(--text-muted)]">
         This order is the order they appear on the day view. Only Sunday Masses are created
         automatically by the weekly job.
       </p>
@@ -152,7 +156,7 @@ export default function AdminMassesPage() {
           }}
         >
           <div>
-            <label htmlFor="mass-name" className="text-sm font-medium text-[var(--muted)]">
+            <label htmlFor="mass-name" className="text-sm font-medium text-[var(--text-muted)]">
               Name
             </label>
             <input
@@ -166,13 +170,13 @@ export default function AdminMassesPage() {
           </div>
 
           <div>
-            <label htmlFor="mass-time" className="text-sm font-medium text-[var(--muted)]">
+            <label htmlFor="mass-time" className="text-sm font-medium text-[var(--text-muted)]">
               Usual time
             </label>
             <div className="relative mt-1">
               <Clock
                 aria-hidden="true"
-                className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--muted)]"
+                className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--text-muted)]"
               />
               <input
                 id="mass-time"
@@ -182,7 +186,7 @@ export default function AdminMassesPage() {
                 className="min-h-12 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] pl-9 pr-3"
               />
             </div>
-            <p className="mt-1 text-xs text-[var(--muted)]">
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
               Used as a reminder when adding a session. Leaving it empty is fine.
             </p>
           </div>
@@ -224,7 +228,7 @@ export default function AdminMassesPage() {
       ) : null}
 
       {masses === null ? (
-        <p className="text-sm text-[var(--muted)]">Loading…</p>
+        <p className="text-sm text-[var(--text-muted)]">Loading…</p>
       ) : loadFailed ? (
         <div role="alert" className="rounded-2xl border border-dashed border-[var(--danger)] p-6 text-center">
           <p className="text-sm font-medium text-[var(--danger)]">Could not load the Mass list.</p>
@@ -233,9 +237,9 @@ export default function AdminMassesPage() {
           </Button>
         </div>
       ) : list.length === 0 ? (
-        <p className="text-sm text-[var(--muted)]">No Masses yet. Add one to start encoding attendance.</p>
+        <p className="text-sm text-[var(--text-muted)]">No Masses yet. Add one to start encoding attendance.</p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="space-y-2" data-testid="mass-list">
           {list.map((mass, index) => (
             <li
               key={mass.id}
@@ -244,12 +248,12 @@ export default function AdminMassesPage() {
               <div className="min-w-0">
                 <p
                   className={
-                    mass.is_active ? "font-medium" : "font-medium text-[var(--muted)] line-through"
+                    mass.is_active ? "font-medium" : "font-medium text-[var(--text-muted)] line-through"
                   }
                 >
                   {mass.name}
                 </p>
-                <p className="text-xs text-[var(--muted)]">
+                <p className="text-xs text-[var(--text-muted)]">
                   {mass.default_time ? `${mass.default_time.slice(0, 5)} · ` : ""}
                   {mass.default_sunday ? "every Sunday" : "manual only"}
                   {mass.is_active ? "" : " · inactive"}

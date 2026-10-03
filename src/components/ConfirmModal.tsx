@@ -33,7 +33,7 @@ export default function ConfirmModal({
             type="button"
             onClick={onCancel}
             disabled={busy}
-            className="min-h-11 flex-1 rounded-xl border border-[var(--border)] text-sm font-medium text-[var(--muted)] disabled:opacity-40"
+            className="min-h-11 flex-1 rounded-xl border border-[var(--border)] text-sm font-medium text-[var(--text-muted)] disabled:opacity-40"
           >
             Cancel
           </button>

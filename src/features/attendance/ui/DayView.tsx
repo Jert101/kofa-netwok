@@ -49,9 +49,11 @@ export function DayView({
         setSessions([]);
         return;
       }
-      const j = (await res.json()) as { sessions: SessionRow[] };
+      // Enveloped response: `sessions` sits under `data`. Reading `j.sessions` is undefined on every
+      // load, so the day view rendered as a day with no Masses on it.
+      const j = (await res.json()) as { data?: { sessions?: SessionRow[] } };
       setLoadFailed(false);
-      setSessions(j.sessions ?? []);
+      setSessions(j.data?.sessions ?? []);
     } catch {
       setLoadFailed(true);
       setSessions([]);
@@ -79,7 +81,7 @@ export function DayView({
       </div>
 
       {sessions === null ? (
-        <p className="mt-4 text-sm text-[var(--muted)]">Loading…</p>
+        <p className="mt-4 text-sm text-[var(--text-muted)]">Loading…</p>
       ) : loadFailed ? (
         <div role="alert" className="mt-4 rounded-2xl border border-dashed border-[var(--danger)] p-6 text-center">
           <p className="text-sm font-medium text-[var(--danger)]">
@@ -90,7 +92,7 @@ export function DayView({
           </Button>
         </div>
       ) : sessions.length === 0 ? (
-        <p className="mt-4 text-sm text-[var(--muted)]">{emptyHint}</p>
+        <p className="mt-4 text-sm text-[var(--text-muted)]">{emptyHint}</p>
       ) : (
         <ul className="mt-4 space-y-2">
           {sessions.map((s) => (
@@ -100,7 +102,7 @@ export function DayView({
                 className="flex min-h-14 items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 active:bg-[var(--surface-2)]"
               >
                 <span className="font-medium">{s.mass_name}</span>
-                <span className="text-sm text-[var(--muted)]">
+                <span className="text-sm text-[var(--text-muted)]">
                   {s.present_count} present
                 </span>
               </Link>

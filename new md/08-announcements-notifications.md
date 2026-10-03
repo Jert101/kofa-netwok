@@ -1,10 +1,10 @@
 # 08 — Announcements & notifications
 
-**Status:** Not started
+**Status:** Code complete. Unit tests, `tsc`, lint and build pass. Manual QA (section 12) not yet run.
 **Roles:** admin, secretary and officer (post announcements); admin, secretary and super admin (inbox); everyone (read announcements, enable push)
 **Depends on:** 02
 **Size:** M
-**Migration:** 030
+**Migration:** 031
 
 ## 1. Purpose
 
@@ -119,7 +119,7 @@ Each event defines its title and body copy in one place, in plain language.
 | GET | `/api/cron/birthday` | secret header | Idempotent via dedupe key |
 | GET | `/api/cron/sweep` | secret header | New. Daily sweep |
 
-## 6. Data (migration 030)
+## 6. Data (migration 031)
 
 ```txt
 announcements
@@ -132,6 +132,7 @@ announcements
 notifications
   + link text NULL
   to_role CHECK widened to all six roles
+  from_role CHECK widened the same way (the dispatchers stamp the caller's role)
 
 push_subscriptions
   + role text NULL
@@ -172,7 +173,7 @@ Existing subscriptions keep working with a null role, and receive broadcast-styl
 
 ## 10. Build tasks
 
-1. Migration 030.
+1. Migration 031 (`liturgy_reminders_sent` included, for LIT-6).
 2. Event catalog and `notify()`, with tests for recipient selection.
 3. Targeted `broadcast` and dead-subscription cleanup.
 4. Subscribe and topics endpoints. Device settings page.
@@ -190,6 +191,8 @@ Existing subscriptions keep working with a null role, and receive broadcast-styl
 - Dedupe key format and rerun behavior.
 
 ## 12. QA checklist
+
+Deferred to final handoff, like every other module's manual pass. The automated gates in sections 9 and 11 run clean; these five need two browsers and an iPhone and cannot be faked by a test suite.
 
 - [ ] Two browsers: super admin and secretary. Generate a report. Only the super admin is notified.
 - [ ] Post to Everyone and to one batch. Check what a member in another batch sees.

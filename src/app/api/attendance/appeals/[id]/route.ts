@@ -1,137 +1,140 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { z } from "zod";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireRole } from "@/lib/api/guard";
-import { notifyAttendanceSessionUpdated } from "@/lib/push/attendance-notify";
+import {
+  alreadyResolved,
+  badRequest,
+  internalError,
+  jsonOk,
+  notFound,
+  reportLocked,
+  validationFailed,
+  zodFields,
+} from "@/lib/api/response";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { guardReportNotGenerated } from "@/lib/reports/check-report-lock";
 import { getClientIp } from "@/lib/auth/ip-hash";
 import { logAudit } from "@/lib/audit/log-audit";
+import { notifyAttendanceSessionUpdated } from "@/lib/push/attendance-notify";
+import { formatAppealRejectReason } from "@/lib/appeals/reject-reasons";
+import { approveAppealItems, rejectAppealItem } from "@/features/appeals/server/appeals";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-async function pruneEmptyAppealParents(sb: SupabaseClient, appealIds: string[]) {
-  const unique = [...new Set(appealIds.filter(Boolean))];
-  for (const appealId of unique) {
-    const { count, error } = await sb
-      .from("attendance_appeal_items")
-      .select("id", { count: "exact", head: true })
-      .eq("appeal_id", appealId);
-    if (error) continue;
-    if ((count ?? 0) === 0) {
-      await sb.from("attendance_appeals").delete().eq("id", appealId);
-    }
-  }
-}
+const patchSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("approve") }),
+  z.object({
+    action: z.literal("reject"),
+    reason: z.string().max(120).trim().optional(),
+    note: z.string().max(400).optional(),
+  }),
+]);
 
-const patchSchema = z.object({
-  action: z.enum(["approve", "reject"]),
-});
-
+/**
+ * APL-3 + APL-5 + APL-7: decide one appeal item.
+ *
+ * The item row is kept after this call. That is the reversal this module makes: approval
+ * used to DELETE the item and then delete the parent appeal once empty, which meant the
+ * record of a decision disappeared at the moment it was made. Now the row records who
+ * decided, when, and why, which is what lets the member see their own outcome.
+ *
+ * A second click returns ALREADY_RESOLVED rather than 404. Two reviewers, or one
+ * reviewer on a slow connection, is the ordinary case for a double tap, and the row is
+ * still right there for them to look at.
+ */
 export async function PATCH(req: NextRequest, ctx: Ctx) {
   const g = await requireRole(req.headers.get("cookie"), ["admin", "secretary"]);
   if (!g.ok) return g.response;
 
-  const { id } = await ctx.params;
+  const { id: itemId } = await ctx.params;
+
   let json: unknown;
   try {
     json = await req.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    return badRequest("Invalid JSON.");
   }
+
   const parsed = patchSchema.safeParse(json);
-  if (!parsed.success) return NextResponse.json({ error: "Invalid body" }, { status: 400 });
+  if (!parsed.success) return validationFailed("Invalid body.", zodFields(parsed.error));
 
   const sb = getSupabaseAdmin();
-  const { data: item, error: fErr } = await sb
+  const reviewerRole = g.session.role === "admin" ? "admin" : "secretary";
+
+  const { data: item, error: itemError } = await sb
     .from("attendance_appeal_items")
-    .select("id, appeal_id, member_id, status, attendance_appeals!inner(session_id)")
-    .eq("id", id)
+    .select("id, member_id, status, appeal_id, attendance_appeals!inner(session_id)")
+    .eq("id", itemId)
     .maybeSingle();
-  if (fErr) return NextResponse.json({ error: fErr.message }, { status: 500 });
-  if (!item) return NextResponse.json({ error: "Appeal item not found" }, { status: 404 });
-  if ((item.status as string) !== "pending") {
-    return NextResponse.json({ error: "Appeal item already reviewed" }, { status: 400 });
+
+  if (itemError) return internalError();
+  if (!item) return notFound("Appeal item not found.");
+
+  const parent = (Array.isArray(item.attendance_appeals) ? item.attendance_appeals[0] : item.attendance_appeals) as
+    | { session_id?: string }
+    | null;
+  const sessionId = parent?.session_id;
+  if (!sessionId) return internalError("Missing appeal context.");
+
+  if (item.status !== "pending") {
+    return alreadyResolved(`This appeal was already ${item.status}.`);
   }
-
-  const sessionId =
-    ((item.attendance_appeals as { session_id?: string } | null)?.session_id as string | undefined) ?? null;
-  if (!sessionId) return NextResponse.json({ error: "Missing session context" }, { status: 500 });
-
-  const appealId = item.appeal_id as string;
 
   if (parsed.data.action === "approve") {
-    const { data: sess } = await sb.from("attendance_sessions").select("session_date").eq("id", sessionId).maybeSingle();
-    if (sess) {
-      const guard = await guardReportNotGenerated(sb, sess.session_date as string);
-      if (guard.blocked) return NextResponse.json({ error: guard.message }, { status: 409 });
+    const result = await approveAppealItems(sb, { sessionId, itemIds: [itemId], reviewerRole });
+
+    if (!result.ok) {
+      if (result.reason === "report_locked") return reportLocked(result.message);
+      if (result.reason === "session_missing") return notFound(result.message);
+      return internalError();
     }
 
-    const { error: upErr } = await sb.from("attendance_records").upsert(
-      [{ session_id: sessionId, member_id: item.member_id as string }],
-      { onConflict: "session_id,member_id", ignoreDuplicates: true }
-    );
-    if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
-
-    const { data: sessionAppeals, error: saErr } = await sb
-      .from("attendance_appeals")
-      .select("id")
-      .eq("session_id", sessionId);
-    if (saErr) return NextResponse.json({ error: saErr.message }, { status: 500 });
-    const sessionAppealIds = (sessionAppeals ?? []).map((r) => r.id as string);
-    if (sessionAppealIds.length === 0) {
-      return NextResponse.json({ error: "Missing appeal context" }, { status: 500 });
+    // Nothing to announce when the item turned out to be resolved by someone else.
+    if (result.approved > 0) {
+      void notifyAttendanceSessionUpdated(sessionId);
+      await logAudit({
+        action: "appeal_approved",
+        actor: { role: g.session.role, memberId: g.session.actor?.id ?? null, name: g.session.actor?.name ?? null },
+        entityType: "attendance_appeal_item",
+        entityId: itemId,
+        meta: { sessionId, memberId: item.member_id, merged: result.merged, added: result.added },
+        ip: getClientIp(req.headers),
+      });
     }
 
-    const { data: pendingItems, error: piErr } = await sb
-      .from("attendance_appeal_items")
-      .select("id, appeal_id")
-      .in("appeal_id", sessionAppealIds)
-      .eq("member_id", item.member_id as string)
-      .eq("status", "pending");
-    if (piErr) return NextResponse.json({ error: piErr.message }, { status: 500 });
-
-    const ids = (pendingItems ?? []).map((r) => r.id as string);
-    const affectedAppealIds = (pendingItems ?? []).map((r) => r.appeal_id as string);
-    if (ids.length === 0) {
-      return NextResponse.json({ error: "No pending appeal rows to resolve" }, { status: 409 });
-    }
-
-    const { error: dErr } = await sb.from("attendance_appeal_items").delete().in("id", ids);
-    if (dErr) return NextResponse.json({ error: dErr.message }, { status: 500 });
-
-    await pruneEmptyAppealParents(sb, affectedAppealIds);
-    void notifyAttendanceSessionUpdated(sessionId);
-    await logAudit({
-      action: "appeal_approved",
-      actor: {
-        role: g.session.role,
-        memberId: g.session.actor?.id ?? null,
-        name: g.session.actor?.name ?? null,
-      },
-      entityType: "attendance_appeal_item",
-      entityId: id,
-      meta: { sessionId, memberId: item.member_id, resolved: ids.length },
-      ip: getClientIp(req.headers),
+    return jsonOk({
+      approved: result.approved,
+      merged_duplicates: result.merged,
+      attendance_added: result.added,
+      already_resolved: result.already,
     });
-    return NextResponse.json({ ok: true });
   }
 
-  const { error: dErr } = await sb.from("attendance_appeal_items").delete().eq("id", id);
-  if (dErr) return NextResponse.json({ error: dErr.message }, { status: 500 });
+  // APL-5: a reason is required. A rejection the member cannot understand is the failure
+  // this whole item exists to prevent.
+  const reason = formatAppealRejectReason({
+    reason: parsed.data.reason ?? "",
+    note: parsed.data.note ?? null,
+  });
+  if (!reason) {
+    return validationFailed("Say why this appeal was turned down.", {
+      reason: "Choose a reason or write a note.",
+    });
+  }
 
-  await pruneEmptyAppealParents(sb, [appealId]);
+  const rejected = await rejectAppealItem(sb, { itemId, reason, reviewerRole });
+  if (!rejected.ok) {
+    if (rejected.reason === "already_resolved") return alreadyResolved(rejected.message);
+    return internalError();
+  }
+
   await logAudit({
-    action: "appeal_rejected",
-    actor: {
-      role: g.session.role,
-      memberId: g.session.actor?.id ?? null,
-      name: g.session.actor?.name ?? null,
-    },
+    action: "appeal_rejected_with_reason",
+    actor: { role: g.session.role, memberId: g.session.actor?.id ?? null, name: g.session.actor?.name ?? null },
     entityType: "attendance_appeal_item",
-    entityId: id,
-    meta: { sessionId, memberId: item.member_id },
+    entityId: itemId,
+    meta: { sessionId, memberId: item.member_id, reason },
     ip: getClientIp(req.headers),
   });
-  return NextResponse.json({ ok: true });
+
+  return jsonOk({ rejected: 1, reason });
 }

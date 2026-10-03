@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { dataOf, messageOf, readEnvelope } from "@/lib/api/client";
 
 /**
  * ATT-2 manual button: "Create this weekend's sessions".
@@ -24,24 +25,24 @@ export function CreateWeekendButton() {
         method: "POST",
         credentials: "same-origin",
       });
-      const body = (await res.json().catch(() => null)) as
-        | {
-            sunday?: string;
-            created?: { mass_name: string }[];
-            skipped?: string[];
-            reason?: string | null;
-            message?: string;
-            error?: string;
-          }
-        | null;
+      const env = await readEnvelope<{
+        sunday?: string;
+        created?: { mass_name: string }[];
+        skipped?: string[];
+        reason?: string | null;
+      }>(res);
 
       if (!res.ok) {
-        setState({ kind: "error", text: body?.message ?? body?.error ?? "Could not create the sessions." });
+        setState({ kind: "error", text: messageOf(env, "Could not create the sessions.") });
         return;
       }
 
-      const created = body?.created?.length ?? 0;
-      const skipped = body?.skipped?.length ?? 0;
+      // Enveloped: the report lives under `data`. Read off the top level every field was undefined,
+      // so this button created the sessions and then announced "Created 0 sessions for undefined" --
+      // which reads as a failure and invites a pointless retry.
+      const body = dataOf(env) ?? {};
+      const created = body.created?.length ?? 0;
+      const skipped = body.skipped?.length ?? 0;
 
       if (body?.reason === "no_default_sunday_masses") {
         setState({ kind: "error", text: "No Mass is set as a Sunday Mass. An admin can set that up." });
@@ -55,16 +56,16 @@ export function CreateWeekendButton() {
       if (created && skipped) {
         setState({
           kind: "done",
-          text: `Created ${created} for ${body?.sunday}. ${skipped} already existed.`,
+          text: `Created ${created} for ${body.sunday}. ${skipped} already existed.`,
         });
         return;
       }
       if (skipped) {
-        setState({ kind: "done", text: `Already set up for ${body?.sunday}.` });
+        setState({ kind: "done", text: `Already set up for ${body.sunday}.` });
         return;
       }
 
-      setState({ kind: "done", text: `Created ${created} session${created === 1 ? "" : "s"} for ${body?.sunday}.` });
+      setState({ kind: "done", text: `Created ${created} session${created === 1 ? "" : "s"} for ${body.sunday}.` });
     } catch {
       setState({ kind: "error", text: "Could not reach the server." });
     }
@@ -83,7 +84,7 @@ export function CreateWeekendButton() {
       </Button>
       {state.text ? (
         <p
-          className={`mt-2 text-sm ${state.kind === "error" ? "text-[var(--danger)]" : "text-[var(--muted)]"}`}
+          className={`mt-2 text-sm ${state.kind === "error" ? "text-[var(--danger)]" : "text-[var(--text-muted)]"}`}
           role="status"
         >
           {state.text}

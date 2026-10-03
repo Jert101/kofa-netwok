@@ -168,18 +168,18 @@ export function SignupForm({ ...props }: React.ComponentProps<typeof Card>) {
             className="rounded-full"
             priority
           />
-          <CheckCircle2 className="size-10 text-[var(--accent)]" aria-hidden />
-          <CardTitle className="text-xl text-[var(--accent)]">
+          <CheckCircle2 className="size-10 text-[var(--brand)]" aria-hidden />
+          <CardTitle as="h1" className="text-xl text-[var(--brand)]">
             Application received
           </CardTitle>
-          <CardDescription className="text-[var(--muted)]">
+          <CardDescription className="text-[var(--text-muted)]">
             An admin will review it. Keep this code to check the outcome.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {referenceCode ? (
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
-              <p className="text-xs text-[var(--muted)]">Your reference code</p>
+              <p className="text-xs text-[var(--text-muted)]">Your reference code</p>
               <p className="mt-1 font-mono text-2xl font-semibold tracking-[0.25em] text-[var(--text)]">
                 {referenceCode}
               </p>
@@ -198,7 +198,7 @@ export function SignupForm({ ...props }: React.ComponentProps<typeof Card>) {
               </Button>
             </div>
           ) : null}
-          <p className="text-xs text-[var(--muted)]">
+          <p className="text-xs text-[var(--text-muted)]">
             Write this down. We cannot show it to you again.
           </p>
           <div className="flex flex-col gap-2">
@@ -230,10 +230,10 @@ export function SignupForm({ ...props }: React.ComponentProps<typeof Card>) {
           />
         </div>
         <div className="space-y-1.5 text-center">
-          <CardTitle className="text-xl text-[var(--accent)]">
+          <CardTitle as="h1" className="text-xl text-[var(--brand)]">
             Membership application
           </CardTitle>
-          <CardDescription className="text-[var(--muted)]">
+          <CardDescription className="text-[var(--text-muted)]">
             Knights of the Altar
           </CardDescription>
         </div>
@@ -282,7 +282,7 @@ export function SignupForm({ ...props }: React.ComponentProps<typeof Card>) {
 
             <Field data-invalid={errors.middle_initial ? true : undefined}>
               <FieldLabel htmlFor="middle_initial">
-                Middle initial <span className="text-[var(--muted)]">(optional)</span>
+                Middle initial <span className="text-[var(--text-muted)]">(optional)</span>
               </FieldLabel>
               <Input
                 id="middle_initial"
@@ -315,7 +315,7 @@ export function SignupForm({ ...props }: React.ComponentProps<typeof Card>) {
                 {GENDER_OPTIONS.map((option) => (
                   <label
                     key={option.value}
-                    className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm has-checked:border-[var(--accent)] has-checked:bg-[var(--accent-soft)]"
+                    className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm has-checked:border-[var(--brand)] has-checked:bg-[var(--brand-soft)]"
                   >
                     <input
                       type="radio"
@@ -324,7 +324,7 @@ export function SignupForm({ ...props }: React.ComponentProps<typeof Card>) {
                       onChange={() =>
                         setValue("gender", option.value, { shouldValidate: true })
                       }
-                      className="accent-[var(--accent)]"
+                      className="accent-[var(--brand)]"
                     />
                     {option.label}
                   </label>
@@ -381,7 +381,7 @@ export function SignupForm({ ...props }: React.ComponentProps<typeof Card>) {
             <Button
               type="submit"
               disabled={isSubmitting}
-              className="h-13 w-full rounded-xl bg-[var(--accent)] text-base font-semibold text-white hover:bg-[var(--accent)]/90"
+              className="h-13 w-full rounded-xl bg-[var(--brand)] text-base font-semibold text-white hover:bg-[var(--brand)]/90"
             >
               {isSubmitting ? (
                 <>
@@ -393,11 +393,11 @@ export function SignupForm({ ...props }: React.ComponentProps<typeof Card>) {
               )}
             </Button>
 
-            <FieldDescription className="text-center text-[var(--muted)]">
+            <FieldDescription className="text-center text-[var(--text-muted)]">
               Already applied?{" "}
               <Link
                 href="/login"
-                className="font-medium text-[var(--accent)] underline underline-offset-4"
+                className="font-medium text-[var(--brand)] underline underline-offset-4"
               >
                 Sign in
               </Link>

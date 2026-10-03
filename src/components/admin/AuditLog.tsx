@@ -151,7 +151,7 @@ export function AuditLog() {
         <CardContent className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-3">
             <div>
-              <label htmlFor="audit-role" className="text-xs text-[var(--muted)]">
+              <label htmlFor="audit-role" className="text-xs text-[var(--text-muted)]">
                 Role
               </label>
               <Select value={role} onValueChange={setRole}>
@@ -170,7 +170,7 @@ export function AuditLog() {
             </div>
 
             <div>
-              <label htmlFor="audit-action" className="text-xs text-[var(--muted)]">
+              <label htmlFor="audit-action" className="text-xs text-[var(--text-muted)]">
                 Action
               </label>
               <Select value={action} onValueChange={setAction}>
@@ -189,7 +189,7 @@ export function AuditLog() {
             </div>
 
             <div>
-              <label htmlFor="audit-window" className="text-xs text-[var(--muted)]">
+              <label htmlFor="audit-window" className="text-xs text-[var(--text-muted)]">
                 When
               </label>
               <Select value={windowDays} onValueChange={setWindowDays}>
@@ -239,7 +239,7 @@ export function AuditLog() {
             </Button>
           </form>
 
-          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--muted)]">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-muted)]">
             <span>
               {data ? `${data.total} event${data.total === 1 ? "" : "s"}` : "…"} · page {page} of{" "}
               {totalPages}
@@ -263,9 +263,9 @@ export function AuditLog() {
 
       <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
         {loading && !data ? (
-          <p className="p-6 text-center text-sm text-[var(--muted)]">Loading…</p>
+          <p className="p-6 text-center text-sm text-[var(--text-muted)]">Loading…</p>
         ) : data && data.items.length === 0 ? (
-          <p className="p-6 text-center text-sm text-[var(--muted)]">
+          <p className="p-6 text-center text-sm text-[var(--text-muted)]">
             No events match these filters.
           </p>
         ) : (
@@ -284,23 +284,23 @@ export function AuditLog() {
                       {row.actor_name ?? "Unknown actor"}
                     </span>
                     {row.actor_role ? (
-                      <span className="text-xs text-[var(--muted)]">
+                      <span className="text-xs text-[var(--text-muted)]">
                         {ROLE_LABEL[row.actor_role as keyof typeof ROLE_LABEL] ?? row.actor_role}
                       </span>
                     ) : null}
                   </div>
-                  <time dateTime={row.at} className="text-xs text-[var(--muted)]">
+                  <time dateTime={row.at} className="text-xs text-[var(--text-muted)]">
                     {formatTimestamp(row.at)}
                   </time>
                 </div>
                 {row.entity_type ? (
-                  <p className="mt-1 text-xs text-[var(--muted)]">
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">
                     {row.entity_type}
                     {row.entity_id ? ` · ${row.entity_id}` : ""}
                   </p>
                 ) : null}
                 {summarizeMeta(row.meta) ? (
-                  <p className="mt-1 break-words text-xs text-[var(--muted)]">
+                  <p className="mt-1 break-words text-xs text-[var(--text-muted)]">
                     {summarizeMeta(row.meta)}
                   </p>
                 ) : null}
@@ -320,7 +320,7 @@ export function AuditLog() {
         >
           Newer
         </Button>
-        <span className="text-xs text-[var(--muted)]">
+        <span className="text-xs text-[var(--text-muted)]">
           Page {page} of {totalPages}
         </span>
         <Button

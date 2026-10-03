@@ -1,10 +1,10 @@
 # 09 — Payments
 
-**Status:** Not started
+**Status:** Code complete. Proration, edit rules, duplicate guard, void, ledger, overdue, exports and the limited lookup are built and covered by 108 unit tests. Manual QA (section 12) not yet run.
 **Roles:** treasurer (manage), admin (read), other roles (limited lookup, see decision D-9)
 **Depends on:** 03
 **Size:** M
-**Migration:** 031
+**Migration:** 032 (module 08 took 031)
 
 ## 1. Purpose
 
@@ -89,11 +89,15 @@ Track dues without spreadsheets, and make the treasurer's day easier: safer reco
 ### PAY-7 Limited lookup
 
 - Secretary, officer and member pages are replaced by one lookup page. Search a member, see structure names and whether they are **paid up**, without amounts, unless the searcher is the declared person (D-1) or the treasurer or admin.
-- Decision D-9: the recommendation is that only the treasurer and admin see all balances. Confirm before building.
+- Decision D-9: **resolved as recommended** -- only the treasurer and admin see all balances. Implemented in `src/lib/payments/visibility.ts` and enforced in the API, not the UI. A signed-in person always sees their own figures; everyone else sees structure names and a paid-up flag with no peso amount. This is a policy decision and is called out in the handoff.
 
 ### PAY-8 Proration function
 
-- One pure function `amountDueByDate(structure, asOf)` and `balance(structure, payments, asOf)`. Extract the current formula from the code into it, with tests, and do not change results for existing data unless agreed. Decision D-7: paste the current calculation before this module starts.
+- One pure function `amountDueByDate(structure, asOf)` and `balance(structure, payments, asOf)`, in `src/lib/payments/proration.ts`, with 53 tests.
+- Decision D-7 answer: **there was no proration to paste.** The `deadline` column was stored, validated and printed but never entered an arithmetic expression, and `installment_months` only ever allocated already-paid money into the PDF's month columns. The one formula the app had, written four times with three small disagreements between them, was `paid = SUM(amount_paid WHERE NOT voided); remaining = MAX(0, amount - paid)`.
+- `balance()` is that formula, extracted exactly and pinned by tests, so no total the parish has ever been shown moves.
+- `amountDueByDate()` is therefore **new** behaviour and the only new rule in the module: with installments, installment `i` falls in `first_installment_month + i` and everything up to and including the month of `asOf` is due; a past deadline makes the whole amount due from the day after it; with no installments the full amount is always due, which is the old behaviour. It reuses the month anchoring the structure PDF already had, so the ledger and the PDF agree instead of each inventing a schedule.
+- The last installment absorbs the rounding remainder, so installments always sum to exactly the structure amount.
 
 ## 5. API
 
@@ -110,7 +114,7 @@ Track dues without spreadsheets, and make the treasurer's day easier: safer reco
 | GET | `/api/payments/lookup?q=` | signed in | New. Limited fields per D-9 |
 | GET | `/api/treasurer/summary` | treasurer, admin | New. Home cards |
 
-## 6. Data (migration 031)
+## 6. Data (migration 032)
 
 ```txt
 payments
@@ -122,7 +126,7 @@ INDEX payments(payment_structure_id, member_id) WHERE voided = false
 INDEX payments(paid_at DESC)
 ```
 
-No changes to structures. The edit rule is enforced in the route.
+Plus `payment_structures.first_installment_month` (a nullable `YYYY-MM` anchor, defaulting to `created_at`) and five partial indexes for the ledger, the overdue list and the duplicate guard. The edit rule is enforced in the route.
 
 ## 7. Business rules
 
@@ -174,6 +178,8 @@ No changes to structures. The edit rule is enforced in the route.
 - Lookup field filtering by role and declared identity.
 
 ## 12. QA checklist
+
+Deferred to final handoff, like every other module's manual pass. The automated gates run clean; these need a real database and a real browser.
 
 - [ ] Flow E end to end: create structure, partial payments, an accidental duplicate, void, print the PDF.
 - [ ] Try to edit the amount after a payment.

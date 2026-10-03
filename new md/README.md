@@ -19,15 +19,15 @@ The system reference for the *current* app is [`docs/README.md`](../docs/README.
 | 00 | [Conventions](00-conventions.md) | — | — | — |
 | 01 | [Framework](01-framework.md) — shell, login, register, shared components | — | M | — |
 | 02 | [Auth & security](02-auth-security.md) — PINs, throttling, sessions, audit log | 01 | L | 023, 024 |
-| 03 | [Registration & members](03-registration-members.md) | 01, 02 | L | 025 |
-| 04 | [Masses & attendance](04-masses-attendance.md) | 03 | L | 026 |
-| 05 | [Appeals](05-appeals.md) | 04 | M | 027 |
-| 06 | [Reports](06-reports.md) — generate, approve, archive, export | 04, 05 | L | 028 |
-| 07 | [Liturgy](07-liturgy.md) | 03, 04 | M | 029 |
-| 08 | [Announcements & notifications](08-announcements-notifications.md) | 02 | M | 030 |
-| 09 | [Payments](09-payments.md) | 03 | M | 031 |
-| 10 | [Dashboards & insights](10-dashboards-insights.md) | 04–09 | M | 032 |
-| 11 | [Settings & system](11-settings-system.md) | 02 | S | 033 |
+| 03 | [Registration & members](03-registration-members.md) | 01, 02 | L | 025, 026 |
+| 04 | [Masses & attendance](04-masses-attendance.md) | 03 | L | 027 |
+| 05 | [Appeals](05-appeals.md) | 04 | M | 028 |
+| 06 | [Reports](06-reports.md) - generate, approve, archive, export | 04, 05 | L | 029 |
+| 07 | [Liturgy](07-liturgy.md) | 03, 04 | M | 030 |
+| 08 | [Announcements & notifications](08-announcements-notifications.md) | 02 | M | 031 |
+| 09 | [Payments](09-payments.md) | 03 | M | 032 |
+| 10 | [Dashboards & insights](10-dashboards-insights.md) | 04-09 | M | 033 |
+| 11 | [Settings & system](11-settings-system.md) | 02 | S | 034 |
 
 Size is relative effort: S small, M medium, L large.
 
@@ -71,9 +71,9 @@ These are proposals. Confirm each before the module that needs it starts.
 | D-4 | Move report PDFs from base64-in-database to Supabase Storage. | Yes, as the last task of module 06. Old rows stay readable. | 06 |
 | D-5 | Keep rejected reports as history instead of deleting them at regenerate. | Yes. Replace the unique month index with a partial index. | 06 |
 | D-6 | Block attendance encoding for future-dated sessions. | Yes. It is a new rule. | 04 |
-| D-7 | Confirm the installment proration formula used by payments today. | Extract from code into one tested function. Paste the current code before module 09. | 09 |
+| D-7 | Confirm the installment proration formula used by payments today. | **Resolved.** There was none: the deadline column was decorative and the balance formula was duplicated four times. `balance()` is the extracted-and-pinned original; `amountDueByDate()` is new behaviour, anchored on the month bucketing the PDF already used. See module 09 section 4. | 09 |
 | D-8 | Public source for the batch dropdown on `/register`. | Confirm which endpoint the page uses today. If none is public, add `GET /api/public/batches`. | 01 |
-| D-9 | Who may see payment balances? | Treasurer and admin see all. Other roles see only the person they declared under D-1. | 09 |
+| D-9 | Who may see payment balances? | **Resolved as recommended.** Treasurer and admin see all. Everyone else sees structure names and a paid-up flag with no amount, plus their own figures. Enforced in the API, not the UI. | 09 |
 
 ## Glossary
 

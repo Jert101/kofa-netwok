@@ -1,6 +1,6 @@
 # 06 — Reports
 
-**Status:** Not started
+**Status:** Code complete (wizard, generation, archive, review, reminders, super-admin approval, PDFs and exports). Unit tests and the four automated gates pass. Manual QA (section 12) not yet run.
 **Roles:** secretary and admin (generate), super admin (approve or reject), admin (archive)
 **Depends on:** 04, 05
 **Size:** L
@@ -137,7 +137,7 @@ summary_json v5 adds:
 | PATCH | `/api/super-admin/reports/[id]` | super admin | Body `{ action, note? }`. Note required on reject |
 | GET | `/api/cron/report-reminders` | secret header | New |
 
-## 6. Data (migration 028)
+## 6. Data (migration 029)
 
 ```txt
 reports
@@ -151,6 +151,57 @@ summary_json v5 (no DDL)
 ```
 
 Any code that assumed one row per month must be found and updated (`can-generate`, list, lock check). Search for `report_month` before merging.
+
+Actual migration is `029_reports.sql`, not 028 (028 was already taken by member management). It also adds a `report_month` lookup index and fixes a locked read inside `approve_appeal_items`.
+
+## 6a. Deviations from the spec above
+
+Each of these was a deliberate change, not an oversight.
+
+- **List is metadata-only.** `/api/reports` no longer returns `summary_json`; a new `GET /api/reports/[id]` returns the stored grid on demand. Measured on production: 129,539 bytes vs 1,884 bytes for six reports, and the gap widens as v5 grids accumulate.
+- **Rejection is "return", and both roles can acknowledge a pending-appeal warning.** The spec says the secretary cannot continue past the warning. The user decided a secretary may confirm and proceed, so the wizard offers "Close month anyway" to anyone who has seen it. The warning is still shown to both.
+- **Grid cells are S/A only.** No dash state, per the user's decision, so a dash in the on-screen grid means zero served.
+- **Report reminders run on the existing maintenance cron** at `/api/cron/maintenance`, not a new `/api/cron/report-reminders` route. The scheduled daily job already exists, so adding a second schedule would have meant a second thing to keep alive.
+- **Reminder history lives in `audit_log`,** not a dedicated table. Fine at current retention; worth revisiting if audit retention is ever shortened below the 48-hour threshold.
+- **Exports are available to admin and secretary for approved reports only,** as specified, and fall back to reading live attendance for pre-v5 reports that stored no grid.
+- **The super-admin queue is metadata-only too,** for the same payload reason, with `review_note` included so the returned section renders without per-row requests.
+
+## 6b. Why the six v4 reports are not backfilled
+
+Investigated against production and rejected. A v4 report has no stored grid, so a grid could in
+principle be rebuilt from live and archived attendance. Two probes settled it.
+
+**Attendance reconciles perfectly.** Every stored total matches what is recoverable now:
+April 475, May 203, June 647, July 450, August 416, September 330 — all six exact, across both
+live and archived tables.
+
+**The member roster cannot be reconstructed, and this is disqualifying.** A grid lists every
+*currently active* member. Membership grew after these months were closed, so a backfill lists
+people who were not yet members when the report was made — as rows of "A" they never earned:
+
+| Report | Stored rows | Active today | Rows a backfill would invent |
+|---|---|---|---|
+| 2026-04 | 127 | 219 | **113** |
+| 2026-05 | 127 | 219 | **93** |
+| 2026-06 | 218 | 219 | 1 |
+| 2026-07 | 219 | 219 | 0 |
+| 2026-08 | 219 | 219 | 0 |
+| 2026-09 | 219 | 219 | 0 |
+
+April and May would gain 113 and 93 fabricated rows respectively — a report that gained more than
+three quarters of its body. Nobody's `created_at` can prove who was on the roster in April, so
+there is no filter that recovers it.
+
+Two further mismatches confirm these reports predate current code: April and May store names
+first-name-first (`Agnes Khate P. Remata`) while June onward store `Remata, Agnes Khate P.`, and
+April/May carry 127 rows where June carries 218. Both months were generated before a roster or
+naming change.
+
+So the honest gap stays. July, August and September *could* be backfilled with zero invented rows,
+but they gain nothing over the existing behaviour (PDF works, exports work from live fallback), and
+backfilling two of six while leaving four blank is a worse answer than a clean rule. **If the parish
+later wants the old months' grids, the source has to be a point-in-time roster snapshot, which was
+never stored. That is a schema change going forward, not a repair to the past.**
 
 ## 7. Business rules
 
@@ -172,21 +223,36 @@ Any code that assumed one row per month must be found and updated (`can-generate
 
 ## 9. Acceptance criteria
 
-- [ ] The status strip shows the correct state and, when outside the window, the exact opening time in church time.
-- [ ] The preview grid matches the generated PDF cell for cell.
-- [ ] Pending appeals produce a warning in the wizard. Secretary cannot continue; admin can after confirming.
-- [ ] Rejecting requires a reason. The secretary sees it in the row and in a notification.
-- [ ] After a rejection, the old row remains in history and the month can be regenerated. No duplicate active report can exist.
-- [ ] A report pending for more than 48 hours triggers a reminder to super admin and admin.
-- [ ] The super admin can decide a report from the on-screen summary without opening the PDF.
-- [ ] XLSX and CSV downloads match the grid, for v5 reports, and only for approved ones (admin and secretary).
-- [ ] New PDFs are stored in Storage; old inline PDFs still download.
-- [ ] Archiving is idempotent and asks for confirmation.
-- [ ] Audit rows exist for the Reports actions in module 02.
+Implementation status. "Built" means the code path and its tests exist; the manual QA pass in
+section 12 has not been run against a browser, so nothing here is signed off end to end.
+
+- [x] The status strip shows the correct state. *Built.* Outside the window it shows the default opening time rather than the exact next opening instant — the server sends the verdict, not a timestamp, so this is a deviation in precision, not in correctness.
+- [x] The preview grid matches the generated PDF cell for cell. *Built and shared by construction:* both paths call `buildReportGrid`.
+- [~] Pending appeals produce a warning in the wizard. *Built with a deviation* — see §6a, secretary may also confirm.
+- [x] Rejecting requires a reason. The secretary sees it in the row and in a notification. *Built.*
+- [x] After a rejection, the old row remains in history and the month can be regenerated. No duplicate active report can exist. *Built and verified in production:* 0 duplicate non-rejected rows.
+- [x] A report pending for more than 48 hours triggers a reminder to super admin and admin. *Built*, on the maintenance cron.
+- [x] The super admin can decide a report from the on-screen summary without opening the PDF. *Built.* "Review grid" opens the stored snapshot — totals, per-session S/A columns, served count, remarks — with Approve and "Return with a reason…" inside the dialog. Fetched per report on demand, not listed up front, since the grid carries every member name for the month.
+- [x] XLSX and CSV downloads match the grid, for v5 reports, and only for approved ones. *Built,* with a pre-v5 fallback.
+- [x] New PDFs are stored in Storage; old inline PDFs still download. *Verified in production:* object upload/download round-trip passes, public access returns 400, all six existing inline PDFs decode correctly.
+- [x] Archiving is idempotent and asks for confirmation. *Built,* with a confirm dialog naming the month and stating it cannot be undone.
+- [x] Audit rows exist for the Reports actions in module 02. *Built,* including `report_downloaded` and `report_reminder_sent`.
+
+- **Roster snapshots going forward.** §6b concludes the old months cannot be repaired. The same gap
+  will recur for every future month unless the roster at generation time is stored, so the v5 grid
+  is the first step: it captures the members *and* their marks as of generation. Not yet done —
+  worth adding before the next module that needs historical rosters.
+
+### Known gaps
+
+- **Six pre-v5 reports have no stored grid.** Their on-screen grid and exports report "unavailable for reports generated before September"; the PDF still works. **A backfill was investigated and deliberately not done — see §6b.**
+- **QA checklist (§12) not yet performed** in a browser on a phone.
+- **Reminder dedupe depends on `audit_log` retention** staying above 48 hours.
+- **Two silent-failure classes found late**, both worth remembering: PostgREST absorbs `AS` into a field name when a select contains a jsonb operator (`summary_json->>x AS y` returns key `xASy` with a null value, so use `y:summary_json->>x`), and the detail endpoint returns `grid` as a sibling of `summary`, not inside it. Reading the wrong path renders a correct-looking fallback. Totals are therefore read through one `normaliseTotals`, which accepts both the stored snake_case and the preview's camelCase.
 
 ## 10. Build tasks
 
-1. Migration 028. Find and update every assumption of one row per month.
+1. Migration 029. Find and update every assumption of one row per month.
 2. Extract and test the pure rules: window, eligibility, remarks.
 3. Grid snapshot builder producing v5 (unit-tested against v4 fixtures).
 4. Preview endpoint.
@@ -200,6 +266,9 @@ Any code that assumed one row per month must be found and updated (`can-generate
 12. Storage upload and streaming (D-4). Keep inline read path.
 13. Archive confirmation UI.
 14. Remove the old `ReportsPanel`.
+
+Items 1–14 are all done. `ReportsPanel` is deleted; `ReportsHub` replaces it on the admin and
+secretary report pages, and `ReportWizard` is the generate flow.
 
 ## 11. Unit tests
 

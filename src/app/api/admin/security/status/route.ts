@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { requireRole } from "@/lib/api/guard";
 import { internalError, jsonOk } from "@/lib/api/response";
 import { findRolesOnDefaultPin, findRolesSharingAStoredHash, countPendingReports, PIN_HASH_KEY, ROLES } from "@/lib/auth/pin-service";
-import { getAllSettings, getSettingsUpdatedAt } from "@/lib/settings/store";
+import { getAllInternalSettings, getInternalSettingsUpdatedAt } from "@/lib/settings/store";
 import { SESSIONS_VALID_AFTER_KEY } from "@/lib/auth/session-valid";
 import { DEFAULT_PIN } from "@/lib/auth/pin-rules";
 
@@ -14,10 +14,10 @@ export async function GET(req: NextRequest) {
   if (!g.ok) return g.response;
 
   try {
-    const settings = await getAllSettings();
+    const settings = await getAllInternalSettings();
     const defaults = await findRolesOnDefaultPin();
     const sharedHash = findRolesSharingAStoredHash(settings);
-    const changedAt = await getSettingsUpdatedAt(ROLES.map((r) => PIN_HASH_KEY[r]));
+    const changedAt = await getInternalSettingsUpdatedAt(ROLES.map((r) => PIN_HASH_KEY[r]));
 
     const roles = ROLES.map((role) => ({
       role,

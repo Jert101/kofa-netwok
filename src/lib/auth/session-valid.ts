@@ -1,7 +1,7 @@
 import type { SessionPayload } from "./session";
 import type { Role } from "./roles";
-import { getAllSettings } from "@/lib/settings/store";
-import type { SettingKey } from "@/lib/settings/keys";
+import { getAllInternalSettings } from "@/lib/settings/store";
+type SettingKey = string;
 
 /** Small tolerance so clock skew between signing and checking cannot sign people out. */
 export const CLOCK_SKEW_TOLERANCE_MS = 5_000;
@@ -67,7 +67,7 @@ export async function isSessionValidForRole(
   session: SessionPayload,
   nowMs: number = Date.now(),
 ): Promise<boolean> {
-  const settings = await getAllSettings();
+  const settings = await getAllInternalSettings();
   return isSessionValid(session.iat, settings[SESSIONS_VALID_AFTER_KEY[session.role]], nowMs);
 }
 

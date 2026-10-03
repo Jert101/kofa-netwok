@@ -1,57 +1,137 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 export type AnnouncementItem = {
   id: string;
   title: string;
   body: string;
-  created_by: "admin" | "secretary" | "officer";
+  created_by: "admin" | "secretary" | "officer" | "system";
   created_at: string;
+  updated_at: string | null;
+  delete_at: string | null;
+  pinned: boolean;
+  audience?: string;
 };
 
-/** Same announcement list for every role (GET /api/announcements, not ?mine=1). */
-export function AnnouncementsFeed() {
-  const [announcements, setAnnouncements] = useState<AnnouncementItem[] | null>(null);
+const PAGE = 5;
 
-  useEffect(() => {
-    (async () => {
-      const res = await fetch("/api/announcements", { credentials: "same-origin" });
+/**
+ * COM-2: the announcements feed.
+ *
+ * Reads `GET /api/announcements`, which already applied the audience filter and the pin order on the
+ * server. Doing either here would be the bug P3 describes: a post meant for one batch would still
+ * exist in the payload the browser had downloaded, and hiding it in the UI is a promise, not a rule.
+ *
+ * System posts look different because they are generated. A birthday greeting rendered like an
+ * officer's notice reads as something a human wrote to them, and the parish would thank the wrong
+ * person.
+ */
+export function AnnouncementsFeed() {
+  const [rows, setRows] = useState<AnnouncementItem[] | null>(null);
+  const [shown, setShown] = useState(PAGE);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch("/api/announcements", {
+        credentials: "same-origin",
+        cache: "no-store",
+      });
       if (!res.ok) {
-        setAnnouncements([]);
+        setError("Could not load announcements.");
+        setRows([]);
         return;
       }
       const j = (await res.json()) as { announcements?: AnnouncementItem[] };
-      setAnnouncements(j.announcements ?? []);
-    })();
+      setError(null);
+      setRows(j.announcements ?? []);
+    } catch {
+      setError("Could not load announcements.");
+      setRows([]);
+    }
   }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  if (rows === null) {
+    return (
+      <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+        <h2 className="text-sm font-semibold text-[var(--brand)]">Announcements</h2>
+        <p className="mt-2 text-sm text-[var(--text-muted)]">Loading announcements...</p>
+      </section>
+    );
+  }
+
+  const visible = rows.slice(0, shown);
 
   return (
     <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
-      <h2 className="text-sm font-semibold text-[var(--accent)]">Announcements</h2>
-      {announcements === null ? (
-        <p className="mt-2 text-sm text-[var(--muted)]">Loading announcements…</p>
-      ) : announcements.length === 0 ? (
-        <p className="mt-2 text-sm text-[var(--muted)]">No announcements yet.</p>
+      <h2 className="text-sm font-semibold text-[var(--brand)]">Announcements</h2>
+
+      {error ? <p className="mt-2 text-sm text-[var(--danger)]">{error}</p> : null}
+
+      {rows.length === 0 ? (
+        <p className="mt-2 text-sm text-[var(--text-muted)]">No announcements yet.</p>
       ) : (
-        <ul className="mt-3 space-y-2">
-          {announcements.map((a) => (
-            <li key={a.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)]">
-              <details className="group">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-3">
-                  <span className="font-medium text-[var(--text)]">{a.title}</span>
-                  <span className="text-xs text-[var(--muted)] group-open:rotate-180">▼</span>
-                </summary>
-                <div className="border-t border-[var(--border)] px-3 pb-3 pt-2">
-                  <p className="whitespace-pre-wrap text-sm text-[var(--muted)]">{a.body}</p>
-                  <p className="mt-2 text-xs text-[var(--muted)]">
-                    By {a.created_by} · {new Date(a.created_at).toLocaleString()}
-                  </p>
-                </div>
-              </details>
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="mt-3 space-y-2">
+            {visible.map((a) => {
+              const system = a.created_by === "system";
+              return (
+                <li
+                  key={a.id}
+                  id={a.id}
+                  className={
+                    "rounded-xl border bg-[var(--surface-2)] " +
+                    (a.pinned ? "border-[var(--brand)]" : "border-[var(--border)]") +
+                    (system ? " bg-[var(--surface)]" : "")
+                  }
+                >
+                  <details className="group">
+                    <summary className="flex cursor-pointer list-none items-start justify-between gap-3 p-3">
+                      <span className="min-w-0">
+                        <span className="flex flex-wrap items-center gap-2">
+                          {a.pinned ? (
+                            <span className="rounded-full bg-[var(--brand)] px-2 py-0.5 text-xs font-medium text-white">
+                              Pinned
+                            </span>
+                          ) : null}
+                          <span className="font-medium text-[var(--text)]">{a.title}</span>
+                        </span>
+                        <span className="mt-1 block text-xs text-[var(--text-muted)]">
+                          {system ? "Parish office" : `By ${a.created_by}`}
+                          {" · "}
+                          {new Date(a.created_at).toLocaleDateString()}
+                          {a.updated_at ? " · Edited" : ""}
+                          {a.audience && a.audience !== "Everyone" ? ` · For ${a.audience}` : ""}
+                        </span>
+                      </span>
+                      <span aria-hidden className="mt-1 text-xs text-[var(--text-muted)] group-open:rotate-180">
+                        ▼
+                      </span>
+                    </summary>
+                    <div className="border-t border-[var(--border)] px-3 pb-3 pt-2">
+                      <p className="whitespace-pre-wrap text-sm text-[var(--text-muted)]">{a.body}</p>
+                    </div>
+                  </details>
+                </li>
+              );
+            })}
+          </ul>
+
+          {rows.length > shown ? (
+            <button
+              type="button"
+              onClick={() => setShown((n) => n + PAGE * 2)}
+              className="mt-3 min-h-11 w-full rounded-xl border border-[var(--border)] text-sm font-medium"
+            >
+              Show older ({rows.length - shown} more)
+            </button>
+          ) : null}
+        </>
       )}
     </section>
   );

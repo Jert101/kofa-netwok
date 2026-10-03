@@ -6,10 +6,11 @@ import { guardSessionWrite } from "@/lib/attendance/guard-session-write";
 import { deleteLiturgyLinkedAnnouncement } from "@/lib/attendance/liturgy-announcement";
 import { monthBounds, monthLabel } from "@/lib/reports/report-lock";
 import { notifyAttendanceSessionUpdated } from "@/lib/push/attendance-notify";
-import { loadRoster } from "@/features/attendance/server/load-roster";
+import { loadRoster, type RosterEntry } from "@/features/attendance/server/load-roster";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getSetting } from "@/lib/settings/store";
 import { guardReportNotGenerated } from "@/lib/reports/check-report-lock";
+import { appealWindowFor } from "@/features/appeals/server/appeals";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -94,7 +95,20 @@ export async function GET(req: NextRequest, ctx: Ctx) {
   // disable its toggles on first paint rather than after a failed tap. The server
   // guard remains the source of truth; this is only what the UI mirrors.
   const timeZone = await getSetting("report_timezone");
-  const { roster } = await loadRoster(sb, id, timeZone);
+
+  // loadRoster throws when one of its own queries fails, and nothing in this handler caught it, so
+  // the failure reached the browser as a 500 with an empty body -- indistinguishable from a broken
+  // link and impossible to diagnose from the page. Caught here so the reason is logged and the
+  // secretary gets a real message. Deliberately not degraded to an empty roster: an empty roster
+  // reads as "this Mass has nobody on it", and encoding into it would write wrong attendance.
+  let roster: RosterEntry[];
+  try {
+    ({ roster } = await loadRoster(sb, id, timeZone));
+  } catch (cause) {
+    console.error("[attendance/session] roster load failed:", cause instanceof Error ? cause.message : cause);
+    return NextResponse.json({ error: "Could not load the roster for this session." }, { status: 500 });
+  }
+
   const guard = await guardReportNotGenerated(sb, String(session.session_date));
   const future = canEncodeSession(session.session_date as string, new Date(), timeZone);
 
@@ -134,6 +148,40 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       }
     }
     payload.member_ids_cannot_appeal = [...cannotAppeal];
+
+    // APL-1/APL-6: the card prints its own deadline, so the member is not left
+    // submitting only to be told it closed.
+    payload.appeal_window = await appealWindowFor(sb, String(session.session_date));
+
+    // APL-4: the member's own appeals and how each was decided. Only available when a
+    // declared identity exists; without one, every row would belong to anyone.
+    const actorId = g.session.actor?.id;
+    if (actorId) {
+      const { data: mine } = await sb
+        .from("attendance_appeal_items")
+        .select(
+          "id, status, resolution, reject_reason, reviewed_at, created_at, attendance_appeals!inner(submitted_at, note)",
+        )
+        .eq("member_id", actorId)
+        .eq("attendance_appeals.session_id", id)
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      payload.my_appeals = (mine ?? []).map((row) => {
+        const parent = (
+          Array.isArray(row.attendance_appeals) ? row.attendance_appeals[0] : row.attendance_appeals
+        ) as { submitted_at?: string; note?: string | null } | null;
+        return {
+          id: String(row.id),
+          status: String(row.status),
+          resolution: (row.resolution as string | null) ?? null,
+          reject_reason: (row.reject_reason as string | null) ?? null,
+          reviewed_at: (row.reviewed_at as string | null) ?? null,
+          submitted_at: parent?.submitted_at ?? String(row.created_at),
+          note: parent?.note ?? null,
+        };
+      });
+    }
   }
 
   return NextResponse.json(payload);

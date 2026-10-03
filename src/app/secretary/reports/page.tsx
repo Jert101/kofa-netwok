@@ -1,4 +1,4 @@
-import { ReportsPanel } from "@/components/ReportsPanel";
+import { ReportsHub } from "@/components/ReportsHub";
 import Image from "next/image";
 
 export default function SecretaryReportsPage() {
@@ -8,7 +8,7 @@ export default function SecretaryReportsPage() {
         <Image src="/logo.png" alt="KofA logo" width={40} height={40} className="rounded-full" />
         <h1 className="text-lg font-semibold">Reports</h1>
       </div>
-      <ReportsPanel />
+      <ReportsHub isAdmin={false} />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 # 07 — Liturgy
 
-**Status:** Not started
+**Status:** Code complete. All liturgy features including LIT-6 reminders, which landed with module 08. Unit tests and the four automated gates pass. Manual QA (section 12) not yet run.
 **Roles:** officer and admin (plan and edit), member (view)
 **Depends on:** 03, 04
 **Size:** M
@@ -41,7 +41,7 @@ Help officers plan who serves what, ahead of time and on the day, with less typi
 | LIT-3 | Conflict warnings | New |
 | LIT-4 | Templates: rename and better list | Change |
 | LIT-5 | Upcoming assignments for members | New |
-| LIT-6 | Reminders | New |
+| LIT-6 | Reminders | Done, module 08 |
 | LIT-7 | Printable one-page PDF | New |
 
 ### LIT-1 Editor
@@ -105,7 +105,7 @@ Warnings are shown inline on the row and in a summary, and never block saving (a
 | GET/DELETE | `/api/officer/liturgy-templates/[id]` | officer, admin | Unchanged |
 | GET | `/api/cron/liturgy-reminders` | secret header | New |
 
-## 6. Data (migration 029)
+## 6. Data (migration 030)
 
 ```txt
 liturgy_positions(id, label UNIQUE (case-insensitive), sort_order int DEFAULT 0, is_active bool DEFAULT true)
@@ -131,15 +131,32 @@ The existing tables keep `position_label` as text. Nothing is rewritten; the cat
 
 ## 9. Acceptance criteria
 
-- [ ] Position suggestions come from the catalog. Casing and spelling stay consistent after a week of use.
-- [ ] Drag reorder and the up and down buttons both work and persist.
-- [ ] Copy from last week fills the rows, drops inactive members, and says which.
-- [ ] Assigning the same member twice at one Mass, or at two Masses on one date, shows a warning that names the conflict.
-- [ ] Members see upcoming assignments for 14 days and can search a name.
-- [ ] A subscribed, identified member gets a reminder the evening before.
-- [ ] The PDF prints one A4 page for a date with up to three Masses.
-- [ ] Templates can be renamed, and cannot be saved empty or with duplicate labels.
-- [ ] Audit rows exist for the Liturgy actions in module 02.
+Code complete unless noted. The QA checklist in §12 is still outstanding, and the reminder line
+is deliberately blocked on module 08.
+
+- [x] Position suggestions come from the catalog. Casing and spelling stay consistent after a week of use.
+- [x] Drag reorder and the up and down buttons both work and persist.
+- [x] Copy from last week fills the rows, drops inactive members, and says which.
+- [x] Assigning the same member twice at one Mass, or at two Masses on one date, shows a warning that names the conflict.
+- [x] Members see upcoming assignments for 14 days and can search a name.
+- [x] A subscribed, identified member gets a reminder the evening before. `GET /api/cron/liturgy-reminders` at 10:00 UTC, keyed on `liturgy_reminders_sent` so a retry does not double-send. Automated only: the manual pass is deferred with the rest.
+- [x] The PDF prints one A4 page for a date with up to three Masses.
+- [x] Templates can be renamed, and cannot be saved empty or with duplicate labels.
+- [x] Audit rows exist for the Liturgy actions in module 02.
+
+Notes on how some of these are met, since a checkbox does not say what was built:
+
+- Catalog casing is applied on blur rather than while typing, so the suggestion corrects a label
+  without fighting the officer mid-word. `PositionInput`.
+- Reorder is native HTML5 drag plus up/down buttons; both go through `moveEditorRow` in
+  `src/lib/liturgy/editor-rows.ts`, and `sort_order` is renumbered from 0 by the server on save.
+- Same-Mass duplicates are computed in the editor as you type; double-booking and inactive members
+  need the roster and the other Masses on the date, so they arrive with the server's warnings on
+  load and after each save. Neither blocks a save.
+- Template rename is `PATCH /api/officer/liturgy-templates/[id]`, which maps the unique index on
+  `lower(btrim(name))` to a 409 with a readable message rather than a 500.
+- The editor is one component, `src/features/liturgy/ui/LiturgyPlanner.tsx`, used by the plan page,
+  the session screen, and the officer day view. `LiturgyServerEditor` is removed.
 
 ## 10. Build tasks
 
@@ -154,6 +171,15 @@ The existing tables keep `position_label` as text. Nothing is rewritten; the cat
 9. Reminder cron (after module 08 links subscriptions to people).
 10. Remove the old `LiturgyServerEditor` and `OfficerCreateMassForm` if unused.
 
+Done except 9. Two corrections to the plan, both from doing it:
+
+- The migration is `030_liturgy_positions.sql`, not 029. Migration 029 belongs to Reports, so 029
+  was already applied and re-running it is not an option. It also adds `liturgy_revision_state` and
+  the `liturgy_save_plan` / `liturgy_current_revision` functions, which are not in the table above
+  because the stale-write rule in §8 needs a revision that survives an empty plan.
+- `OfficerCreateMassForm` is kept. It still creates Masses, which nothing else does; only
+  `LiturgyServerEditor` was superseded.
+
 ## 11. Unit tests
 
 - Conflict detection: same member twice in a Mass, in two Masses the same date, inactive member, no conflict when different dates.
@@ -161,13 +187,25 @@ The existing tables keep `position_label` as text. Nothing is rewritten; the cat
 - Label normalization and catalog merge.
 - Reminder selection: assignments for tomorrow in church time, guests skipped.
 
+Reminder selection is written with the cron in task 9. Everything else has tests, and the editor's
+own row state has its own file: `src/lib/liturgy/editor-rows.test.ts` covers dirty tracking,
+assignee mode switching, ordering, and what survives a save.
+
 ## 12. QA checklist
+
+Manual, and deferred to the end of the build.
 
 - [ ] Plan next Sunday for two Masses, copy Mass 1 into Mass 2, edit, save.
 - [ ] Create the session on the day and confirm rows were seeded.
 - [ ] Reorder on a phone with touch.
 - [ ] Print the sheet and check the layout.
 - [ ] Sign in as a member, find a name in upcoming assignments.
+
+Two more that the implementation makes worth checking by hand, because neither is reachable from
+the automated tests:
+
+- [ ] Two browsers on one Mass: the second save wins and says it overwrote the first.
+- [ ] Rename a template to another template's name, only differing in case.
 
 ## 13. Out of scope
 

@@ -1,10 +1,10 @@
 # 11 — Settings & system
 
-**Status:** Not started
+**Status:** Code complete. Typed settings registry with validators, every cron wrapped by `recordCronRun`, the health page, the ZIP backup and the sectioned settings page. Manual QA (section 12) not yet run.
 **Roles:** admin
 **Depends on:** 02
 **Size:** S
-**Migration:** 033
+**Migration:** 034 (modules 08, 09 and 10 took 031, 032 and 033)
 
 ## 1. Purpose
 
@@ -70,6 +70,22 @@ Sections, each with its own **Save changes** button and a "Saved" toast. Unsaved
 
 PIN hashes and `sessions_valid_after_<role>` are also in `system_settings` but are managed only by module 02 and never returned by the settings API.
 
+### How a timezone is validated
+
+`isValidTimeZone` is more than a try/catch around `Intl.DateTimeFormat`, and the two obvious approaches
+are both wrong:
+
+- **Try/catch alone is too lenient.** It accepts "PST" and "EST", which are *fixed offsets with no
+  daylight saving*. A parish that set "PST" would get a timezone that silently disagrees with civil time
+  for half the year, and the report window would be wrong on exactly the days it matters.
+- **An allowlist is too strict.** `Intl.supportedValuesOf("timeZone")` is only as complete as the ICU data
+  in the runtime: the build this was tested against returns "Asia/Calcutta" and does not include
+  "Asia/Kolkata", so a plain list rejects a perfectly valid modern name for the most populous time zone on
+  earth.
+
+The rule used instead: a name is accepted when the runtime understands it **and** it is region-qualified
+(contains a "/") or is one of `UTC`, `GMT`, `Z`. Every real IANA zone is either region-qualified
+("Asia/Kolkata", "Etc/GMT+8", "US/Pacific") or one of those three; the dangerous abbreviations are not.
 ### SYS-3 Health page (`/admin/settings/system`)
 
 A read-only checklist with a green, amber or red state and a fix hint for each:
@@ -107,7 +123,7 @@ A read-only checklist with a green, amber or red state and a fix hint for each:
 | GET | `/api/admin/backup` | admin | New. ZIP stream |
 | GET | `/api/cron/*` | secret header | Existing and new jobs, now recorded |
 
-## 6. Data (migration 033)
+## 6. Data (migration 034)
 
 ```txt
 cron_runs(id uuid PK, job text, started_at timestamptz, finished_at timestamptz NULL, ok boolean NULL, detail text NULL)
@@ -158,6 +174,9 @@ Settings need no DDL.
 - Backup: file list and secret stripping.
 
 ## 12. QA checklist
+
+Deferred to final handoff, like every other module''s manual pass. The automated gates run clean; these
+need two browsers, an iPhone and a real database.
 
 - [ ] Change the church name and generate a preview to see the header change.
 - [ ] Break a cron secret on staging and confirm the health page shows it.

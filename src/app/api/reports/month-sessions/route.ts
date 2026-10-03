@@ -36,6 +36,14 @@ export async function GET(req: NextRequest) {
   const rawList = sessions ?? [];
   const sessionIds = rawList.map((s) => s.id as string);
   const withAttendance = new Set<string>();
+  /**
+   * Per-session counts, not just the set of sessions that have any attendance.
+   *
+   * RPT-2 asks for a "low turnout" label against the rest of the month, which is impossible
+   * from presence alone: every session in this list already has attendance by the time it is
+   * returned. The counts are accumulated in one pass and reused for the filter below.
+   */
+  const countsBySession = new Map<string, number>();
   if (sessionIds.length > 0) {
     const { data: recRows, error: recErr } = await sb
       .from("attendance_records")
@@ -45,7 +53,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: recErr.message }, { status: 500 });
     }
     for (const r of recRows ?? []) {
-      withAttendance.add(r.session_id as string);
+      const sid = r.session_id as string;
+      withAttendance.add(sid);
+      countsBySession.set(sid, (countsBySession.get(sid) ?? 0) + 1);
     }
   }
 
@@ -70,6 +80,7 @@ export async function GET(req: NextRequest) {
       session_date: ymd,
       weekday_label: weekday,
       mass_name: massName,
+      attendance_count: countsBySession.get(s.id as string) ?? 0,
     };
   });
 

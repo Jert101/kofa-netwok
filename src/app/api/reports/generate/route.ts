@@ -11,6 +11,8 @@ const bodySchema = z.object({
   archive_data: z.boolean().optional(),
   month_start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   session_ids: z.array(z.string().uuid()).min(1, "Select at least one Mass session"),
+  /** APL-8: set on the retry after the pending-appeal warning, to confirm closing anyway. */
+  acknowledge_pending_appeals: z.boolean().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -54,14 +56,26 @@ export async function POST(req: NextRequest) {
     targetMonthStart: parsed.data.month_start,
     includedSessionIds: parsed.data.session_ids,
     archiveAfterGenerate,
+    acknowledgePendingAppeals: parsed.data.acknowledge_pending_appeals === true,
   });
 
   if (!result.ok) {
+    if (result.code === "PENDING_APPEALS") {
+      // 409 with the count, so the UI can offer the confirmation instead of a dead end.
+      return NextResponse.json(
+        { error: result.message, code: result.code, pending_appeals: result.pendingAppeals ?? 0 },
+        { status: 409 },
+      );
+    }
     const clientErr =
       result.code === "NOT_ALLOWED_WINDOW" || result.code === "ALREADY_EXISTS";
     const status = clientErr ? 403 : 500;
     return NextResponse.json({ error: result.message, code: result.code }, { status });
   }
 
-  return NextResponse.json({ ok: true, reportId: result.reportId });
+  return NextResponse.json({
+    ok: true,
+    reportId: result.reportId,
+    ...(result.expiredAppeals ? { expired_appeals: result.expiredAppeals } : {}),
+  });
 }

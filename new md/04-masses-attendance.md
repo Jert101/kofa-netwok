@@ -1,6 +1,6 @@
 # 04 — Masses & attendance
 
-**Status:** Not started
+**Status:** Code complete (masses, sessions, encoding, live and archive, CSV, needs-attention, per-role session screens). Unit tests and the four automated gates pass. Manual QA (section 12) not yet run.
 **Roles:** admin (Masses catalog, everything), secretary (daily encoding), officer and member (read-only session view)
 **Depends on:** 03
 **Size:** L

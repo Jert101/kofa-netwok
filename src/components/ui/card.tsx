@@ -27,14 +27,27 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
-function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
+/**
+ * `as` exists so a card that *is* the page's title can say so.
+ *
+ * shadcn's CardTitle is a `div`, which is right for a card sitting inside a page that already has an
+ * `<h1>` and wrong for the card that is the only title on the screen: `/login` and `/register` each had
+ * exactly one title and it was not a heading, so a screen reader's heading list showed nothing at all.
+ *
+ * Defaults to `div` so the six existing call sites are unchanged.
+ */
+function CardTitle({
+  className,
+  as: Tag = "div",
+  ...props
+}: React.ComponentProps<"div"> & { as?: "div" | "h1" | "h2" | "h3" }) {
   return (
-    <div
+    <Tag
       data-slot="card-title"
       className={cn("leading-none font-semibold", className)}
       {...props}
     />
-  )
+  );
 }
 
 function CardDescription({ className, ...props }: React.ComponentProps<"div">) {

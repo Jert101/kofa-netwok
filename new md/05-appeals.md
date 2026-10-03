@@ -1,6 +1,6 @@
 # 05 — Appeals
 
-**Status:** Not started
+**Status:** Code complete (windows, eligibility, review, auto-approve, retention, report lock). Unit tests and the four automated gates pass. Manual QA (section 12) not yet run.
 **Roles:** member (submit), secretary and admin (review)
 **Depends on:** 04
 **Size:** M
@@ -105,14 +105,28 @@ Let members correct attendance mistakes themselves, keep reviewers on top of the
 |---|---|---|---|
 | POST | `/api/attendance/session/[id]/appeals` | member | Adds note, window check, throttle. `auto_approved` branch kept |
 | GET | `/api/attendance/session/[id]/appeals?status=` | admin, secretary | Default `pending` |
-| GET | `/api/attendance/session/[id]/appeals/summary` | any signed in | New. Names and status only, for members |
+| GET | `/api/attendance/session/[id]` | member | Carries `appeal_window` and `my_appeals`. **Changed:** see below |
 | GET | `/api/attendance/appeals?month=&status=` | admin, secretary | New. Central queue |
-| PATCH | `/api/attendance/appeals/[id]` | admin, secretary | Body `{ action: 'approve'|'reject', reason? }` |
+| PATCH | `/api/attendance/appeals/[id]` | admin, secretary | Body `{ action: 'approve'\|'reject', reason?, note? }` |
+| PATCH | `/api/attendance/appeals` | admin, secretary | New. Body `{ session_id, item_ids[] }`, one session |
 | POST | `/api/attendance/session/[id]/appeals/approve-all` | admin, secretary | Calls the atomic function |
-| POST | `/api/attendance/appeals/approve` | admin, secretary | New. Body `{ item_ids[] }`, across sessions |
 | GET | `/api/attendance/appeals/month-indicators?month=` | admin, secretary | Unchanged, pending only |
 
-## 6. Data (migration 027)
+Two endpoints here differ from the first draft of this table, both on purpose.
+
+**No `/appeals/summary` and no cross-session `/appeals/approve`.** The summary is served
+inside the session `GET`, which the member page already loads to draw the roster and the
+appeal form. A second endpoint returning the same rows would be a second code path to keep
+in step with the first, and the member page would then need two requests to render one
+screen. Approval is scoped to a single session for the same kind of reason, but sharper:
+the atomic function takes one `session_id` because a cross-session approval spans two
+months, and a lock on either one would leave the caller unable to tell which half
+happened — the exact outcome APL-7 exists to prevent. Selecting across sessions in the
+central queue and approving one Mass at a time gets the same work done with no partial
+state.
+
+## 6. Data (migration 028)
+
 
 ```txt
 attendance_appeals

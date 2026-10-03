@@ -12,6 +12,15 @@
 
 # testing
 /coverage
+# Playwright output. `test-results` holds failure screenshots and traces, which are large, machine-
+# specific and useless to anyone else; `playwright-report` is the HTML run summary.
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
+# Supabase CLI scratch state. Holds the linked project ref and cached credentials.
+/supabase/.temp/
 
 # next.js
 /.next/

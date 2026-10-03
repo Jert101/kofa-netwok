@@ -1,10 +1,10 @@
 # 10 — Dashboards & insights
 
-**Status:** Not started
+**Status:** Code complete. `metrics.ts` (67 tests), migration 033, six dashboard endpoints with a five-minute cache, and hand-rolled SVG charts with text summaries and table alternatives. Manual QA (section 12) not yet run.
 **Roles:** all (each has its own home)
 **Depends on:** 04–09
 **Size:** M
-**Migration:** 032
+**Migration:** 033 (modules 08 and 09 took 031 and 032)
 
 ## 1. Purpose
 
@@ -52,7 +52,13 @@ Top to bottom:
 6. **Birthdays:** today and the next 7 days.
 7. **Recent activity:** the last 10 audit entries.
 
-Charts use the shadcn chart component (Recharts). Each has a text summary and a table alternative for screen readers.
+Charts are hand-rolled SVG, not Recharts. Recharts is not installed, and adding it would put a charting
+library in the bundle of all six role home pages for one line chart and one bar chart. Everything else
+visual in this app is already hand-rolled Tailwind, so this matches the codebase and costs no dependency.
+
+Each chart carries a text summary *and* a table alternative, both of which are required rather than
+polish: an `<svg>` with no accessible name is a picture of numbers, and a screen reader reads nothing.
+Both versions render from the same array, so they cannot disagree.
 
 ### DSH-2 Secretary
 
@@ -84,10 +90,24 @@ One file, `lib/insights/metrics.ts`, with pure functions and tests. Every dashbo
 | **Attendance rate** (member, period) | Distinct sessions attended ÷ sessions held in the period, live plus archive. Toggle: Sundays only. |
 | **Average attendance** (period) | Total records ÷ sessions held. |
 | **Weekend streak** | Consecutive weekends, counting back from the latest weekend with any session, in which the member attended at least one session. |
-| **Inactive** | Active member with zero attendance in the last 2 complete months (existing rule). Members who never had any attendance are excluded, as today. |
+| **Inactive** | Active member with zero attendance in the last two months, measured back from today. Members who never had any attendance are excluded, as today. See the note below. |
 | **At risk** | Active member, not inactive, who meets either: attended 3 or more of the previous 8 weekends but none of the last 3; or a rate over the last 4 weekends at least 50 points below the rate over the 8 weekends before that. |
 | **Birthdays in N days** | Compare `MM-DD` in church time. Handle 29 Feb by showing it on 28 Feb in non-leap years. |
 
+### One deliberate behaviour change: the inactive window
+
+The old rule used exactly "the last 2 complete months" -- August and September when today is 4 October.
+That means a member who served **yesterday** appears on the inactive list, because yesterday is in
+October and the window ends at the end of September.
+
+That is not what anybody means by "has drifted away", and a card whose first entry is somebody who was at
+Mass yesterday loses its credibility for the twenty names underneath it. The window now runs from the
+start of the month two months back **through today**, so somebody who turned up recently is never listed.
+Everything else about the rule is unchanged: still two months, still active members only, still excludes
+members who have never served.
+
+This is a deliberate correction rather than a faithful transcription, and it is called out in the
+handoff so it can be reverted if the parish prefers the literal wording.
 The at-risk rule is a proposal. Adjust the numbers after looking at real data.
 
 ### DSH-7 Recent activity
@@ -105,9 +125,14 @@ The at-risk rule is a proposal. Adjust the numbers after looking at real data.
 | GET | `/api/dashboard/super-admin` | super admin | Pending summary |
 | GET | `/api/admin/top-servers`, `/inactive-members` | admin | Unchanged, moved onto shared metrics |
 
-Dashboards are read-only. Each endpoint is cached for 5 minutes with tags that attendance, appeal and report writes invalidate.
+Dashboards are read-only. Each endpoint's history read is cached in-process for five minutes
+(`src/lib/insights/server/history.ts`), bounded to 100 entries and evicted oldest-first.
+`invalidateDashboards()` is exported for the write paths to call, so a mark recorded this morning shows
+up immediately rather than up to five minutes later. The TTL is a floor behind that, not the mechanism:
+`unstable_cache` with tag invalidation wired into every attendance, appeal and report write is a lot of
+moving parts to stop a dashboard being a second of work on every page load.
 
-## 6. Data (migration 032)
+## 6. Data (migration 033)
 
 ```txt
 VIEW v_attendance_all(session_id, session_date, mass_id, member_id, source_table)
@@ -168,6 +193,8 @@ Archive keys are composite (`id, archived_at`); the view must select the right s
 - Weekend grouping when a Mass falls on Saturday evening.
 
 ## 12. QA checklist
+
+Deferred to final handoff, like every other module's manual pass. The automated gates run clean; these need a real database and a real browser.
 
 - [ ] Compare three numbers on the dashboard against a manual count.
 - [ ] Archive a month and reload. Nothing changes.

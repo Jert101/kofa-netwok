@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
-import { getAllSettings, upsertSettings } from "@/lib/settings/store";
-import type { SettingKey } from "@/lib/settings/keys";
+import { getAllInternalSettings, upsertInternalSetting } from "@/lib/settings/store";
+type SettingKey = string;
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { SESSIONS_VALID_AFTER_KEY } from "./session-valid";
 import { canClearSuperAdminPin, DEFAULT_PIN } from "./pin-rules";
@@ -57,7 +57,7 @@ export function findRolesSharingAStoredHash(settings: Record<string, string>): S
 
 /** Roles still on the shipped `1234` PIN, for the blocking banner. */
 export async function findRolesOnDefaultPin(): Promise<Role[]> {
-  const settings = await getAllSettings();
+  const settings = await getAllInternalSettings();
   const out: Role[] = [];
   for (const role of ROLES) {
     const hash = settings[PIN_HASH_KEY[role]];
@@ -71,7 +71,7 @@ export async function findRolesOnDefaultPin(): Promise<Role[]> {
  * A role being re-set to its own current PIN is not a conflict.
  */
 export async function findRoleUsingPin(pin: string, except: Role): Promise<Role | null> {
-  const settings = await getAllSettings();
+  const settings = await getAllInternalSettings();
   for (const role of ROLES) {
     if (role === except) continue;
     const hash = settings[PIN_HASH_KEY[role]];
@@ -91,7 +91,7 @@ export async function countPendingReports(): Promise<number> {
 
 /** AUTH-3: invalidates every existing session for a role from now on. */
 export async function revokeSessions(role: Role, at: Date = new Date()): Promise<void> {
-  await upsertSettings({ [SESSIONS_VALID_AFTER_KEY[role]]: at.toISOString() });
+  await upsertInternalSetting(SESSIONS_VALID_AFTER_KEY[role], at.toISOString());
 }
 
 export type SavePinResult =
@@ -111,7 +111,7 @@ export async function savePin(role: Role, pin: string, at: Date = new Date()): P
     }
   }
 
-  await upsertSettings({ [PIN_HASH_KEY[role]]: bcrypt.hashSync(pin, 10) });
+  await upsertInternalSetting(PIN_HASH_KEY[role], bcrypt.hashSync(pin, 10));
   await revokeSessions(role, at);
   return { ok: true, revokedSessions: true };
 }

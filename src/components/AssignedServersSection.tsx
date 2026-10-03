@@ -3,7 +3,7 @@
 import { addDays, format, parseISO } from "date-fns";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { LiturgyServerEditor, type LiturgyRow } from "@/components/LiturgyServerEditor";
+import { LiturgyPlanner } from "@/features/liturgy/ui/LiturgyPlanner";
 
 type Slot = { position_label: string; member_name: string | null; free_text: string | null };
 type MassDay = { mass_id: string; mass_name: string; session_id: string | null; slots: Slot[] };
@@ -35,6 +35,14 @@ function groupedLines(slots: Slot[]): { position: string; names: string[] }[] {
   return order.map((position) => ({ position, names: map.get(position) ?? [] }));
 }
 
+/**
+ * Inline editor for one Mass on the officer's day view.
+ *
+ * The panel holds no rows of its own. It used to fetch `/api/attendance/*` and hand the rows to the
+ * editor, which meant this component and the editor each knew half of how to read a plan. The
+ * editor now loads and saves through `/api/liturgy/*` on its own, so all that is left here is which
+ * target to point it at and when to refresh the summary underneath it.
+ */
 function OfficerMassEditorPanel({
   date,
   mass,
@@ -46,118 +54,23 @@ function OfficerMassEditorPanel({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [rows, setRows] = useState<LiturgyRow[] | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setErr(null);
-    setRows(null);
-    try {
-      if (mass.session_id) {
-        const res = await fetch(`/api/attendance/session/${mass.session_id}`, { credentials: "same-origin" });
-        if (!res.ok) {
-          setErr("Could not load session.");
-          return;
-        }
-        const j = (await res.json()) as {
-          liturgy_servers: Array<{
-            position_label: string;
-            member_id: string | null;
-            member_name: string | null;
-            free_text: string | null;
-          }>;
-        };
-        setRows(
-          (j.liturgy_servers ?? []).map((s) => ({
-            position_label: s.position_label,
-            member_id: s.member_id,
-            member_name: s.member_name,
-            free_text: s.free_text,
-          }))
-        );
-      } else {
-        const res = await fetch(
-          `/api/attendance/liturgy-planned?date=${encodeURIComponent(date)}&mass_id=${encodeURIComponent(mass.mass_id)}`,
-          { credentials: "same-origin" }
-        );
-        if (!res.ok) {
-          setErr("Could not load plan.");
-          return;
-        }
-        const j = (await res.json()) as {
-          slots: Array<{
-            position_label: string;
-            member_id: string | null;
-            member_name: string | null;
-            free_text: string | null;
-          }>;
-        };
-        setRows(
-          (j.slots ?? []).map((s) => ({
-            position_label: s.position_label,
-            member_id: s.member_id,
-            member_name: s.member_name,
-            free_text: s.free_text,
-          }))
-        );
-      }
-    } catch {
-      setErr("Could not load.");
-    }
-  }, [date, mass.mass_id, mass.session_id]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  if (err) {
-    return (
-      <div className="mt-3 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3 text-sm text-[var(--danger)]">
-        {err}{" "}
-        <button type="button" className="text-[var(--accent)] underline" onClick={() => void load()}>
-          Retry
-        </button>
-        <button type="button" className="ml-2 text-[var(--muted)] underline" onClick={onClose}>
-          Close
-        </button>
-      </div>
-    );
-  }
-
-  if (rows === null) {
-    return <p className="mt-3 text-sm text-[var(--muted)]">Loading editor…</p>;
-  }
-
   return (
     <div className="mt-3 border-t border-[var(--border)] pt-3">
-      <div className="mb-2 flex justify-end gap-2">
-        <button type="button" className="text-sm text-[var(--muted)] underline" onClick={onClose}>
+      <div className="mb-2 flex justify-end">
+        <button type="button" className="text-sm text-[var(--text-muted)] underline" onClick={onClose}>
           Close editor
         </button>
       </div>
-      {mass.session_id ? (
-        <LiturgyServerEditor
-          mode="session"
-          sessionId={mass.session_id}
-          initialRows={rows}
-          onSaved={() => {
-            onSaved();
-            void load();
-          }}
-        />
-      ) : (
-        <LiturgyServerEditor
-          mode="planned"
-          sessionDate={date}
-          massId={mass.mass_id}
-          massName={mass.mass_name}
-          initialRows={rows}
-          onSaved={() => {
-            onSaved();
-            void load();
-          }}
-        />
-      )}
+      <LiturgyPlanner
+        target={
+          mass.session_id
+            ? { kind: "session", sessionId: mass.session_id }
+            : { kind: "planned", sessionDate: date, massId: mass.mass_id }
+        }
+        title={mass.mass_name}
+        subtitle={formatDayHeading(date)}
+        onSaved={onSaved}
+      />
     </div>
   );
 }
@@ -206,12 +119,12 @@ export function AssignedServersSection({
 
   return (
     <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
-      <h2 className="text-sm font-semibold text-[var(--accent)]">{title}</h2>
+      <h2 className="text-sm font-semibold text-[var(--brand)]">{title}</h2>
 
       {days === null ? (
-        <p className="mt-3 text-sm text-[var(--muted)]">Loading…</p>
+        <p className="mt-3 text-sm text-[var(--text-muted)]">Loading…</p>
       ) : days.length === 0 ? (
-        <p className="mt-3 text-sm text-[var(--muted)]">No server assignments in this range yet.</p>
+        <p className="mt-3 text-sm text-[var(--text-muted)]">No server assignments in this range yet.</p>
       ) : (
         <ul className="mt-3 space-y-4">
           {days.map((d) => (
@@ -219,7 +132,7 @@ export function AssignedServersSection({
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <Link
                   href={`${memberBasePath}/${d.date}`}
-                  className="text-sm font-semibold text-[var(--accent)] hover:underline"
+                  className="text-sm font-semibold text-[var(--brand)] hover:underline"
                 >
                   {formatDayHeading(d.date)}
                 </Link>
@@ -232,7 +145,7 @@ export function AssignedServersSection({
                       {officerEditable && singleDate ? (
                         <button
                           type="button"
-                          className="text-sm font-medium text-[var(--accent)]"
+                          className="text-sm font-medium text-[var(--brand)]"
                           onClick={() => setEditingMassId((id) => (id === m.mass_id ? null : m.mass_id))}
                         >
                           {editingMassId === m.mass_id ? "Close edit" : "Edit"}
@@ -241,7 +154,7 @@ export function AssignedServersSection({
                     </div>
                     <ul className="mt-1 space-y-1 pl-0">
                       {groupedLines(m.slots).map((g) => (
-                        <li key={g.position} className="text-sm text-[var(--muted)]">
+                        <li key={g.position} className="text-sm text-[var(--text-muted)]">
                           <span className="font-medium text-[var(--text)]">{g.position}:</span>{" "}
                           {g.names.length ? g.names.join(", ") : "—"}
                         </li>

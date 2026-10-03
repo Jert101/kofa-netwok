@@ -27,7 +27,8 @@ import { Button } from "@/components/ui/button";
 import { Roster, type RosterEntry } from "@/features/attendance/ui/Roster";
 import { AttendanceAppealsReview } from "@/components/AttendanceAppealsReview";
 import { AttendanceAppealForm } from "@/components/AttendanceAppealForm";
-import { LiturgyServerEditor } from "@/components/LiturgyServerEditor";
+import { MyAppealsList } from "@/features/appeals/ui/MyAppealsList";
+import { LiturgyPlanner } from "@/features/liturgy/ui/LiturgyPlanner";
 import { decideEditability } from "@/lib/attendance/editability";
 import type { Role } from "@/lib/auth/roles";
 
@@ -54,6 +55,16 @@ type SessionPayload = {
   locked_message: string | null;
   is_future: boolean;
   month_label: string;
+  /** APL-4: present only for a member with a declared identity. */
+  my_appeals?: {
+    id: string;
+    status: "pending" | "approved" | "rejected" | "expired";
+    resolution: string | null;
+    reject_reason: string | null;
+    reviewed_at: string | null;
+    submitted_at: string;
+    note: string | null;
+  }[];
 };
 
 type Props = {
@@ -81,7 +92,15 @@ export function SessionScreen({ sessionId, role, backHref }: Props) {
         cache: "no-store",
       });
       if (!res.ok) {
-        setLoadError(res.status === 404 ? "That session no longer exists." : "Could not load this session.");
+        // This route answers with bare JSON, so the reason is under `error`. Reading it means a real
+        // server-side failure says what went wrong instead of a generic message that sends the
+        // secretary looking for a problem that is not on their side.
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        setLoadError(
+          res.status === 404
+            ? "That session no longer exists."
+            : body?.error ?? "Could not load this session.",
+        );
         return;
       }
       setData((await res.json()) as SessionPayload);
@@ -153,7 +172,7 @@ export function SessionScreen({ sessionId, role, backHref }: Props) {
   }
 
   if (!data) {
-    return <p className="text-sm text-[var(--muted)]">Loading…</p>;
+    return <p className="text-sm text-[var(--text-muted)]">Loading…</p>;
   }
 
   return (
@@ -163,7 +182,7 @@ export function SessionScreen({ sessionId, role, backHref }: Props) {
           ← Back
         </Button>
         <h1 className="mt-1 text-xl font-semibold">{data.session.mass_name}</h1>
-        <p className="text-sm text-[var(--muted)]">{data.session.session_date}</p>
+        <p className="text-sm text-[var(--text-muted)]">{data.session.session_date}</p>
       </div>
 
       {editability.banner ? <Banner banner={editability.banner} /> : null}
@@ -182,24 +201,26 @@ export function SessionScreen({ sessionId, role, backHref }: Props) {
         <AttendanceAppealForm sessionId={sessionId} onAppealSubmitted={refresh} />
       ) : null}
 
+      {/* APL-4: outcomes sit under the form so the member sees the answer to an appeal
+          they already sent, on the same screen they would send a new one from. */}
+      {role === "member" && data.my_appeals?.length ? (
+        <MyAppealsList appeals={data.my_appeals} />
+      ) : null}
+
       {canReviewAppeals ? (
         <AttendanceAppealsReview sessionId={sessionId} onAppealApproved={refresh} />
       ) : null}
 
-      {canEditLiturgy && data.liturgy_servers.length ? (
-        // Officers edit assignments here, per the spec. Kept as the existing editor
-        // rather than rebuilt, because templates and role blocks already work.
+      {canEditLiturgy ? (
+        // LIT-1's editor, shown even when nothing is assigned yet: an officer filling in who is
+        // free is the common case for a session that has no liturgy servers on it.
         <section>
-          <h2 className="mb-2 text-sm font-semibold text-[var(--muted)]">Liturgy servers</h2>
-          <LiturgyServerEditor
-            mode="session"
-            sessionId={sessionId}
-            initialRows={data.liturgy_servers.map((row) => ({
-              position_label: row.position_label,
-              member_id: row.member_id,
-              member_name: row.member_name,
-              free_text: row.free_text,
-            }))}
+          <h2 className="mb-2 text-sm font-semibold text-[var(--text-muted)]">Liturgy servers</h2>
+          <LiturgyPlanner
+            target={{ kind: "session", sessionId }}
+            title="Serving today"
+            subtitle={data.session.mass_name}
+            initialRows={data.liturgy_servers}
             onSaved={refresh}
           />
         </section>
@@ -207,11 +228,11 @@ export function SessionScreen({ sessionId, role, backHref }: Props) {
 
       {!canEditLiturgy && data.liturgy_servers.length ? (
         <section>
-          <h2 className="text-sm font-semibold text-[var(--muted)]">Liturgy servers</h2>
+          <h2 className="text-sm font-semibold text-[var(--text-muted)]">Liturgy servers</h2>
           <ul className="mt-2 divide-y divide-[var(--border)] overflow-hidden rounded-2xl border border-[var(--border)]">
             {data.liturgy_servers.map((server) => (
               <li key={server.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                <span className="text-sm text-[var(--muted)]">{server.position_label}</span>
+                <span className="text-sm text-[var(--text-muted)]">{server.position_label}</span>
                 <span className="text-base">{server.member_name ?? server.free_text ?? "—"}</span>
               </li>
             ))}
@@ -241,10 +262,10 @@ function Banner({ banner }: { banner: { tone: "locked" | "future"; title: string
       role="status"
       className="flex gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4"
     >
-      <Icon aria-hidden className="mt-0.5 size-5 shrink-0 text-[var(--muted)]" />
+      <Icon aria-hidden className="mt-0.5 size-5 shrink-0 text-[var(--text-muted)]" />
       <div className="text-sm">
         <p className="font-semibold">{banner.title}</p>
-        <p className="mt-1 text-[var(--muted)]">{banner.body}</p>
+        <p className="mt-1 text-[var(--text-muted)]">{banner.body}</p>
       </div>
     </div>
   );

@@ -131,7 +131,7 @@ export function SecurityPanel() {
   );
 
   if (loading) {
-    return <p className="py-8 text-center text-sm text-[var(--muted)]">Loading…</p>;
+    return <p className="py-8 text-center text-sm text-[var(--text-muted)]">Loading…</p>;
   }
 
   if (error || !status) {
@@ -173,7 +173,7 @@ export function SecurityPanel() {
                 </li>
               ))}
             </ul>
-            <p className="mt-1 text-[var(--muted)]">
+            <p className="mt-1 text-[var(--text-muted)]">
               Their hashes are the same value, not two hashes of the same PIN, so one of these
               was copied rather than set through the app. Sign-in resolves roles in a fixed
               order, so the later one is hard to reach. Re-set both PINs.
@@ -208,7 +208,7 @@ export function SecurityPanel() {
                 </p>
               ) : null}
               {r.sessionsValidAfter ? (
-                <p className="text-xs text-[var(--muted)]">
+                <p className="text-xs text-[var(--text-muted)]">
                   Sessions issued before {formatDate(r.sessionsValidAfter)} were signed out.
                 </p>
               ) : null}
@@ -380,7 +380,7 @@ function ChangePinDialog({
         <div className="space-y-3">
           <div>
             <label htmlFor="new-pin" className="text-sm">
-              <span className="text-[var(--muted)]">New PIN</span>
+              <span className="text-[var(--text-muted)]">New PIN</span>
             </label>
             <Input
               id="new-pin"
@@ -393,7 +393,7 @@ function ChangePinDialog({
             />
             {rule ? (
               <p
-                className={`mt-1 text-xs ${rule.ok ? "text-[var(--muted)]" : "text-[var(--danger)]"}`}
+                className={`mt-1 text-xs ${rule.ok ? "text-[var(--text-muted)]" : "text-[var(--danger)]"}`}
                 aria-live="polite"
               >
                 {rule.ok ? <Check aria-hidden className="mr-1 inline size-3" /> : null}
@@ -404,7 +404,7 @@ function ChangePinDialog({
 
           <div>
             <label htmlFor="confirm-pin" className="text-sm">
-              <span className="text-[var(--muted)]">Confirm PIN</span>
+              <span className="text-[var(--text-muted)]">Confirm PIN</span>
             </label>
             <Input
               id="confirm-pin"
@@ -448,7 +448,7 @@ function ChangePinDialog({
         </DialogFooter>
 
         {role === "super_admin" && pendingReports > 0 ? (
-          <p className="text-xs text-[var(--muted)]">
+          <p className="text-xs text-[var(--text-muted)]">
             {pendingReports} report{pendingReports === 1 ? "" : "s"} awaiting approval. Approval cannot
             be turned off until {pendingReports === 1 ? "it is" : "they are"} resolved.
           </p>

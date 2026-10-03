@@ -80,7 +80,7 @@ export function MonthCalendar({
             type="button"
             aria-label="Previous month"
             onClick={() => onMonthChange(prevMonth)}
-            className="inline-flex size-11 items-center justify-center rounded-xl text-[var(--muted)] hover:bg-[var(--surface-2)]"
+            className="inline-flex size-11 items-center justify-center rounded-xl text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
           >
             <ChevronLeft aria-hidden="true" className="size-5" />
           </button>
@@ -88,10 +88,10 @@ export function MonthCalendar({
           <span className="size-11" aria-hidden="true" />
         )}
         <p className="flex items-center gap-2 text-base font-semibold">
-          <CalendarDays aria-hidden="true" className="size-4 text-[var(--muted)]" />
+          <CalendarDays aria-hidden="true" className="size-4 text-[var(--text-muted)]" />
           {format(current, "MMMM yyyy")}
           {locked ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-xs font-medium text-[var(--muted)]">
+            <span className="inline-flex items-center gap-1 rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-xs font-medium text-[var(--text-muted)]">
               <Lock aria-hidden="true" className="size-3" />
               Closed
             </span>
@@ -102,7 +102,7 @@ export function MonthCalendar({
             type="button"
             aria-label="Next month"
             onClick={() => onMonthChange(nextMonth)}
-            className="inline-flex size-11 items-center justify-center rounded-xl text-[var(--muted)] hover:bg-[var(--surface-2)]"
+            className="inline-flex size-11 items-center justify-center rounded-xl text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
           >
             <ChevronRight aria-hidden="true" className="size-5" />
           </button>
@@ -111,7 +111,7 @@ export function MonthCalendar({
         )}
       </div>
 
-      <div aria-hidden="true" className="grid grid-cols-7 gap-1 text-center text-xs text-[var(--muted)]">
+      <div aria-hidden="true" className="grid grid-cols-7 gap-1 text-center text-xs text-[var(--text-muted)]">
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
           <span key={d} className="py-1">
             {d.charAt(0)}
@@ -147,11 +147,11 @@ export function MonthCalendar({
                 className={[
                   "flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl border p-1 text-sm",
                   inMonth ? "border-[var(--border)] bg-[var(--surface)]" : "border-transparent",
-                  isToday ? "border-[var(--accent)] ring-1 ring-[var(--accent)]" : "",
+                  isToday ? "border-[var(--brand)] ring-1 ring-[var(--brand)]" : "",
                   inMonth ? "hover:bg-[var(--surface-2)]" : "pointer-events-none opacity-40",
                 ].join(" ")}
               >
-                <span className={isToday ? "font-bold text-[var(--accent)]" : "font-medium"}>
+                <span className={isToday ? "font-bold text-[var(--brand)]" : "font-medium"}>
                   {day.getDate()}
                 </span>
                 {inMonth && info ? (
@@ -164,7 +164,7 @@ export function MonthCalendar({
                       />
                     ) : null}
                     {locked ? (
-                      <Lock aria-hidden="true" className="size-2.5 text-[var(--muted)]" />
+                      <Lock aria-hidden="true" className="size-2.5 text-[var(--text-muted)]" />
                     ) : null}
                   </span>
                 ) : null}

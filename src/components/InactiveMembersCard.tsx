@@ -38,35 +38,35 @@ export function InactiveMembersCard() {
         <h2 className="text-base font-semibold tracking-tight text-[var(--text)]">
           Inactive Members — No Service in 2 Months
         </h2>
-        <p className="mt-1 text-sm leading-relaxed text-[var(--muted)]">
+        <p className="mt-1 text-sm leading-relaxed text-[var(--text-muted)]">
           Active members with zero attendance records in the last 2 complete calendar months.
         </p>
       </div>
 
       <div className="p-4">
         {loading ? (
-          <p className="py-6 text-center text-sm text-[var(--muted)]">Loading…</p>
+          <p className="py-6 text-center text-sm text-[var(--text-muted)]">Loading…</p>
         ) : !data ? (
-          <p className="rounded-xl border border-dashed border-[var(--border)] py-10 text-center text-sm text-[var(--muted)]">
+          <p className="rounded-xl border border-dashed border-[var(--border)] py-10 text-center text-sm text-[var(--text-muted)]">
             Could not load data.
           </p>
         ) : list.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-[var(--border)] py-10 text-center text-sm text-[var(--muted)]">
+          <p className="rounded-xl border border-dashed border-[var(--border)] py-10 text-center text-sm text-[var(--text-muted)]">
             All active members have served at least once in the last 2 months.
           </p>
         ) : (
           <>
-            <p className="mb-3 text-sm text-[var(--muted)]">
+            <p className="mb-3 text-sm text-[var(--text-muted)]">
               Period: <span className="font-medium text-[var(--text)]">{data.period.start}</span> –{" "}
               <span className="font-medium text-[var(--text)]">{data.period.end}</span>
               &nbsp;·&nbsp;
-              <span className="font-semibold text-[var(--accent)]">{data.count}</span> member{data.count !== 1 ? "s" : ""}
+              <span className="font-semibold text-[var(--brand)]">{data.count}</span> member{data.count !== 1 ? "s" : ""}
             </p>
 
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-[var(--border)] text-left text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                  <tr className="border-b border-[var(--border)] text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                     <th className="pb-2 pr-2">#</th>
                     <th className="pb-2">Name</th>
                   </tr>
@@ -74,7 +74,7 @@ export function InactiveMembersCard() {
                 <tbody>
                   {(expanded ? list : list.slice(0, 10)).map((m, idx) => (
                     <tr key={m.member_id} className="border-b border-[var(--border)] last:border-0">
-                      <td className="py-2.5 pr-2 text-[var(--muted)]">{idx + 1}</td>
+                      <td className="py-2.5 pr-2 text-[var(--text-muted)]">{idx + 1}</td>
                       <td className="py-2.5 font-medium text-[var(--text)]">{m.full_name}</td>
                     </tr>
                   ))}
@@ -86,7 +86,7 @@ export function InactiveMembersCard() {
               <button
                 type="button"
                 onClick={() => setExpanded(!expanded)}
-                className="mt-3 text-sm font-medium text-[var(--accent)] hover:underline"
+                className="mt-3 text-sm font-medium text-[var(--brand)] hover:underline"
               >
                 {expanded ? "Show less" : `Show all ${list.length} members`}
               </button>

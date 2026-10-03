@@ -1,40 +1,48 @@
-import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
+import { NextRequest } from "next/server";
 import { requireRole } from "@/lib/api/guard";
-import { getAllSettings, upsertSettings } from "@/lib/settings/store";
+import { internalError, jsonError, jsonOk } from "@/lib/api/response";
+import { getSettings, getSettingsUpdatedAt, upsertSettings } from "@/lib/settings/store";
 import {
-  MAX_AUDIT_RETENTION_MONTHS,
-  MIN_AUDIT_RETENTION_MONTHS,
-  parseAuditRetentionMonths,
-} from "@/lib/maintenance/retention";
+  EXPOSED_KEYS,
+  SETTING_SECTIONS,
+  validateSettings,
+} from "@/lib/settings/registry";
+import { logAudit } from "@/lib/audit/log-audit";
 
-const patchSchema = z.object({
-  church_name: z.string().min(1).max(200).optional(),
-  church_address: z.string().max(500).optional(),
-  report_title: z.string().min(1).max(200).optional(),
-  report_timezone: z.string().min(1).max(80).optional(),
-  attendance_auto_approve_appeals: z.boolean().optional(),
-  audit_retention_months: z
-    .number()
-    .int()
-    .min(MIN_AUDIT_RETENTION_MONTHS)
-    .max(MAX_AUDIT_RETENTION_MONTHS)
-    .optional(),
-});
+export const dynamic = "force-dynamic";
 
+/**
+ * SYS-2: read and write settings, validated against the registry.
+ *
+ * ## What changed, and why it matters
+ *
+ * The old route had its own zod schema listing eight keys, hand-maintained, which had already drifted
+ * from what the callers actually checked: `auto_create_sunday_sessions` could not be toggled from the UI
+ * because the schema did not know the key existed, and `report_timezone` was free text, so a typo broke
+ * every date rule in the app at once.
+ *
+ * Now the registry is the only list. A key that is not registered cannot be written, and a key the
+ * registry marks internal cannot be written at all -- which is what makes "the settings API never returns
+ * a PIN hash" a property of the code rather than a promise in a comment.
+ */
 export async function GET(req: NextRequest) {
   const g = await requireRole(req.headers.get("cookie"), ["admin"]);
   if (!g.ok) return g.response;
 
-  const all = await getAllSettings();
-  return NextResponse.json({
-    church_name: all.church_name ?? "",
-    church_address: all.church_address ?? "",
-    report_title: all.report_title ?? "",
-    report_timezone: all.report_timezone ?? "UTC",
-    attendance_auto_approve_appeals: all.attendance_auto_approve_appeals === "true",
-    audit_retention_months: parseAuditRetentionMonths(all.audit_retention_months),
-  });
+  try {
+    const keys = EXPOSED_KEYS.map((d) => d.key);
+    const [values, updatedAt] = await Promise.all([getSettings(keys), getSettingsUpdatedAt(keys)]);
+
+    return jsonOk({
+      values,
+      updated_at: updatedAt,
+      sections: SETTING_SECTIONS,
+      definitions: EXPOSED_KEYS,
+    });
+  } catch (e) {
+    console.error("[admin/settings] read failed:", e instanceof Error ? e.message : e);
+    return internalError("Could not read the settings.");
+  }
 }
 
 export async function PATCH(req: NextRequest) {
@@ -45,25 +53,74 @@ export async function PATCH(req: NextRequest) {
   try {
     json = await req.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
-  const parsed = patchSchema.safeParse(json);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid body" }, { status: 400 });
+    return jsonError("BAD_REQUEST", "Could not read the request.", { status: 400 });
   }
 
-  const payload: Record<string, string> = {};
-  if (parsed.data.church_name !== undefined) payload.church_name = parsed.data.church_name;
-  if (parsed.data.church_address !== undefined) payload.church_address = parsed.data.church_address;
-  if (parsed.data.report_title !== undefined) payload.report_title = parsed.data.report_title;
-  if (parsed.data.report_timezone !== undefined) payload.report_timezone = parsed.data.report_timezone;
-  if (parsed.data.attendance_auto_approve_appeals !== undefined) {
-    payload.attendance_auto_approve_appeals = parsed.data.attendance_auto_approve_appeals ? "true" : "false";
-  }
-  if (parsed.data.audit_retention_months !== undefined) {
-    payload.audit_retention_months = String(parsed.data.audit_retention_months);
+  if (typeof json !== "object" || json === null || Array.isArray(json)) {
+    return jsonError("BAD_REQUEST", "Send an object of settings.", { status: 400 });
   }
 
-  await upsertSettings(payload as Parameters<typeof upsertSettings>[0]);
-  return NextResponse.json({ ok: true });
+  // Reject anything that is not already a string. Accepting a number here and coercing it would make
+  // `church_name: 123` a valid request, and the stored value would then read back as the string "123" on
+  // the next load, which is a confusing way to lose a character.
+  const raw = json as Record<string, unknown>;
+  const patch: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value !== "string") {
+      return jsonError("VALIDATION_FAILED", `${key} must be sent as text.`, {
+        status: 400,
+        fields: { [key]: "Must be text." },
+      });
+    }
+    patch[key] = value;
+  }
+
+  const validated = validateSettings(patch);
+  if (!validated.ok) {
+    // All-or-nothing, and every failure named. Saving some of a form and reporting success is worse than
+    // saving none and saying which field is wrong.
+    return jsonError("VALIDATION_FAILED", "Some settings could not be saved.", {
+      status: 400,
+      fields: validated.errors,
+    });
+  }
+
+  try {
+    // Read the old values first, so the audit row records what changed rather than only what it became.
+    const before = await getSettings(Object.keys(validated.values));
+
+    await upsertSettings(validated.values);
+
+    const changed: Record<string, { from: string; to: string; warning?: string }> = {};
+    for (const [key, next] of Object.entries(validated.values)) {
+      const previous = before[key] ?? "";
+      if (previous !== next) changed[key] = { from: previous, to: next };
+    }
+
+    // The timezone warning is not decoration. Spec §7 asks for it because changing it moves when reports
+    // open and when "today" starts, everywhere, at once.
+    if (changed["report_timezone"]) {
+      changed["report_timezone"].warning =
+        "This changes when reports open and when 'today' starts. It takes effect immediately.";
+    }
+
+    await logAudit({
+      actor: {
+        role: g.session.role,
+        memberId: g.session.actor?.id ?? null,
+        name: g.session.actor?.name ?? null,
+      },
+      action: "settings_updated",
+      entityType: "settings",
+      entityId: null,
+      // Old and new values, per spec §7. Safe for these keys because none of them is a secret: the
+      // registry refuses to accept a PIN hash here in the first place.
+      meta: { changed },
+    });
+
+    return jsonOk({ saved: Object.keys(validated.values), changed });
+  } catch (e) {
+    console.error("[admin/settings] write failed:", e instanceof Error ? e.message : e);
+    return internalError("Could not save the settings.");
+  }
 }

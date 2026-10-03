@@ -728,23 +728,39 @@ Vercel Cron config in `vercel.json`; secret via `CRON_SECRET`. Both unattended j
 
 ## 13. Deployment & Environment
 
-**Host:** Vercel (Node runtime functions) + Supabase (Postgres + storage unused in MVP).
+**Host:** Vercel (Node runtime functions) + Supabase (Postgres + Storage).
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=     # server-only
 JWT_SECRET=                    # ≥16 chars
-VAPID_PUBLIC_KEY= / VAPID_PRIVATE_KEY= / NEXT_PUBLIC_VAPID_PUBLIC_KEY=
-CRON_SECRET=
+VAPID_PUBLIC_KEY=              # server-only, NOT NEXT_PUBLIC_ — the browser fetches it from /api/push/vapid-key
+VAPID_PRIVATE_KEY=             # server-only
+VAPID_SUBJECT=                 # mailto:you@example.com
+CRON_SECRET=                   # sent as a header by the Vercel cron caller
+IP_HASH_SALT=                  # optional; falls back to JWT_SECRET if unset
 ```
+
+Only `NEXT_PUBLIC_SUPABASE_URL` reaches the browser. Everything else is server-only and must **not** be
+prefixed with `NEXT_PUBLIC_`, or the value is inlined into the client bundle and readable by anyone who
+opens devtools. `VAPID_PUBLIC_KEY` is the easy mistake here: it is not public config, the service worker
+key is fetched at runtime from `/api/push/vapid-key` instead.
 
 **Release checklist**
 
-1. Apply migrations `001→026` in order (all idempotent `IF NOT EXISTS`/`ON CONFLICT`).
-   - **025 and 026 are authored but NOT yet applied.** Until they are, `registration_requests.reference_code` and `.approved_member_id` do not exist, so registration review, the "link to this member" action and the CSV import will all fail. Nothing else in the app depends on them.
-   - 026 also enables RLS on `payments` and `payment_structures` (they were the only tables left without it) and adds the `member_id` indexes the member profile needs.
+1. Apply migrations `001→034` in order (all idempotent `IF NOT EXISTS`/`ON CONFLICT`).
+   - `001→034` are all applied to the live project as of this writing, verified by probing each
+     migration's distinctive columns, tables and view through the service-role key. Re-run that probe
+     after any fresh project or `db reset`, because a partially-migrated database fails at runtime in
+     ways that look like bugs: a missing column surfaces as a 400 from PostgREST, not as a startup error.
+   - 026 also enables RLS on `payments` and `payment_structures` (they were the only tables left without
+     it) and adds the `member_id` indexes the member profile needs.
+   - Storage is **not** unused: report PDFs moved from base64-in-database to a **private** `reports`
+     bucket (decision D-4). `reports.pdf_storage_kind` is `inline` for legacy rows and `stored` for new
+     ones, and both download paths must keep working.
 2. Set env vars; deploy.
-3. Log in with seeded `1234` admin PIN → **immediately rotate all six PINs** (Settings).
+3. Sign in and confirm the default-PIN banner is gone. It appears while any of the six role PINs is still
+   `1234`, and clears when the last one is rotated (Settings).
 4. Fill Report header (church name/address/timezone), create batches, import/add members.
 5. Configure Masses; subscribe a test device for push; dry-run: register→approve→session→appeal→approve-all→generate(bypass)→super-admin approve→download→archive.
 

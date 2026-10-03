@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/api/guard";
-import { getAllSettings } from "@/lib/settings/store";
+import { getAllInternalSettings } from "@/lib/settings/store";
 import {
   canGenerateMonthlyReport,
   previousReportMonthStartForNow,
@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   const g = await requireRole(req.headers.get("cookie"), ["admin", "secretary"]);
   if (!g.ok) return g.response;
 
-  const settings = await getAllSettings();
+  const settings = await getAllInternalSettings();
   const tz = settings.report_timezone || "UTC";
   const now = new Date();
   const scheduleAllowed = canGenerateMonthlyReport(now, tz);
@@ -21,12 +21,24 @@ export async function GET(req: NextRequest) {
   const superAdminConfigured = (settings.pin_super_admin_hash ?? "").length > 0;
 
   const sb = getSupabaseAdmin();
+  // 029: uniqueness is partial, so filter to the row that actually holds the month and
+  // limit before maybeSingle() so two rows can never turn into a read error here.
+  const activeFor = (m: string) =>
+    sb
+      .from("reports")
+      .select("id, status")
+      .eq("report_month", m)
+      .neq("status", "rejected")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
   const [{ data: existing }, { data: previousExisting }] = await Promise.all([
-    sb.from("reports").select("id, status").eq("report_month", monthStart).maybeSingle(),
-    sb.from("reports").select("id, status").eq("report_month", previousMonthStart).maybeSingle(),
+    activeFor(monthStart),
+    activeFor(previousMonthStart),
   ]);
-  const reportExists = existing?.id ? existing.status !== "rejected" : false;
-  const previousReportExists = previousExisting?.id ? previousExisting.status !== "rejected" : false;
+  const reportExists = Boolean(existing?.id);
+  const previousReportExists = Boolean(previousExisting?.id);
   const canGeneratePreviousMonth = g.session.role === "admin" && !previousReportExists;
 
   return NextResponse.json({
@@ -44,6 +56,15 @@ export async function GET(req: NextRequest) {
         ? "Only on the last Sunday of the month, from 8:00 PM (church time)."
         : null,
     month_start: monthStart,
+    /**
+     * Sent so the client can render the status strip through `buildStatusStrip` instead of
+     * re-deciding the window in the browser. The browser's own timezone is the wrong one to
+     * judge by — the church setting is the rule — and a user travelling or on a device set
+     * elsewhere would otherwise see a different answer from the server.
+     */
+    time_zone: tz,
+    /** The active row's status, so the strip can say "pending" vs "already exists". */
+    report_status: (existing?.status ?? null) as "pending" | "approved" | "rejected" | null,
     super_admin_configured: superAdminConfigured,
   });
 }

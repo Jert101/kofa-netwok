@@ -313,8 +313,8 @@ export function RegistrationReviewTable() {
             }}
             className={`-mb-px min-h-11 border-b-2 px-4 text-sm font-medium transition-colors ${
               tab === t.key
-                ? "border-[var(--accent)] text-[var(--accent)]"
-                : "border-transparent text-[var(--muted)] hover:text-[var(--text)]"
+                ? "border-[var(--brand)] text-[var(--brand)]"
+                : "border-transparent text-[var(--text-muted)] hover:text-[var(--text)]"
             }`}
           >
             {t.label}
@@ -341,7 +341,7 @@ export function RegistrationReviewTable() {
       <div className="relative">
         <Search
           aria-hidden
-          className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--muted)]"
+          className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--text-muted)]"
         />
         <Label htmlFor="reg-search" className="sr-only">
           Search by name
@@ -357,7 +357,7 @@ export function RegistrationReviewTable() {
       </div>
 
       {selected.size > 0 ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--accent)] bg-[var(--surface)] p-2">
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--brand)] bg-[var(--surface)] p-2">
           <span className="px-2 text-sm font-medium">
             {selected.size} selected
           </span>
@@ -374,9 +374,9 @@ export function RegistrationReviewTable() {
       ) : null}
 
       {rows === null ? (
-        <p className="text-sm text-[var(--muted)]">Loading…</p>
+        <p className="text-sm text-[var(--text-muted)]">Loading…</p>
       ) : visible.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-[var(--border)] py-10 text-center text-sm text-[var(--muted)]">
+        <p className="rounded-xl border border-dashed border-[var(--border)] py-10 text-center text-sm text-[var(--text-muted)]">
           {rows.length === 0 ? `No ${tab} applications.` : "No applications match your search."}
         </p>
       ) : (
@@ -391,7 +391,7 @@ export function RegistrationReviewTable() {
                       aria-label="Select all on this page"
                       checked={allOnPageSelected}
                       onChange={toggleAllOnPage}
-                      className="size-4 accent-[var(--accent)]"
+                      className="size-4 accent-[var(--brand)]"
                     />
                   </TableHead>
                   <TableHead>Name</TableHead>
@@ -415,17 +415,17 @@ export function RegistrationReviewTable() {
                           aria-label={`Select ${r.full_name}`}
                           checked={selected.has(r.id)}
                           onChange={() => toggle(r.id)}
-                          className="size-4 accent-[var(--accent)]"
+                          className="size-4 accent-[var(--brand)]"
                         />
                       </TableCell>
                       <TableCell className="font-medium">
                         {r.full_name}
                         {r.reference_code ? (
-                          <span className="ml-2 font-mono text-xs text-[var(--muted)]">
+                          <span className="ml-2 font-mono text-xs text-[var(--text-muted)]">
                             {r.reference_code}
                           </span>
                         ) : null}
-                        <span className="block text-xs text-[var(--muted)] sm:hidden">
+                        <span className="block text-xs text-[var(--text-muted)] sm:hidden">
                           {formatSubmitted(r.created_at)}
                           {r.date_of_birth ? ` · ${r.date_of_birth}` : ""}
                         </span>
@@ -439,7 +439,7 @@ export function RegistrationReviewTable() {
                       <TableCell className="hidden lg:table-cell">
                         {formatSubmitted(r.created_at)}
                         {r.reviewed_at ? (
-                          <span className="block text-xs text-[var(--muted)]">
+                          <span className="block text-xs text-[var(--text-muted)]">
                             reviewed {formatSubmittedTime(r.reviewed_at)}
                           </span>
                         ) : null}
@@ -450,7 +450,7 @@ export function RegistrationReviewTable() {
                             {flag}
                           </Badge>
                         ) : (
-                          <span className="text-xs text-[var(--muted)]">—</span>
+                          <span className="text-xs text-[var(--text-muted)]">—</span>
                         )}
                         {r.reject_reason ? (
                           <Badge variant="secondary" className="mt-1 block whitespace-normal text-xs">
@@ -523,7 +523,7 @@ export function RegistrationReviewTable() {
               >
                 Previous
               </Button>
-              <span className="text-[var(--muted)]">
+              <span className="text-[var(--text-muted)]">
                 Page {page} of {pageCount} · {total} total
               </span>
               <Button

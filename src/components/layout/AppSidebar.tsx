@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
+import { BellRing } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -17,10 +18,32 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 import { LogoutButton } from "@/components/layout/LogoutButton";
+import { ThemeSwitch } from "@/components/layout/ThemeSwitch";
 import { PwaHub } from "@/components/PwaHub";
 import { ActorPicker, type ActorOption } from "@/components/auth/ActorPicker";
 import { NAV_ICONS, ROLE_LABEL, isActive, type NavItem } from "@/lib/nav/config";
+import { useUnreadCount } from "@/lib/comms/use-unread-count";
 import type { Role } from "@/lib/auth/roles";
+
+/**
+ * COM-2: the unread count on the nav item that asked for one.
+ *
+ * The number, not a dot. A dot says "something" and cannot be acted on; the badge is also capped at
+ * 99 because a four digit pill in a collapsed sidebar stops being a badge and starts being a layout
+ * problem, and nobody needs to know that there are 4,203 unread.
+ */
+function UnreadBadge() {
+  const unread = useUnreadCount();
+  if (unread === null || unread <= 0) return null;
+  return (
+    <span
+      className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--brand)] px-1.5 text-xs font-semibold text-white group-data-[collapsible=icon]:hidden"
+      aria-label={`${unread} unread`}
+    >
+      {unread > 99 ? "99+" : unread}
+    </span>
+  );
+}
 
 export function AppSidebar({
   role,
@@ -45,10 +68,10 @@ export function AppSidebar({
             className="shrink-0 rounded-full"
           />
           <div className="grid min-w-0 flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
-            <span className="truncate text-sm font-semibold text-[var(--accent)]">
+            <span className="truncate text-sm font-semibold text-[var(--brand)]">
               KofA Attendance
             </span>
-            <span className="truncate text-xs text-[var(--muted)]">
+            <span className="truncate text-xs text-[var(--text-muted)]">
               {ROLE_LABEL[role]}
             </span>
           </div>
@@ -77,6 +100,7 @@ export function AppSidebar({
                       >
                         <Icon aria-hidden />
                         <span>{item.label}</span>
+                        {item.badgeKey === "notifications" ? <UnreadBadge /> : null}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -89,8 +113,28 @@ export function AppSidebar({
 
       <SidebarFooter>
         <SidebarMenu>
+          {/*
+            COM-4: device notification settings, next to the identity picker and the app hub rather
+            than buried in a nav group. It is the same for every role, so it is one link and not six.
+          */}
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="Notification settings" className="min-h-11">
+              <Link href="/notifications">
+                <BellRing aria-hidden />
+                <span>Notifications</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <ActorPicker actor={actor} />
+          </SidebarMenuItem>
+          {/*
+            FW-7: the theme switch sits in the account menu, which module 01 §4.1 specifies as "the role,
+            theme switch, and Log out". It is a footer entry rather than something buried in Settings
+            because a person toggling it at 7am in a bright church is doing it once, not configuring it.
+          */}
+          <SidebarMenuItem>
+            <ThemeSwitch />
           </SidebarMenuItem>
           <SidebarMenuItem>
             <PwaHub />

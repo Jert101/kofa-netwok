@@ -31,6 +31,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { queueSummary, type QueueEntry } from "@/lib/attendance/retry-queue";
+import { messageOf, readEnvelope } from "@/lib/api/client";
 import { sortRoster, type SortMode } from "@/lib/attendance/roster-sort";
 import {
   flushQueue,
@@ -234,12 +235,20 @@ export function Roster({
       if (!ids.length) return;
 
       try {
-        await fetch(`/api/attendance/session/${sessionId}/records/set`, {
+        const res = await fetch(`/api/attendance/session/${sessionId}/records/set`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "same-origin",
           body: JSON.stringify({ op }),
         });
+        // The status has to be checked. The server refuses a bulk mark when the month is locked or
+        // the Mass has not happened yet, and ignoring that made the whole roster flash present and
+        // then snap back on refresh -- which reads as the app silently losing the change.
+        if (!res.ok) {
+          const env = await readEnvelope(res);
+          setToast({ tone: "warn", text: messageOf(env, "Could not update the roster.") });
+          return;
+        }
       } catch {
         setToast({ tone: "warn", text: "Could not reach the server. Try again." });
         return;
@@ -286,8 +295,8 @@ export function Roster({
       <div className="sticky top-0 z-10 -mx-4 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <p className="text-lg font-semibold tabular-nums" aria-live="polite">
-            <span className="text-[var(--accent)]">{counts.present}</span>
-            <span className="text-[var(--muted)]"> / {counts.total} present</span>
+            <span className="text-[var(--brand)]">{counts.present}</span>
+            <span className="text-[var(--text-muted)]"> / {counts.total} present</span>
           </p>
           <div className="flex items-center gap-2">
             {undoStack.length ? (
@@ -319,7 +328,7 @@ export function Roster({
         {queue.length ? (
           <p
             role="status"
-            className="mt-2 rounded-lg bg-[var(--surface-2)] px-3 py-2 text-sm font-medium text-[var(--muted)]"
+            className="mt-2 rounded-lg bg-[var(--surface-2)] px-3 py-2 text-sm font-medium text-[var(--text-muted)]"
           >
             {summary.label}
           </p>
@@ -356,8 +365,8 @@ export function Roster({
             aria-pressed={filter === option}
             className={`min-h-11 rounded-full border px-4 text-sm font-medium capitalize ${
               filter === option
-                ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
-                : "border-[var(--border)] text-[var(--muted)]"
+                ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]"
+                : "border-[var(--border)] text-[var(--text-muted)]"
             }`}
           >
             {option}
@@ -366,7 +375,7 @@ export function Roster({
         <button
           type="button"
           onClick={() => setSortMode((m) => (m === "alphabetical" ? "recent_servers" : "alphabetical"))}
-          className="min-h-11 rounded-full border border-[var(--border)] px-4 text-sm font-medium text-[var(--muted)]"
+          className="min-h-11 rounded-full border border-[var(--border)] px-4 text-sm font-medium text-[var(--text-muted)]"
         >
           {sortMode === "alphabetical" ? "A–Z" : "Recent servers"}
         </button>
@@ -397,7 +406,7 @@ export function Roster({
                 <span
                   className={`flex size-7 shrink-0 items-center justify-center rounded-full border-2 ${
                     isPresent
-                      ? "border-[var(--accent)] bg-[var(--accent)] text-white"
+                      ? "border-[var(--brand)] bg-[var(--brand)] text-white"
                       : "border-[var(--border)] text-transparent"
                   }`}
                 >
@@ -408,14 +417,14 @@ export function Roster({
           );
         })}
         {visible.length === 0 ? (
-          <li className="px-4 py-8 text-center text-sm text-[var(--muted)]">
+          <li className="px-4 py-8 text-center text-sm text-[var(--text-muted)]">
             {term.trim() ? "No names match that search." : "Nobody here."}
           </li>
         ) : null}
       </ul>
 
       <div>
-        <label htmlFor="session-notes" className="text-sm font-medium text-[var(--muted)]">
+        <label htmlFor="session-notes" className="text-sm font-medium text-[var(--text-muted)]">
           Notes
         </label>
         <Textarea

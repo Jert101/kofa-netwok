@@ -211,7 +211,7 @@ export function ImportMembersDialog({
             </Button>
 
             {fileName ? (
-              <span className="flex items-center gap-1.5 text-sm text-[var(--muted)]">
+              <span className="flex items-center gap-1.5 text-sm text-[var(--text-muted)]">
                 <FileSpreadsheet aria-hidden className="size-4" />
                 {fileName}
               </span>
@@ -296,17 +296,17 @@ export function ImportMembersDialog({
                   <tbody>
                     {preview.rows.map((row) => (
                       <tr key={row.line} className="border-t border-[var(--border)]">
-                        <td className="px-3 py-2 tabular-nums text-[var(--muted)]">
+                        <td className="px-3 py-2 tabular-nums text-[var(--text-muted)]">
                           {row.line}
                         </td>
                         <td className="px-3 py-2">
                           {row.full_name || (
-                            <span className="text-[var(--muted)]">
+                            <span className="text-[var(--text-muted)]">
                               {row.values.first_name || "?"}
                             </span>
                           )}
                         </td>
-                        <td className="px-3 py-2 tabular-nums text-[var(--muted)]">
+                        <td className="px-3 py-2 tabular-nums text-[var(--text-muted)]">
                           {row.values.batch || "—"}
                         </td>
                         <td className="px-3 py-2">
@@ -316,7 +316,7 @@ export function ImportMembersDialog({
                             {STATUS_LABEL[row.status]}
                           </span>
                           {row.message ? (
-                            <p className="mt-0.5 text-xs text-[var(--muted)]">{row.message}</p>
+                            <p className="mt-0.5 text-xs text-[var(--text-muted)]">{row.message}</p>
                           ) : null}
                         </td>
                       </tr>
@@ -358,7 +358,7 @@ export function ImportMembersDialog({
             </div>
           ) : null}
 
-          <p className="flex items-start gap-2 text-xs text-[var(--muted)]">
+          <p className="flex items-start gap-2 text-xs text-[var(--text-muted)]">
             <Copy aria-hidden className="mt-0.5 size-3.5 shrink-0" />
             Columns: first_name, last_name, middle_initial, date_of_birth, gender,
             contact_number, batch. Only first_name and last_name are required. Dates

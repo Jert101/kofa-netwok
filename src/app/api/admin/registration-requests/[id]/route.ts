@@ -18,6 +18,7 @@ import {
   type RequestRow,
 } from "@/features/registrations/server/decide-request";
 import { normalizeRegisterInput } from "@/features/registrations/schemas";
+import { notify } from "@/lib/notify/notify";
 
 const SELECT = `
   id, first_name, last_name, middle_initial, date_of_birth, gender,
@@ -234,6 +235,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return conflict("CONFLICT", result.message);
     }
     return internalError(result.message);
+  }
+
+  // COM-5: the applicant hears the outcome from the catalog, not from this route. `change-status`
+  // back to pending is not news, so it is only an approve or a reject that gets pushed.
+  if (target === "approved" || target === "rejected") {
+    await notify(
+      "registration_reviewed",
+      {
+        member_name: `${request.first_name} ${request.last_name}`.trim(),
+        outcome: target,
+      },
+      { fromRole: g.session.role },
+    );
   }
 
   return jsonOk({ id, status: result.status, member_id: result.memberId });

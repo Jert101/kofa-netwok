@@ -106,7 +106,7 @@ export function ConflictDialog({
           <DialogDescription>{message}</DialogDescription>
         </DialogHeader>
 
-        <p className="text-sm text-[var(--muted)]">
+        <p className="text-sm text-[var(--text-muted)]">
           Nothing was saved. Choose how to handle {memberName}.
         </p>
 
@@ -125,7 +125,7 @@ export function ConflictDialog({
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-xs text-[var(--muted)]">
+            <p className="text-xs text-[var(--text-muted)]">
               Approves the application without creating a second member.
             </p>
           </div>

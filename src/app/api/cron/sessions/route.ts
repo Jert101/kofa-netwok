@@ -1,6 +1,8 @@
 import { internalError, jsonOk, unauthenticated } from "@/lib/api/response";
+import { NextResponse } from "next/server";
 import { createWeekendSessions } from "@/features/attendance/server/create-weekend-sessions";
 import { getSetting } from "@/lib/settings/store";
+import { recordCronRun } from "@/lib/system/cron-run";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +23,7 @@ export const dynamic = "force-dynamic";
  * leaves the decision to the secretary. Silently exiting would look identical to the
  * cron not firing at all, which is a much harder thing to notice.
  */
-async function run(req: Request) {
+async function run(req: Request): Promise<NextResponse> {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) {
     console.error(
@@ -49,7 +51,12 @@ async function run(req: Request) {
   }
 }
 
-export const GET = run;
+/** SYS-4: every run is recorded, so a weekly job that stops is visible rather than silent. */
+async function recorded(req: Request): Promise<NextResponse> {
+  return recordCronRun("sessions", () => run(req), (res) => `status ${res.status}`);
+}
+
+export const GET = recorded;
 
 /** Kept so a scheduler can POST as well as GET. Both need the same secret. */
-export const POST = run;
+export const POST = recorded;

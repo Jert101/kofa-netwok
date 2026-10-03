@@ -45,6 +45,17 @@ export async function middleware(req: NextRequest) {
 
   const need = (prefix: string) => pathname === prefix || pathname.startsWith(`${prefix}/`);
 
+  /*
+    COM-4: the one authenticated page that is not under a role prefix. It renders the caller's own
+    sidebar, so it reads the role from the session instead of from the path. Any role, still signed in.
+  */
+  if (need("/notifications")) {
+    if (!session?.role) {
+      return NextResponse.redirect(loginUrl(req));
+    }
+    return NextResponse.next();
+  }
+
   if (need("/admin")) {
     if (session?.role !== "admin") {
       return NextResponse.redirect(loginUrl(req));

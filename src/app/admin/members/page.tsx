@@ -38,8 +38,8 @@ export default function AdminMembersPage() {
               onClick={() => setTab(t.key)}
               className={`-mb-px min-h-11 border-b-2 px-4 text-sm font-medium transition-colors ${
                 tab === t.key
-                  ? "border-[var(--accent)] text-[var(--accent)]"
-                  : "border-transparent text-[var(--muted)] hover:text-[var(--text)]"
+                  ? "border-[var(--brand)] text-[var(--brand)]"
+                  : "border-transparent text-[var(--text-muted)] hover:text-[var(--text)]"
               }`}
             >
               {t.label}

@@ -8,7 +8,7 @@
 /*
   Two layers:
   1. App tokens  — the original parish palette. Untouched, so every existing
-     `text-[var(--muted)]` / `bg-[var(--surface)]` usage (236 + 128 sites)
+     `text-[var(--text-muted)]` / `bg-[var(--surface)]` usage (236 + 128 sites)
      keeps working verbatim.
   2. shadcn layer — @theme mappings from shadcn's names onto the app tokens,
      so shadcn components (which use named utilities like `bg-primary`) are
@@ -24,9 +24,9 @@
   --surface: #ffffff;
   --surface-2: #fff2dc;
   --border: #e7c98d;
-  --muted: #7a5c3d;
-  --accent: #aa1f2a;
-  --accent-soft: #ffe4b8;
+  --text-muted: #7a5c3d;
+  --brand: #aa1f2a;
+  --brand-soft: #ffe4b8;
   --danger: #8f0f1f;
   --success: #1a7f4b;
   --success-soft: #d9f2e4;
@@ -36,10 +36,10 @@
   --radius: 0.75rem;
   --sidebar: var(--surface);
   --sidebar-foreground: var(--foreground);
-  --sidebar-primary: var(--accent);
+  --sidebar-primary: var(--brand);
   --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: var(--accent-soft);
-  --sidebar-accent-foreground: var(--accent);
+  --sidebar-accent: var(--brand-soft);
+  --sidebar-accent-foreground: var(--brand);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
 }
@@ -56,24 +56,24 @@
   --color-popover: var(--surface);
   --color-popover-foreground: var(--foreground);
 
-  --color-primary: var(--accent);
+  --color-primary: var(--brand);
   --color-primary-foreground: var(--primary-foreground);
 
   --color-secondary: var(--surface-2);
   --color-secondary-foreground: var(--foreground);
 
   --color-muted: var(--surface-2);
-  --color-muted-foreground: var(--muted);
+  --color-muted-foreground: var(--text-muted);
 
   --color-accent: var(--surface-2);
-  --color-accent-foreground: var(--accent);
+  --color-accent-foreground: var(--brand);
 
   --color-destructive: var(--danger);
   --color-destructive-foreground: var(--primary-foreground);
 
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
-  --color-accent-soft: var(--accent-soft);
+  --color-accent-soft: var(--brand-soft);
 
   --color-border: var(--border);
   --color-input: var(--border);
@@ -93,16 +93,55 @@
   --color-sidebar: var(--sidebar);
 }
 
+/*
+  FW-7: the dark palette, as a class rather than only as a media query.
+
+  This is deliberately a copy of the values below rather than a reference to them. `prefers-color-scheme`
+  and `.dark` have to be able to disagree: somebody whose OS is light but who chose dark in this app needs
+  dark, and somebody whose OS is dark but who chose light needs light. If `.dark` merely re-declared
+  "same as the media query" there would be no way to choose, which is the whole point of the toggle.
+*/
+.dark {
+  --background: #2b0d0f;
+  --foreground: #fff4dd;
+  --surface: #3b1216;
+  --surface-2: #55201f;
+  --border: #9f6a27;
+  --text-muted: #f3cf98;
+  --brand: #f0bc62;
+  --brand-soft: #7a281f;
+  --danger: #ff8a8a;
+  --success: #5fd39a;
+  --success-soft: #14382a;
+  --ring: #f0bc62;
+  --text: var(--foreground);
+  --primary-foreground: #2b0d0f;
+  --sidebar: var(--surface);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--brand);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--brand-soft);
+  --sidebar-accent-foreground: var(--brand);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+}
+
+/*
+  The OS preference, only for somebody who has never chosen.
+
+  `.dark` above wins over this block for both rules, because it comes later and has the same specificity,
+  so a person who picked light is not overridden by their OS afterwards.
+*/
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not(.light) {
     --background: #2b0d0f;
     --foreground: #fff4dd;
     --surface: #3b1216;
     --surface-2: #55201f;
     --border: #9f6a27;
-    --muted: #f3cf98;
-    --accent: #f0bc62;
-    --accent-soft: #7a281f;
+    --text-muted: #f3cf98;
+    --brand: #f0bc62;
+    --brand-soft: #7a281f;
     --danger: #ff8a8a;
     --success: #5fd39a;
     --success-soft: #14382a;
@@ -111,10 +150,10 @@
     --primary-foreground: #2b0d0f;
     --sidebar: var(--surface);
     --sidebar-foreground: var(--foreground);
-    --sidebar-primary: var(--accent);
+    --sidebar-primary: var(--brand);
     --sidebar-primary-foreground: var(--primary-foreground);
-    --sidebar-accent: var(--accent-soft);
-    --sidebar-accent-foreground: var(--accent);
+    --sidebar-accent: var(--brand-soft);
+    --sidebar-accent-foreground: var(--brand);
     --sidebar-border: var(--border);
     --sidebar-ring: var(--ring);
   }
@@ -134,6 +173,6 @@ body {
 }
 
 ::selection {
-  background: var(--accent-soft);
+  background: var(--brand-soft);
   color: var(--foreground);
 }

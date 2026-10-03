@@ -241,7 +241,7 @@ export function MemberDirectory() {
         <div className="relative min-w-52 flex-1">
           <Search
             aria-hidden
-            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--muted)]"
+            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--text-muted)]"
           />
           <Label htmlFor="member-search" className="sr-only">
             Search members
@@ -372,7 +372,7 @@ export function MemberDirectory() {
       </div>
 
       {data ? (
-        <p className="text-sm text-[var(--muted)]">
+        <p className="text-sm text-[var(--text-muted)]">
           {data.total} member{data.total === 1 ? "" : "s"}
           {filters.birth_month
             ? ` born in ${MONTHS[Number(filters.birth_month) - 1]}`
@@ -381,9 +381,9 @@ export function MemberDirectory() {
       ) : null}
 
       {data === null ? (
-        <p className="text-sm text-[var(--muted)]">Loading…</p>
+        <p className="text-sm text-[var(--text-muted)]">Loading…</p>
       ) : members.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-[var(--border)] py-10 text-center text-sm text-[var(--muted)]">
+        <p className="rounded-xl border border-dashed border-[var(--border)] py-10 text-center text-sm text-[var(--text-muted)]">
           No members match these filters.
         </p>
       ) : (
@@ -460,7 +460,7 @@ export function MemberDirectory() {
                     >
                       {m.full_name}
                     </Link>
-                    <p className="text-sm text-[var(--muted)]">
+                    <p className="text-sm text-[var(--text-muted)]">
                       {m.batch ? `Batch ${m.batch}` : "No batch"}
                       {m.date_of_birth ? ` · ${m.date_of_birth}` : ""}
                     </p>
@@ -470,7 +470,7 @@ export function MemberDirectory() {
                   </Badge>
                 </div>
                 {!m.is_active && m.deactivation_reason ? (
-                  <p className="mt-1 text-xs text-[var(--muted)]">
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">
                     {m.deactivation_reason}
                   </p>
                 ) : null}
@@ -488,7 +488,7 @@ export function MemberDirectory() {
               >
                 Previous
               </Button>
-              <span className="text-[var(--muted)]">
+              <span className="text-[var(--text-muted)]">
                 Page {data.page} of {data.pageCount}
               </span>
               <Button

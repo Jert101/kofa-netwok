@@ -118,10 +118,16 @@ async function monthLock(
   sb: ReturnType<typeof getSupabaseAdmin>,
   monthStart: string,
 ): Promise<{ locked: boolean }> {
+  // 029: a month can hold a rejected row alongside its active one, so the filter is
+  // required and the limit keeps a second row from becoming a read error (which would
+  // report every month as locked).
   const { data, error } = await sb
     .from("reports")
     .select("status")
     .eq("report_month", monthStart)
+    .neq("status", "rejected")
+    .order("created_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   // Unreadable reports means the month cannot be promised open, so it is shown locked.
@@ -135,29 +141,50 @@ async function monthLock(
   return { locked: decideReportLock(data?.status ?? null, monthStart).locked };
 }
 
+/**
+ * Pending appeal count per session date.
+ *
+ * Counted from `attendance_appeal_items`, not `attendance_appeals`. Only the items table
+ * has a status; a query filtering the parents on `status` errors out, and the parents
+ * are a container anyway — one appeal can carry up to 40 names, so counting parents
+ * would understate the work waiting by a factor of forty.
+ */
 async function pendingAppealsByDate(
   sb: ReturnType<typeof getSupabaseAdmin>,
   start: string,
   end: string,
 ): Promise<Map<string, number>> {
   const { data, error } = await sb
-    .from("attendance_appeals")
-    .select("session_id, attendance_sessions!inner(session_date)")
+    .from("attendance_appeal_items")
+    .select("id, attendance_appeals!inner(session_id, attendance_sessions!inner(session_date))")
     .eq("status", "pending")
-    .gte("attendance_sessions.session_date", start)
-    .lte("attendance_sessions.session_date", end);
+    .gte("attendance_appeals.attendance_sessions.session_date", start)
+    .lte("attendance_appeals.attendance_sessions.session_date", end);
 
   if (error) throw new Error(error.message);
 
   const dates = new Map<string, number>();
   for (const row of data ?? []) {
-    // PostgREST returns an embedded relation as an array even when the filter makes it
-    // a single row, so the first element is the session.
-    const sessions = row.attendance_sessions as unknown as { session_date: string }[];
-    const date = String(sessions?.[0]?.session_date ?? "");
-    if (date) dates.set(date, (dates.get(date) ?? 0) + 1);
+    // PostgREST nests embedded relations as objects when the filter makes each one
+    // single, and as arrays otherwise. Read both shapes rather than guessing.
+    const parents = (row.attendance_appeals ?? {}) as unknown;
+    const sessions = firstSessionDate(parents);
+    if (sessions) dates.set(sessions, (dates.get(sessions) ?? 0) + 1);
   }
   return dates;
+}
+
+function firstSessionDate(parents: unknown): string | null {
+  const list = Array.isArray(parents) ? parents : [parents];
+  for (const parent of list as { attendance_sessions?: unknown }[]) {
+    const sessions = parent?.attendance_sessions;
+    const sessionsList = Array.isArray(sessions) ? sessions : [sessions];
+    for (const session of sessionsList as { session_date?: unknown }[]) {
+      const date = session?.session_date;
+      if (typeof date === "string") return date;
+    }
+  }
+  return null;
 }
 
 function todayInParish(timeZone: string | null): string {

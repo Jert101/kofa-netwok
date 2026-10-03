@@ -1,92 +1,75 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { requireRole } from "@/lib/api/guard";
-import { notifyAttendanceSessionUpdated } from "@/lib/push/attendance-notify";
+import { internalError, jsonOk, notFound, reportLocked, badRequest } from "@/lib/api/response";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { guardReportNotGenerated } from "@/lib/reports/check-report-lock";
 import { getClientIp } from "@/lib/auth/ip-hash";
 import { logAudit } from "@/lib/audit/log-audit";
+import { notifyAttendanceSessionUpdated } from "@/lib/push/attendance-notify";
+import { approveAppealItems, pendingItemsForSession } from "@/features/appeals/server/appeals";
 
 type Ctx = { params: Promise<{ id: string }> };
 
+/**
+ * APL-7: approve everything pending on this session, in one transaction.
+ *
+ * This used to be four separate calls ending in a DELETE of the item rows, so a failure
+ * midway left attendance written and the appeals still pending — a state a retry cannot
+ * distinguish from a fresh appeal. It now runs entirely inside
+ * `approve_appeal_items`, so it is all of it or none of it.
+ */
 export async function POST(req: NextRequest, ctx: Ctx) {
   const g = await requireRole(req.headers.get("cookie"), ["admin", "secretary"]);
   if (!g.ok) return g.response;
 
-  const sessionId = (await ctx.params).id;
+  const { id: sessionId } = await ctx.params;
   const sb = getSupabaseAdmin();
+  const reviewerRole = g.session.role === "admin" ? "admin" : "secretary";
 
-  const { data: sess } = await sb
+  const { data: session, error: sessionError } = await sb
     .from("attendance_sessions")
-    .select("session_date")
+    .select("id")
     .eq("id", sessionId)
     .maybeSingle();
+  if (sessionError) return internalError();
+  if (!session) return notFound("Session not found.");
 
-  if (!sess) return NextResponse.json({ error: "Session not found" }, { status: 404 });
-
-  const guard = await guardReportNotGenerated(sb, sess.session_date as string);
-  if (guard.blocked) return NextResponse.json({ error: guard.message }, { status: 409 });
-
-  const { data: appeals } = await sb
-    .from("attendance_appeals")
-    .select("id")
-    .eq("session_id", sessionId);
-
-  const appealIds = (appeals ?? []).map((r) => r.id as string);
-  if (appealIds.length === 0) {
-    return NextResponse.json({ error: "No appeals for this session" }, { status: 400 });
+  const pending = await pendingItemsForSession(sb, sessionId);
+  if (pending.length === 0) {
+    return badRequest("No pending appeal items for this Mass.");
   }
 
-  const { data: pendingItems } = await sb
-    .from("attendance_appeal_items")
-    .select("id, appeal_id, member_id")
-    .in("appeal_id", appealIds)
-    .eq("status", "pending");
-
-  const items = pendingItems ?? [];
-  if (items.length === 0) {
-    return NextResponse.json({ error: "No pending appeal items" }, { status: 400 });
-  }
-
-  const uniqueMembers = [...new Set(items.map((i) => i.member_id as string))];
-
-  const { error: upErr } = await sb.from("attendance_records").upsert(
-    uniqueMembers.map((memberId) => ({ session_id: sessionId, member_id: memberId })),
-    { onConflict: "session_id,member_id", ignoreDuplicates: true }
-  );
-
-  if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
-
-  const itemIds = items.map((i) => i.id as string);
-  const parentAppealIds = items.map((i) => i.appeal_id as string);
-
-  const { error: dErr } = await sb.from("attendance_appeal_items").delete().in("id", itemIds);
-  if (dErr) return NextResponse.json({ error: dErr.message }, { status: 500 });
-
-  const uniqueAppealIds = [...new Set(parentAppealIds)];
-  for (const aid of uniqueAppealIds) {
-    const { count } = await sb
-      .from("attendance_appeal_items")
-      .select("id", { count: "exact", head: true })
-      .eq("appeal_id", aid);
-    if ((count ?? 0) === 0) {
-      await sb.from("attendance_appeals").delete().eq("id", aid);
-    }
-  }
-
-  void notifyAttendanceSessionUpdated(sessionId);
-
-  await logAudit({
-    action: "appeals_approved_all",
-    actor: {
-      role: g.session.role,
-      memberId: g.session.actor?.id ?? null,
-      name: g.session.actor?.name ?? null,
-    },
-    entityType: "attendance_session",
-    entityId: sessionId,
-    meta: { count: uniqueMembers.length, items: itemIds.length },
-    ip: getClientIp(req.headers),
+  const result = await approveAppealItems(sb, {
+    sessionId,
+    itemIds: pending.map((p) => p.id),
+    reviewerRole,
   });
 
-  return NextResponse.json({ ok: true, approved_count: uniqueMembers.length });
+  if (!result.ok) {
+    if (result.reason === "report_locked") return reportLocked(result.message);
+    if (result.reason === "session_missing") return notFound(result.message);
+    return internalError();
+  }
+
+  if (result.approved > 0) {
+    void notifyAttendanceSessionUpdated(sessionId);
+    await logAudit({
+      action: "appeals_approved_all",
+      actor: { role: g.session.role, memberId: g.session.actor?.id ?? null, name: g.session.actor?.name ?? null },
+      entityType: "attendance_session",
+      entityId: sessionId,
+      meta: {
+        approved: result.approved,
+        merged: result.merged,
+        attendanceAdded: result.added,
+      },
+      ip: getClientIp(req.headers),
+    });
+  }
+
+  return jsonOk({
+    approved_count: result.approved,
+    merged_duplicates: result.merged,
+    attendance_added: result.added,
+    already_resolved: result.already,
+  });
 }

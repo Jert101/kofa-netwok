@@ -17,13 +17,13 @@ export default async function RegisterStatusPage({
   return (
     <main className="mx-auto w-full max-w-md px-4 py-10">
       <h1 className="text-xl font-semibold">Application status</h1>
-      <p className="mt-1 mb-6 text-sm text-[var(--muted)]">
+      <p className="mt-1 mb-6 text-sm text-[var(--text-muted)]">
         Check whether your application was approved, without signing in.
       </p>
       <RegistrationStatusForm initialCode={initialCode} />
-      <p className="mt-6 text-center text-sm text-[var(--muted)]">
+      <p className="mt-6 text-center text-sm text-[var(--text-muted)]">
         Have not applied yet?{" "}
-        <Link href="/register" className="font-medium text-[var(--accent)] hover:underline">
+        <Link href="/register" className="font-medium text-[var(--brand)] hover:underline">
           Apply now
         </Link>
       </p>
