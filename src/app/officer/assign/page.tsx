@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { BulkAssign } from "./BulkAssign";
 
 type Mass = { id: string; name: string };
 type Template = { id: string; name: string; slot_count?: number };
@@ -459,6 +460,8 @@ export default function OfficerAssignPage() {
           Clear all
         </Button>
       </div>
+
+      <BulkAssign masses={masses} sendPush={sendPush} />
     </div>
   );
 }

@@ -2,14 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/api/guard";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { validateTemplateLabels, validateTemplateName } from "@/lib/liturgy/rules";
+import { asGenderRule, validateTemplateName, validateTemplatePositions } from "@/lib/liturgy/rules";
 import { logAudit } from "@/lib/audit/log-audit";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 const patchSchema = z.object({
   name: z.string().min(1).max(60).optional(),
-  position_labels: z.array(z.string().min(1)).min(1).optional(),
+  position_labels: z
+    .array(z.union([z.string(), z.object({
+      position_label: z.string(),
+      required_gender: z.enum(["male", "female", "any"]).optional(),
+    })]))
+    .min(1)
+    .optional(),
 });
 
 export async function GET(req: NextRequest, ctx: Ctx) {
@@ -30,16 +36,24 @@ export async function GET(req: NextRequest, ctx: Ctx) {
 
   const { data: slots, error: sErr } = await sb
     .from("liturgy_template_slots")
-    .select("position_label")
+    .select("position_label, required_gender")
     .eq("template_id", id)
     .order("sort_order", { ascending: true });
 
   if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 });
 
+  const positions = (slots ?? []).map((s) => ({
+    position_label: s.position_label as string,
+    // Read through `asGenderRule` so a stray value reads as "any" rather than surfacing junk.
+    required_gender: asGenderRule(s.required_gender),
+  }));
+
   return NextResponse.json({
     id: template.id as string,
     name: template.name as string,
-    position_labels: (slots ?? []).map((s) => s.position_label as string),
+    // `position_labels` is kept for the plan editor's TemplateBar, which only wants the strings.
+    position_labels: positions.map((p) => p.position_label),
+    positions,
   });
 }
 
@@ -142,13 +156,18 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   }
 
   if (parsed.data.position_labels !== undefined) {
-    const labels = validateTemplateLabels(parsed.data.position_labels);
-    if (!labels.ok) {
-      return NextResponse.json({ error: labels.message }, { status: 400 });
+    const validated = validateTemplatePositions(parsed.data.position_labels);
+    if (!validated.ok) {
+      return NextResponse.json({ error: validated.message }, { status: 400 });
     }
     const { error: delErr } = await sb.from("liturgy_template_slots").delete().eq("template_id", id);
     if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
-    const rows = labels.labels.map((label, i) => ({ template_id: id, position_label: label, sort_order: i }));
+    const rows = validated.positions.map((p, i) => ({
+      template_id: id,
+      position_label: p.position_label,
+      required_gender: p.required_gender,
+      sort_order: i,
+    }));
     const { error: insErr } = await sb.from("liturgy_template_slots").insert(rows);
     if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
   }

@@ -16,6 +16,8 @@ import {
   unassignedSummary,
   validateTemplateLabels,
   validateTemplateName,
+  validateTemplatePositions,
+  asGenderRule,
   type LiturgyEntry,
   type LiturgyMemberRef,
 } from "./rules";
@@ -558,5 +560,72 @@ describe("unassignedSummary", () => {
 
   it("says so when there are no positions at all", () => {
     expect(unassignedSummary({ total: 0, unassigned: 0 })).toBe("No positions yet.");
+  });
+});
+describe("validateTemplatePositions", () => {
+  it("accepts bare strings and defaults every rule to anyone", () => {
+    const res = validateTemplatePositions(["Crucifix", "Thurifer"]);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.positions).toEqual([
+      { position_label: "Crucifix", required_gender: "any" },
+      { position_label: "Thurifer", required_gender: "any" },
+    ]);
+  });
+
+  it("keeps the gender rule the officer set for each position", () => {
+    const res = validateTemplatePositions([
+      { position_label: "Thurifer", required_gender: "female" },
+      { position_label: "Crucifix", required_gender: "male" },
+      { position_label: "Lector", required_gender: "any" },
+    ]);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.positions.map((p) => p.required_gender)).toEqual(["female", "male", "any"]);
+  });
+
+  it("reads an absent or stray rule as anyone rather than failing", () => {
+    const res = validateTemplatePositions([
+      { position_label: "A" },
+      { position_label: "B", required_gender: "nonsense" },
+    ]);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.positions.map((p) => p.required_gender)).toEqual(["any", "any"]);
+  });
+
+  it("trims and collapses whitespace like the label validator does", () => {
+    const res = validateTemplatePositions(["  Crucifix   bearer "]);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.positions[0].position_label).toBe("Crucifix bearer");
+  });
+
+  it("refuses a duplicate position, whichever form it arrived in", () => {
+    const dupes = validateTemplatePositions([
+      { position_label: "Thurifer", required_gender: "male" },
+      { position_label: "thurifer", required_gender: "female" },
+    ]);
+    expect(dupes.ok).toBe(false);
+    if (dupes.ok) return;
+    expect(dupes.message).toContain("appears twice");
+  });
+
+  it("refuses an empty lineup", () => {
+    const empty = validateTemplatePositions(["   ", ""]);
+    expect(empty.ok).toBe(false);
+    if (empty.ok) return;
+    expect(empty.message).toMatch(/at least one position/i);
+  });
+});
+
+describe("asGenderRule", () => {
+  it("passes the three real values through and coerces everything else to any", () => {
+    expect(asGenderRule("male")).toBe("male");
+    expect(asGenderRule("female")).toBe("female");
+    expect(asGenderRule("any")).toBe("any");
+    expect(asGenderRule(undefined)).toBe("any");
+    expect(asGenderRule(null)).toBe("any");
+    expect(asGenderRule("Male")).toBe("any");
   });
 });

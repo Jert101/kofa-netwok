@@ -401,6 +401,59 @@ export function validateTemplateLabels(labels: string[]): {
   return { ok: true, labels: cleaned };
 }
 
+/**
+ * What a position wants from a random draw, and the template position shape the API stores.
+ *
+ * `required_gender` lives on the template rather than on the plan, because the template is what the
+ * officer reuses week after week: a thurifer that must be a woman should stay a requirement when the
+ * plan is rebuilt from the template, not be retyped every Sunday.
+ */
+export type GenderRule = "male" | "female" | "any";
+export type TemplatePosition = { position_label: string; required_gender: GenderRule };
+
+export const GENDER_RULES: readonly GenderRule[] = ["any", "male", "female"] as const;
+
+export function asGenderRule(value: unknown): GenderRule {
+  return value === "male" || value === "female" ? value : "any";
+}
+
+/**
+ * Validate a template's positions, applying the same duplicate rule `validateTemplateLabels` does.
+ *
+ * Accepts bare strings as well as position objects, so a template saved before `required_gender`
+ * existed still loads (as all-`any`) instead of being rejected.
+ */
+export function validateTemplatePositions(
+  input: Array<string | { position_label?: unknown; required_gender?: unknown }>,
+): { ok: true; positions: TemplatePosition[] } | { ok: false; message: string } {
+  const cleaned: TemplatePosition[] = [];
+  const byNorm = new Map<string, string>();
+
+  for (const raw of input) {
+    const text = typeof raw === "string" ? raw : String(raw?.position_label ?? "");
+    const label = text.trim().replace(/\s+/g, " ");
+    if (label.length === 0) continue;
+    const norm = normalizeLabel(label);
+    if (byNorm.has(norm)) {
+      return {
+        ok: false,
+        message: `"${byNorm.get(norm)}" appears twice. Each position can only be listed once.`,
+      };
+    }
+    byNorm.set(norm, label);
+    cleaned.push({
+      position_label: label,
+      required_gender: asGenderRule(typeof raw === "string" ? undefined : raw?.required_gender),
+    });
+  }
+
+  if (cleaned.length === 0) {
+    return { ok: false, message: "Add at least one position before saving this template." };
+  }
+
+  return { ok: true, positions: cleaned };
+}
+
 export function validateTemplateName(name: string): { ok: true; name: string } | { ok: false; message: string } {
   const trimmed = name.trim().replace(/\s+/g, " ");
   if (trimmed.length === 0) {

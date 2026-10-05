@@ -2,10 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/api/guard";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { validateTemplatePositions } from "@/lib/liturgy/rules";
 
 const createSchema = z.object({
   name: z.string().min(1).max(100),
-  position_labels: z.array(z.string().min(1)).min(1),
+  /** Bare labels or full positions; the gender rule rides along on the latter. */
+  position_labels: z.array(z.union([z.string(), z.object({
+    position_label: z.string(),
+    required_gender: z.enum(["male", "female", "any"]).optional(),
+  })])).min(1),
 });
 
 export async function GET(req: NextRequest) {
@@ -57,6 +62,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Validate the whole lineup once, before anything is written, so a duplicate position cannot
+  // leave a template row behind with half its slots.
+  const positions = validateTemplatePositions(parsed.data.position_labels);
+  if (!positions.ok) {
+    return NextResponse.json({ error: positions.message }, { status: 400 });
+  }
+
   const sb = getSupabaseAdmin();
   const { data: template, error: tErr } = await sb
     .from("liturgy_templates")
@@ -68,9 +80,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: tErr?.message ?? "Could not create template" }, { status: 500 });
   }
 
-  const slots = parsed.data.position_labels.map((label, i) => ({
+  const slots = positions.positions.map((p, i) => ({
     template_id: template.id,
-    position_label: label,
+    position_label: p.position_label,
+    required_gender: p.required_gender,
     sort_order: i,
   }));
 
