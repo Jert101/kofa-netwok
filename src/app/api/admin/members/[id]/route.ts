@@ -10,6 +10,11 @@ import {
   zodFields,
 } from "@/lib/api/response";
 import { getClientIp } from "@/lib/auth/ip-hash";
+import {
+  memberScopeForSubject,
+  redactMember,
+  visibleMemberFields,
+} from "@/features/members/member-visibility";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   deactivateMember,
@@ -50,7 +55,13 @@ export async function GET(req: NextRequest, ctx: Ctx) {
   if (error) return internalError("Could not load that member.");
   if (!data) return badRequest("That member no longer exists.");
 
-  return jsonOk({ member: data });
+  // Narrowed to what this viewer may read, same rule as the list. The select above is the full column
+  // list because the columns are filtered after the row is read, not in the query -- and that is safe
+  // precisely because this is a server-side response: the hidden values are removed here and never
+  // reach the wire. See `member-visibility.ts` for the tiers and the reasoning.
+  const viewer = { role: g.session.role, actorId: g.session.actor?.id ?? null };
+  const scope = memberScopeForSubject(viewer, String(data.id));
+  return jsonOk({ member: redactMember(data, scope), visible_fields: visibleMemberFields(scope) });
 }
 
 export async function PATCH(req: NextRequest, ctx: Ctx) {

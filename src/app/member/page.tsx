@@ -25,15 +25,27 @@ type MemberDashboard = {
  */
 export default function MemberHomePage() {
   const [data, setData] = useState<MemberDashboard | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
     try {
       const res = await fetch("/api/dashboard/member", { credentials: "same-origin", cache: "no-store" });
-      if (!res.ok) return;
+      // The attendance and identity banner never appeared when this failed, and the page said
+      // nothing about it -- so "no attendance" and "could not read attendance" looked the same.
+      // The rest of the page is independent, so the failure is confined to the attendance block.
+      if (!res.ok) {
+        setLoadError("Could not load your attendance.");
+        return;
+      }
       const json = (await res.json()) as { data?: MemberDashboard };
       setData(json.data ?? null);
     } catch {
-      // The rest of the page is independent of this.
+      setLoadError("Could not load your attendance.");
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -65,6 +77,14 @@ export default function MemberHomePage() {
             ))}
           </ul>
         </section>
+      ) : null}
+
+      {loadError ? (
+        <p role="alert" className="rounded-2xl border border-[var(--danger)] p-4 text-sm text-[var(--danger)]">
+          {loadError}
+        </p>
+      ) : loading && !data ? (
+        <p className="text-sm text-[var(--text-muted)]">Loading your attendance…</p>
       ) : null}
 
       {data?.identity_declared ? (

@@ -56,10 +56,25 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     return validationFailed("Invalid body.", {});
   }
 
+  // `in` throws a TypeError on null and on any primitive, and this line sat between the two try blocks
+  // below, so a `null` body never reached validation -- it escaped as an unstructured 500. Deciding
+  // "is this the bulk shape?" from a value already known to be a plain object removes the throw.
+  if (typeof json !== "object" || json === null || Array.isArray(json)) {
+    return validationFailed("Invalid body.", {});
+  }
+
   const isBulk = "op" in (json as Record<string, unknown>);
 
   const sb = getSupabaseAdmin();
-  const blocked = await guardSessionWrite({ sb, sessionId: id });
+  // `guardSessionWrite` can throw on a failed session lookup, so it belongs inside the same try as
+  // everything after it rather than above one.
+  let blocked: Awaited<ReturnType<typeof guardSessionWrite>>;
+  try {
+    blocked = await guardSessionWrite({ sb, sessionId: id });
+  } catch (e) {
+    console.error("[records/set] session lookup failed:", e instanceof Error ? e.message : e);
+    return internalError("Could not check that session.");
+  }
   if (blocked) return blocked;
 
   try {

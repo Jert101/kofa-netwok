@@ -82,17 +82,14 @@ export default function TreasurerPaymentsPage() {
       );
       setPayments(paymentJson.payments ?? []);
 
-      // The church's date, from the same endpoint the record sheet's defaults use, so the date field
-      // does not open on the server's idea of today.
-      const tzRes = await fetch("/api/admin/settings", { credentials: "same-origin", cache: "no-store" });
+      // The church's date, so the record sheet's date field does not open on the browser's idea of
+      // today. This used to read `/api/admin/settings`, which is admin-only: a treasurer got a 401,
+      // `today` stayed "", and the page showed a permanent "Today is…" above a date field with no
+      // `max` at all -- so a payment could be dated in the future without anything stopping it.
+      const tzRes = await fetch("/api/church-date", { credentials: "same-origin", cache: "no-store" });
       if (tzRes.ok) {
-        const tzJson = (await tzRes.json()) as { data?: { report_timezone?: string } };
-        const zone = tzJson.data?.report_timezone ?? "Asia/Manila";
-        try {
-          setToday(new Intl.DateTimeFormat("en-CA", { timeZone: zone }).format(new Date()));
-        } catch {
-          setToday(new Date().toISOString().slice(0, 10));
-        }
+        const tzJson = (await tzRes.json()) as { data?: { today?: string } };
+        setToday(tzJson.data?.today ?? "");
       }
     } catch {
       setError("Could not load the payments pages.");

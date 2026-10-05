@@ -64,6 +64,9 @@ export async function POST(req: NextRequest) {
       "[admin/members/import] failed:",
       e instanceof Error ? e.message : e,
     );
-    return internalError("Could not read that file.");
+    // This catch is the last word on anything the commit or the preview threw -- a schema mismatch, a
+    // dead RPC, a constraint -- so naming the file as the problem sent the admin looking for a bad CSV
+    // when the file was fine. The parse failure above already has its own accurate message.
+    return internalError("Could not import the members. Nothing was changed.");
   }
 }

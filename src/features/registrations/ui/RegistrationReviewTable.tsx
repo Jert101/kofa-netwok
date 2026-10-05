@@ -59,6 +59,8 @@ export function RegistrationReviewTable() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  /** The load failed: the table must not claim "No applications" underneath the notice. */
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const [editTarget, setEditTarget] = useState<RegistrationRequest | null>(null);
   const [rejectFor, setRejectFor] = useState<RegistrationRequest[] | null>(null);
@@ -77,13 +79,18 @@ export function RegistrationReviewTable() {
     );
     const body: unknown = await res.json().catch(() => null);
     if (!isApiResponse<ListResponse>(body) || !body.ok) {
-      setRows([]);
+      // Used to set `rows` to [], which rendered the "No pending applications." empty state -- the
+      // same screen a 500 and an honest empty tab produce. That is not a safe guess about the queue,
+      // so the failure is stated and the table is not given a list to be proud of.
+      setRows(null);
+      setLoadFailed(true);
       setNotice({
         tone: "error",
         text: isApiResponse(body) && !body.ok ? body.error.message : "Could not load applications.",
       });
       return;
     }
+    setLoadFailed(false);
     setRows(body.data.requests);
     setCounts(body.data.counts);
     setTotal(body.data.total);
@@ -373,11 +380,15 @@ export function RegistrationReviewTable() {
         </div>
       ) : null}
 
-      {rows === null ? (
+      {rows === null && !loadFailed ? (
         <p className="text-sm text-[var(--text-muted)]">Loading…</p>
+      ) : loadFailed ? (
+        <p className="py-10 text-center text-sm text-[var(--text-muted)]">
+          Could not load the applications.
+        </p>
       ) : visible.length === 0 ? (
         <p className="rounded-xl border border-dashed border-[var(--border)] py-10 text-center text-sm text-[var(--text-muted)]">
-          {rows.length === 0 ? `No ${tab} applications.` : "No applications match your search."}
+          {(rows ?? []).length === 0 ? `No ${tab} applications.` : "No applications match your search."}
         </p>
       ) : (
         <>

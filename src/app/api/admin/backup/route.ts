@@ -178,9 +178,14 @@ export async function GET(req: NextRequest) {
           });
         }
         console.error(`[backup] skipping ${spec.file}: ${message}`);
+        // The reason stays in that log line and out of the archive. It used to be written into the file
+        // as well, so a ZIP an admin downloads, emails to themselves and keeps in a recycle bin carried
+        // internal table names and PostgREST wording out of the app -- the exact route this file's own
+        // header worries about for PIN hashes. The line was not CSV-quoted either, so a message with a
+        // comma in it corrupted the file's structure.
         files.push({
           name: spec.file,
-          content: `# This table could not be read: ${message}\r\n`,
+          content: "# This table could not be read and is NOT in this backup. See the server log for the reason.\r\n",
         });
       }
     }

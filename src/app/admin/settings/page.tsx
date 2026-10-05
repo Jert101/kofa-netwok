@@ -89,9 +89,15 @@ export default function AdminSettingsPage() {
   }, []);
 
   // In-app navigation, which is the one that actually loses work.
+  //
+  // The listener is attached unconditionally and the dirty check moved inside the handler. It used to
+  // be guarded by `if (!dirty.current) return` at the top of a `[]`-dependency effect, which runs once on
+  // mount -- before any `edit()` had set the flag -- so it always returned early and the listener was
+  // never registered. The confirm this file documents could therefore never fire, while the
+  // `beforeunload` half above worked and made the omission easy to miss.
   useEffect(() => {
-    if (!dirty.current) return;
     const onClick = (e: MouseEvent) => {
+      if (!dirty.current) return;
       const anchor = (e.target as HTMLElement | null)?.closest("a");
       if (!anchor) return;
       const href = anchor.getAttribute("href");

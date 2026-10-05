@@ -50,16 +50,23 @@ export type LiturgyPlannerProps = {
    * officer does not watch a spinner for data the screen has been showing for a second.
    */
   initialRows?: Array<LiturgyRow & { member_name?: string | null; memberName?: string | null }>;
+  /**
+   * The version those rows came with. Optional, but when a page hands rows over without it the
+   * optimistic-concurrency check cannot run: the editor sends `expected_version: null` and the
+   * server can never see it, so the "someone else changed this" notice it is built around never
+   * fires. The pages that already read rows now also read the version and pass both.
+   */
+  initialVersion?: string | null;
   onSaved?: () => void;
 };
 
 type LoadState = "loading" | "ready" | "error";
 
-export function LiturgyPlanner({ target, title, subtitle, initialRows, onSaved }: LiturgyPlannerProps) {
+export function LiturgyPlanner({ target, title, subtitle, initialRows, initialVersion, onSaved }: LiturgyPlannerProps) {
   const seeded = useMemo(() => rowsFromServer(initialRows ?? []), [initialRows]);
   const [rows, setRows] = useState<EditorRow[]>(seeded);
   const [savedSnapshot, setSavedSnapshot] = useState<EditorRow[]>(seeded);
-  const [version, setVersion] = useState<string | null>(null);
+  const [version, setVersion] = useState<string | null>(initialVersion ?? null);
   const [catalog, setCatalog] = useState<string[]>([]);
   const [state, setState] = useState<LoadState>(initialRows ? "ready" : "loading");
   const [saving, setSaving] = useState(false);

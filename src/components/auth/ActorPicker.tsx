@@ -92,16 +92,7 @@ export function ActorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="sm:max-w-md"
-        showCloseButton={false}
-        onEscapeKeyDown={(e) => {
-          if (!skippable) e.preventDefault();
-        }}
-        onInteractOutside={(e) => {
-          if (!skippable) e.preventDefault();
-        }}
-      >
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Who&apos;s using this device?</DialogTitle>
           <DialogDescription>
@@ -142,13 +133,21 @@ export function ActorDialog({
 
         {error ? <p className="text-sm text-[var(--danger)]">{error}</p> : null}
 
-        {skippable ? (
-          <DialogFooter>
+        {/* Both branches need a way out. When the name is skippable the button submits "nobody"; when it
+            is required it only steps aside, because the session is already valid and the caller has to
+            decide where to send the user next. Leaving a dialog with no exit at all is what turned a
+            wrong PIN into a dead end. */}
+        <DialogFooter>
+          {skippable ? (
             <Button variant="ghost" disabled={saving} onClick={() => void choose("")}>
               Skip
             </Button>
-          </DialogFooter>
-        ) : null}
+          ) : (
+            <Button variant="ghost" disabled={saving} onClick={() => onOpenChange(false)}>
+              Continue without a name
+            </Button>
+          )}
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

@@ -62,14 +62,28 @@ export function InboxList() {
 
   async function open(item: InboxItem) {
     if (!item.read_at) {
+      const previous = items;
+      const stamped = new Date().toISOString();
+      // Optimistic: mark it read so the dot clears without waiting on the network. This used to be
+      // the whole story -- if the PATCH below failed, the server kept the item unread, the badge
+      // had already been decremented, and the item flipped back to unread on the next load, which
+      // looks exactly like the action un-did itself to the person who took it. So the update is now
+      // rolled back when the save does not land.
       setItems((prev) =>
-        prev?.map((n) => (n.id === item.id ? { ...n, read_at: new Date().toISOString() } : n)) ?? prev,
+        prev?.map((n) => (n.id === item.id ? { ...n, read_at: stamped } : n)) ?? prev,
       );
       markReadLocally();
-      await fetch(`/api/notifications/${item.id}`, {
-        method: "PATCH",
-        credentials: "same-origin",
-      });
+      try {
+        const res = await fetch(`/api/notifications/${item.id}`, {
+          method: "PATCH",
+          credentials: "same-origin",
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        setError(null);
+      } catch {
+        setItems(previous);
+        setError("That message could not be marked as read.");
+      }
       refreshUnread();
     }
     if (item.link) window.location.assign(item.link);

@@ -1,4 +1,4 @@
-import type { Role } from "@/lib/auth/roles";
+import { ROLE_REACH, type Role } from "@/lib/auth/roles";
 import {
   CalendarDays,
   FileText,
@@ -123,6 +123,42 @@ export const NAV_BY_ROLE: Record<Role, readonly NavItem[]> = {
     // read them, which is the exact gap P2 describes.
     { href: "/super-admin/inbox", label: "Inbox", icon: "inbox", badgeKey: "notifications" },
   ],
+};
+
+/** One section of the sidebar: the pages of a single role, under that role's name. */
+export type NavGroup = {
+  role: Role;
+  label: string;
+  items: readonly NavItem[];
+};
+
+/**
+ * `NAV_BY_ROLE` is one role's menu; this is a role's whole sidebar.
+ *
+ * A four-role sidebar is a flat list of "Menu" and reads fine. A sidebar carrying every page of six
+ * roles is the same list twice over -- "Payments" four times, "Reports" three times -- so the items
+ * are grouped by the section they belong to and each group is headed by the role's name.
+ *
+ * The groups come from `ROLE_REACH`, the same table the middleware and the API guard ask, so the
+ * sidebar cannot offer a link that a guard would then refuse. A role that reaches only itself still
+ * gets exactly one group, and the sidebar labels that one "Menu" so the four ordinary roles keep the
+ * menu they have always had.
+ */
+function groupsFor(role: Role): readonly NavGroup[] {
+  return ROLE_REACH[role].map((section) => ({
+    role: section,
+    label: ROLE_LABEL[section],
+    items: NAV_BY_ROLE[section],
+  }));
+}
+
+export const NAV_GROUPS_BY_ROLE: Record<Role, readonly NavGroup[]> = {
+  admin: groupsFor("admin"),
+  secretary: groupsFor("secretary"),
+  member: groupsFor("member"),
+  officer: groupsFor("officer"),
+  treasurer: groupsFor("treasurer"),
+  super_admin: groupsFor("super_admin"),
 };
 
 /** Exact match on the item's own path; prefix match on child routes only for

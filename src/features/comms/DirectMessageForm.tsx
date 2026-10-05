@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { messageOf, readEnvelope } from "@/lib/api/client";
 
 /**
  * The officer-to-office note on the inbox page.
@@ -32,14 +33,20 @@ export function DirectMessageForm({
         credentials: "same-origin",
         body: JSON.stringify({ title: title.trim(), body: body.trim() || undefined }),
       });
-      if (!res.ok) {
-        const j = (await res.json()) as { error?: string };
-        setError(j.error ?? "Could not send the message.");
+      // The route answers errors as an envelope (`{ ok: false, error: { code, message } }`), so
+      // `j.error` is an object, not a string. Rendering it directly threw "Objects are not valid as a
+      // React child". `messageOf` reads the real reason, and the catch covers a network failure,
+      // which used to fail silently on this form.
+      const env = await readEnvelope(res);
+      if (!res.ok || !env || !env.ok) {
+        setError(messageOf(env, "Could not send the message."));
         return;
       }
       setTitle("");
       setBody("");
       setMsg(`Sent to the ${recipientLabel}.`);
+    } catch {
+      setError("Can't reach the server. The message was not sent.");
     } finally {
       setBusy(false);
     }

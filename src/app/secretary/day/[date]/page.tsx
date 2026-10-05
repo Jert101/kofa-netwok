@@ -1,16 +1,13 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
 import { RoleDayView } from "@/features/attendance/ui/DayView";
+import { BadRouteParamNotice, useDayParam } from "@/features/attendance/ui/route-params";
 
 export default function SecretaryDayPage() {
-  const params = useParams();
-  const date = String(params.date ?? "");
-  const router = useRouter();
+  const date = useDayParam();
 
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    router.replace("/secretary");
-    return null;
+  if (!date) {
+    return <BadRouteParamNotice what="date" homeHref="/secretary" homeLabel="Back to the dashboard" />;
   }
 
   return <RoleDayView role="secretary" date={date} />;

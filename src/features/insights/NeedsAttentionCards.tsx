@@ -92,7 +92,13 @@ export function SecretaryNeedsAttention() {
           <ul className="mt-2 space-y-1 text-sm">
             {data.unrecorded_sessions.slice(0, 6).map((s) => (
               <li key={s.session_id} className="flex items-baseline justify-between gap-3">
-                <Link href={`/secretary/day/${s.date}/session/${s.session_id}`} className="underline">
+                {/*
+                  The secretary's session screen is flat -- `/secretary/session/[id]`, with no date
+                  segment -- so the date-scoped path this used to build matched no route and every tap
+                  in this list was a 404. `DayView` already encodes the difference; the id needs no
+                  translation either way.
+                */}
+                <Link href={`/secretary/session/${s.session_id}`} className="underline">
                   {s.mass_name}
                   {s.sunday ? "" : " (weekday)"}
                 </Link>

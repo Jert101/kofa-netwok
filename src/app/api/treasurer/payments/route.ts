@@ -58,6 +58,16 @@ export async function POST(req: NextRequest) {
   if (!isIsoDate(paidAt)) {
     return validationFailed("That date is not a real date.", { paid_at: "Use a valid date." });
   }
+  // `isIsoDate` only checks the shape. The column is a plain DATE with no CHECK, so a payment dated in
+  // the future used to be stored verbatim and then feed proration -- making a member look like they
+  // still owed money on a date that has not happened. Compare against the parish's today, not the
+  // server's, or the check would refuse an honest payment on the evening of a Manila morning.
+  const today = churchToday(await getSetting("report_timezone"));
+  if (paidAt > today) {
+    return validationFailed("A payment cannot be dated in the future.", {
+      paid_at: `Use today (${today}) or earlier.`,
+    });
+  }
 
   const amount = round2(parsed.data.amount_paid);
   if (amount <= 0) {

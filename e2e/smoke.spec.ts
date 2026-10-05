@@ -322,4 +322,59 @@ test.describe("navigation", () => {
     const members = page.getByRole("link", { name: /^Members$/ }).first();
     await expect(members).toHaveAttribute("aria-current", "page");
   });
+
+  /**
+   * The admin and the super admin are the two roles whose sidebar carries every other role's pages.
+   *
+   * Asserted on the group headings in order rather than on a link count, because a count passes just
+   * as happily when the right number of links is under the wrong headings. "Payments" appears once per
+   * role that has it, which is exactly why each group is headed by the role's name.
+   */
+  for (const [role, headings] of [
+    ["admin", ["Administrator", "Secretary", "Member", "Officer", "Treasurer"]],
+    [
+      "super_admin",
+      ["Administrator", "Secretary", "Member", "Officer", "Treasurer", "Super Admin"],
+    ],
+  ] as const) {
+    test(`${role} sees every role's pages, grouped by role`, async ({ page }) => {
+      await signIn(page, role);
+      await openSidebar(page);
+
+      await expect(page.locator('[data-sidebar="group-label"]')).toHaveText([...headings]);
+      await expect(page.locator('[data-sidebar="group"]')).toHaveCount(headings.length);
+
+      // Every role's own inbox is listed, but only the caller's carries the unread badge: one number
+      // repeated on three inboxes reads as three different counts. Zero is the honest case too --
+      // a parish with nothing unread has no badge.
+      expect(await page.getByLabel(/\d+ unread/).count()).toBeLessThanOrEqual(1);
+    });
+  }
+
+  test("the admin can open another role's pages and keeps the full menu", async ({ page }) => {
+    await signIn(page, "admin");
+    await page.goto("/treasurer");
+    await openSidebar(page);
+
+    // The treasurer's page rendered, under a prefix that used to belong to the treasurer alone...
+    await expect(page.getByRole("link", { name: /^Structures$/ }).first()).toBeVisible();
+    // ...and the shell is still the admin's, which is what gets them back out.
+    await expect(page.getByText("Administrator", { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Members$/ }).first()).toBeVisible();
+  });
+
+  test("the admin still cannot open the super admin namespace", async ({ page }) => {
+    await signIn(page, "admin");
+    await page.goto("/super-admin");
+    await expect(page).toHaveURL(/\/login/);
+  });
+
+  test("a single-section role keeps one plain menu", async ({ page }) => {
+    await signIn(page, "member");
+    await openSidebar(page);
+    await expect(page.locator('[data-sidebar="group-label"]')).toHaveText(["Menu"]);
+    // A member is offered nobody else's pages.
+    await expect(page.getByRole("link", { name: /^Structures$/ })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /^Members$/ })).toHaveCount(0);
+  });
 });

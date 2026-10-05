@@ -16,12 +16,15 @@ type Entry = {
 
 type LookupResponse = {
   found: boolean;
-  as_of: string;
-  member: { id: string; full_name: string; batch: string | null; is_active: boolean };
-  amounts_visible: boolean;
-  is_self: boolean;
-  note: string;
-  entries: Entry[];
+  // Absent when `found` is false: the route answers `{ found: false, results: [], results_count: 0 }`
+  // and nothing else. Declaring them as present is what let `result.member` typecheck behind a `found`
+  // guard that a future edit could easily drop -- and then it would be undefined at runtime.
+  as_of?: string;
+  member?: { id: string; full_name: string; batch: string | null; is_active: boolean };
+  amounts_visible?: boolean;
+  is_self?: boolean;
+  note?: string;
+  entries?: Entry[];
 };
 
 /**
@@ -59,26 +62,38 @@ export function PaymentLookupPage({
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchSeq = useRef(0);
 
   const run = useCallback(async (params: URLSearchParams) => {
     setSearching(true);
     setError(null);
+    // A response that lands after a newer search has begun describes a question the user has already
+    // moved on from, and would overwrite the newer answer. Numbering the requests is cheaper and more
+    // honest than a boolean: the last one to be *asked* wins, not the last one to *arrive*.
+    const ticket = ++searchSeq.current;
     try {
       const res = await fetch(`/api/payments/lookup?${params.toString()}`, {
         credentials: "same-origin",
         cache: "no-store",
       });
+      if (ticket !== searchSeq.current) return;
       if (!res.ok) {
         const json = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+        // Drop the previous result on a failure. Leaving it on screen put one member's name, batch and
+        // peso table under an error banner about a different search, and nothing in the view said which
+        // member it belonged to.
+        setResult(null);
         setError(json?.error?.message ?? "Could not look that up.");
         return;
       }
       const json = (await res.json()) as { data?: LookupResponse };
       setResult(json.data ?? null);
     } catch {
+      if (ticket !== searchSeq.current) return;
+      setResult(null);
       setError("Could not look that up.");
     } finally {
-      setSearching(false);
+      if (ticket === searchSeq.current) setSearching(false);
     }
   }, []);
 
@@ -105,6 +120,14 @@ export function PaymentLookupPage({
       if (debounce.current) clearTimeout(debounce.current);
     };
   }, [query, run, selfOnly]);
+
+  /*
+    Narrowed once, here, rather than trusting `found` to imply the payload is there. The route's
+    not-found answer carries `found: false` and none of these fields, and the alternative -- reading
+    `result.member` behind a `found` check -- is exactly the shape that typechecks and then throws.
+  */
+  const match =
+    result?.found && result.member && result.entries ? { ...result, member: result.member, entries: result.entries } : null;
 
   return (
     <div className="space-y-6 pb-8">
@@ -134,73 +157,73 @@ export function PaymentLookupPage({
 
       {searching ? <p className="text-sm text-[var(--text-muted)]">Searching…</p> : null}
 
-      {!searching && result?.found ? (
+      {match ? (
         <section aria-labelledby="lookup-member" className="space-y-3">
           <div>
             <h2 id="lookup-member" className="font-medium">
-              {result.member.full_name}
+              {match.member.full_name}
             </h2>
             <p className="text-sm text-[var(--text-muted)]">
-              {result.member.batch ? `Batch ${result.member.batch} · ` : ""}
-              {result.member.is_active ? "Active" : "Inactive"} · {result.note}
+              {match.member.batch ? `Batch ${match.member.batch} · ` : ""}
+              {match.member.is_active ? "Active" : "Inactive"} · {match.note}
             </p>
           </div>
 
-          {result.entries.length === 0 ? (
+          {match.entries.length === 0 ? (
             <p className="rounded-2xl border border-dashed border-[var(--border)] p-6 text-center text-sm text-[var(--text-muted)]">
               No payment structures apply to this member.
             </p>
           ) : (
             <ul className="space-y-2">
-              {result.entries.map((entry) => (
+              {match.entries.map((entry) => (
                 <li
                   key={entry.structureId}
-                  className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4"
+                  className="rounded-xl border border-[var(--border)] p-3 text-sm"
                 >
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <p className="font-medium">
+                    <span className="font-medium">
                       {entry.structureName}
                       {!entry.isActive ? (
                         <span className="ml-2 text-xs uppercase tracking-wide text-[var(--text-muted)]">
                           inactive
                         </span>
                       ) : null}
-                    </p>
-                    {entry.settled ? (
-                      <span className="text-sm font-medium text-[var(--success)]">Paid up</span>
-                    ) : (
-                      <span className="text-sm font-medium text-[var(--danger)]">Not paid up</span>
-                    )}
+                    </span>
+                    <span className={entry.settled ? "text-[var(--success)]" : "text-[var(--danger)]"}>
+                      {entry.settled ? "Paid up" : "Not paid up"}
+                    </span>
                   </div>
 
-                  {result.amounts_visible ? (
-                    <dl className="mt-2 grid gap-2 text-sm sm:grid-cols-4">
+                  {/*
+                    `amount` and the rest arrive nulled when the viewer may not see them, so this is a
+                    real branch rather than a formatting edge case. The settled/not word above is the
+                    part everyone is allowed to know; the figures are not, and the page says which it
+                    is showing instead of leaving a peso column blank.
+                  */}
+                  {match.amounts_visible ? (
+                    <dl className="mt-2 grid gap-2 sm:grid-cols-3">
                       <div>
                         <dt className="text-[var(--text-muted)]">Amount</dt>
-                        <dd>{entry.amount !== null ? formatPeso(Number(entry.amount)) : "—"}</dd>
+                        <dd>{entry.amount === null ? "—" : formatPeso(Number(entry.amount))}</dd>
                       </div>
                       <div>
                         <dt className="text-[var(--text-muted)]">Paid</dt>
-                        <dd>{entry.paid !== null ? formatPeso(Number(entry.paid)) : "—"}</dd>
+                        <dd>{entry.paid === null ? "—" : formatPeso(Number(entry.paid))}</dd>
                       </div>
                       <div>
                         <dt className="text-[var(--text-muted)]">Remaining</dt>
-                        <dd>
-                          {entry.remaining !== null ? formatPeso(Number(entry.remaining)) : "—"}
+                        <dd className="font-medium">
+                          {entry.remaining === null ? "—" : formatPeso(Number(entry.remaining))}
                         </dd>
                       </div>
-                      <div>
-                        <dt className="text-[var(--text-muted)]">Credit</dt>
-                        <dd>{entry.credit !== null ? formatPeso(Number(entry.credit)) : "—"}</dd>
-                      </div>
                     </dl>
-                  ) : (
-                    // Said in words rather than left blank. An empty cell reads as a bug; this reads as
-                    // a decision, which is what it is.
-                    <p className="mt-2 text-sm text-[var(--text-muted)]">
-                      Amounts are kept by the treasurer. Ask them if you need the figure.
+                  ) : null}
+
+                  {entry.credit !== null && Number(entry.credit) > 0 ? (
+                    <p className="mt-2 text-xs text-[var(--text-muted)]">
+                      {formatPeso(Number(entry.credit))} paid over. It is held as a credit.
                     </p>
-                  )}
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -208,7 +231,14 @@ export function PaymentLookupPage({
         </section>
       ) : null}
 
-      {!searching && !result && query.trim().length >= 2 && !error ? (
+      {/*
+        A name that matched nobody comes back as `{ found: false, results: [], results_count: 0 }` --
+        a 200 with a populated body, not a null. So this used to test `!result`, which was only ever true
+        before the first search, and the line was unreachable: the member card is skipped because
+        `found` is false, and this is skipped because `result` is truthy. A search for somebody who does
+        not exist rendered neither a card nor a word.
+      */}
+      {!searching && result && !result.found && !error ? (
         <p className="text-sm text-[var(--text-muted)]">No member found by that name.</p>
       ) : null}
     </div>

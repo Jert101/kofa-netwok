@@ -38,8 +38,9 @@ type LoginData = { role: Role; actorRequired: boolean; defaultPinRoles: string[]
 
 export function LoginForm({
   className,
+  next,
   ...props
-}: React.ComponentProps<"div">) {
+}: React.ComponentProps<"div"> & { next?: string }) {
   const router = useRouter()
   const [pin, setPin] = useState("")
   const [shown, setShown] = useState(false)
@@ -54,6 +55,13 @@ export function LoginForm({
   const tooShort = pin.length > 0 && pin.length < PIN_MIN
   const invalid = tooShort || pin.length > PIN_MAX
   const message = error ?? (invalid ? `Use ${PIN_MIN}–${PIN_MAX} characters.` : null)
+
+  // The deep link they originally asked for, or the role's own home. `next` was already narrowed to a
+  // same-site path by `safeNextPath` on the server, so it is safe to hand straight to the router.
+  function go(href: string) {
+    router.replace(href)
+    router.refresh()
+  }
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -96,8 +104,7 @@ export function LoginForm({
         return
       }
 
-      router.replace(ROLE_PATH[role])
-      router.refresh()
+      go(next || ROLE_PATH[role])
     } catch {
       setError(NO_CONNECTION)
     } finally {
@@ -110,18 +117,21 @@ export function LoginForm({
       <ActorDialog
         open={actorStep !== null}
         onOpenChange={(open) => {
-          if (!open && actorStep?.required) return
+          if (open) return
+          // Dismissing used to be refused outright when the actor name is required, which left anyone
+          // who changed their mind with no way out of the dialog. The session is already valid at this
+          // point, and the sidebar offers this same picker as skippable, so leaving is safe: send them on
+          // to their own home and let them set the name there if they want to.
+          const role = actorStep?.role
           setActorStep(null)
+          if (role) go(next || ROLE_PATH[role])
         }}
         actor={null}
         skippable={!actorStep?.required}
         onSelected={() => {
           const role = actorStep?.role
           setActorStep(null)
-          if (role) {
-            router.replace(ROLE_PATH[role])
-            router.refresh()
-          }
+          if (role) go(next || ROLE_PATH[role])
         }}
       />
       <Card className="border-[var(--border)] bg-[var(--surface)]">

@@ -19,6 +19,7 @@ import {
   type LiturgyTarget,
 } from "./liturgy-rows";
 import type { LiturgySlotInput } from "@/lib/liturgy/rules";
+import type { Role } from "@/lib/auth/roles";
 
 /**
  * The one GET/PUT pair behind both key styles.
@@ -27,6 +28,23 @@ import type { LiturgySlotInput } from "@/lib/liturgy/rules";
  * two route files are three lines each because of this. It also means the "last save wins with
  * an 'Updated by another device' notice" rule is implemented once rather than once per mode.
  */
+
+/**
+ * Who may read and write each mode, and the two lists differ on purpose.
+ *
+ * `planned` is the officer's plan for a Mass that has not happened yet. `session` is the record of who
+ * actually served, kept on the session the secretary is running -- the secretary is the one standing
+ * there, and `SessionScreen` has always offered them this editor. With one allowlist for both, the
+ * secretary's editor could not even load its rows, let alone save: every tap ended in a 401 from a
+ * control the app itself had put on their screen.
+ *
+ * So the check is per mode rather than per handler. The secretary gains the session record, which is
+ * theirs to write, and still cannot touch the officer's plan.
+ */
+const LITURGY_ROLES: Record<LiturgyTarget["kind"], Role[]> = {
+  planned: ["officer", "admin"],
+  session: ["officer", "admin", "secretary"],
+};
 
 type ResolvedTarget =
   | { ok: true; target: LiturgyTarget; massId: string; massName: string; date: string }
@@ -60,7 +78,7 @@ async function resolveTarget(target: LiturgyTarget): Promise<ResolvedTarget> {
 }
 
 export async function handleLiturgyGet(req: NextRequest, target: LiturgyTarget) {
-  const guard = await requireRole(req.headers.get("cookie"), ["officer", "admin"]);
+  const guard = await requireRole(req.headers.get("cookie"), LITURGY_ROLES[target.kind]);
   if (!guard.ok) return guard.response;
 
   const resolved = await resolveTarget(target);
@@ -88,7 +106,7 @@ export async function handleLiturgyGet(req: NextRequest, target: LiturgyTarget) 
 }
 
 export async function handleLiturgyPut(req: NextRequest, target: LiturgyTarget) {
-  const guard = await requireRole(req.headers.get("cookie"), ["officer", "admin"]);
+  const guard = await requireRole(req.headers.get("cookie"), LITURGY_ROLES[target.kind]);
   if (!guard.ok) return guard.response;
 
   let json: unknown;

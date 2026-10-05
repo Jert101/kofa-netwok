@@ -1,16 +1,19 @@
 "use client";
 
-import { useParams } from "next/navigation";
 import { SessionScreen } from "@/features/attendance/ui/SessionScreen";
+import {
+  BadRouteParamNotice,
+  useDayParam,
+  useSessionIdParam,
+} from "@/features/attendance/ui/route-params";
 
 export default function MemberSessionDetailPage() {
-  const params = useParams();
-  const date = String(params.date ?? "");
-  return (
-    <SessionScreen
-      sessionId={String(params.id ?? "")}
-      role="member"
-      backHref={date ? `/member/day/${date}` : "/member"}
-    />
-  );
+  const date = useDayParam();
+  const sessionId = useSessionIdParam();
+
+  if (!date || !sessionId) {
+    return <BadRouteParamNotice what="date or session" homeHref="/member" homeLabel="Back to the dashboard" />;
+  }
+
+  return <SessionScreen sessionId={sessionId} role="member" backHref={`/member/day/${date}`} />;
 }

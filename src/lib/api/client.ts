@@ -1,4 +1,4 @@
-import type { ApiError, ApiFailure, ApiSuccess } from "./response";
+import type { ApiError, ApiErrorCode, ApiFailure, ApiSuccess } from "./response";
 
 /**
  * Reading the API from the browser.
@@ -34,7 +34,28 @@ export async function readEnvelope<T>(res: Response): Promise<Envelope<T> | null
   if (!isRecord(body)) return null;
   if (body.ok === true) return { ok: true, data: body.data as T };
   if (body.ok === false) return { ok: false, error: body.error as ApiError };
+
+  /*
+    A bare `{ error: "..." }` with no `ok` flag. Not the contract, but a real shape: the guard used to
+    answer 401 this way, and several older routes still do. Returning null here threw that wording away
+    and left the caller showing its generic fallback, so a signed-out user was told "Could not load
+    members" instead of being told to sign in again. Normalising it means those callers get the server's
+    reason without every call site having to know which shape it received.
+  */
+  if (typeof body.error === "string" && body.error.length > 0) {
+    return { ok: false, error: { code: legacyCodeFor(res.status), message: body.error } };
+  }
   return null;
+}
+
+function legacyCodeFor(status: number): ApiErrorCode {
+  if (status === 401) return "UNAUTHENTICATED";
+  if (status === 403) return "FORBIDDEN";
+  if (status === 404) return "NOT_FOUND";
+  if (status === 409) return "CONFLICT";
+  if (status === 429) return "RATE_LIMITED";
+  if (status === 400) return "BAD_REQUEST";
+  return "INTERNAL_ERROR";
 }
 
 /** The payload of a successful enveloped response, or null. */

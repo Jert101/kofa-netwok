@@ -8,6 +8,12 @@ import {
   safeParseMemberQuery,
   type MemberQuery,
 } from "@/features/members/member-query";
+import {
+  memberScopeFor,
+  memberScopeForSubject,
+  redactMember,
+  visibleMemberFields,
+} from "@/features/members/member-visibility";
 import { createMember } from "@/features/members/server/create-member";
 import { createMemberSchema, toCreateMemberInput } from "@/features/members/member-input";
 
@@ -25,10 +31,24 @@ export async function GET(req: NextRequest) {
   }
 
   const query: MemberQuery = parsed.data;
+  const viewer = { role: g.session.role, actorId: g.session.actor?.id ?? null };
+  const scope = memberScopeFor(viewer);
 
   try {
-    const result = await fetchMembers(query);
-    return jsonOk(result);
+    // The whole roll is one query, so the columns are fetched once and then narrowed per viewer.
+    // Searching by contact number is passed in the same decision: a member who may not read the number
+    // must not be able to find who owns it either, or the search box becomes an oracle that hands over
+    // the number a digit at a time.
+    const result = await fetchMembers(query, { searchContactNumber: scope.contactNumber });
+    return jsonOk({
+      ...result,
+      members: result.members.map((m) =>
+        redactMember(m, memberScopeForSubject(viewer, m.id)),
+      ),
+      // So the directory can offer the columns this caller can actually fill, instead of printing an
+      // em dash down a Contact column that will never have a value.
+      visible_fields: visibleMemberFields(scope),
+    });
   } catch (e) {
     console.error("[admin/members] list failed:", e instanceof Error ? e.message : e);
     return internalError("Could not load the member list.");

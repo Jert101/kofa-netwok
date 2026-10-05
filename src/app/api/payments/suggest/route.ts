@@ -44,12 +44,18 @@ export async function GET(req: NextRequest) {
   if (error) return internalError("Could not load that structure.");
   if (!structure) return badRequest("That structure no longer exists.");
 
-  const { data: payments } = await sb
+  // The `error` was dropped here while the query directly above it checked its own. Supabase answers a
+  // failed read as `data: null`, so `rows` became `[]` and every figure below was computed as though the
+  // member had never paid a peso -- and it answered 200. A treasurer would have been told to collect the
+  // full amount from someone who already paid it.
+  const { data: payments, error: paymentsError } = await sb
     .from("payments")
     .select("amount_paid, paid_at, voided, created_at")
     .eq("member_id", parsed.data.member_id)
     .eq("payment_structure_id", parsed.data.structure_id)
     .eq("voided", false);
+
+  if (paymentsError) return internalError("Could not read this member's payments.");
 
   const rows = payments ?? [];
   const b = balance(structure, rows);

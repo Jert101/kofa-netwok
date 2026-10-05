@@ -3,12 +3,19 @@ import type { NextRequest } from "next/server";
 import { SESSION_COOKIE } from "@/lib/auth/constants";
 import { verifySessionTokenEdge } from "@/lib/auth/jwt-edge";
 import type { Role } from "@/lib/auth/roles";
-import { ROLE_PATH } from "@/lib/auth/roles";
+import { ROLE_PATH, ROLE_SECTIONS, canReach } from "@/lib/auth/roles";
+
+/** Everything a signed-out visitor may open. Each is matched on a segment boundary so `/register`
+ *  cannot accidentally imply `/register/status`. */
+const PUBLIC_PATHS = ["/login", "/register", "/register/status"] as const;
 
 function loginUrl(req: NextRequest) {
   const u = req.nextUrl.clone();
   u.pathname = "/login";
   u.search = "";
+  // Remember where they were headed so a deep link survives the detour through the form.
+  // `safeNextPath` re-validates this on the login page; it is a convenience, never a trust boundary.
+  u.searchParams.set("next", req.nextUrl.pathname);
   return u;
 }
 
@@ -26,8 +33,10 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  if (pathname === "/login" || pathname === "/register") {
-    return NextResponse.next();
+  for (const path of PUBLIC_PATHS) {
+    if (pathname === path) {
+      return NextResponse.next();
+    }
   }
 
   const token = req.cookies.get(SESSION_COOKIE)?.value ?? null;
@@ -56,49 +65,28 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  if (need("/admin")) {
-    if (session?.role !== "admin") {
+  /*
+    Role prefixes are checked against `ROLE_REACH` rather than against one hard-coded role each.
+    A section is open to the role that owns it plus every role that oversees it, so the admin and the
+    super admin can follow a link into any other role's pages; everyone else is still turned away, and
+    `admin` still cannot open `/super-admin`. Middleware stays a cheap signature check -- whether the
+    session was revoked is settled again in the layout, where the cookie can be read properly.
+  */
+  for (const { prefix, role } of ROLE_SECTIONS) {
+    if (!need(prefix)) continue;
+    if (!session?.role || !canReach(session.role as Role, role)) {
       return NextResponse.redirect(loginUrl(req));
     }
     return NextResponse.next();
   }
 
-  if (need("/secretary")) {
-    if (session?.role !== "secretary") {
-      return NextResponse.redirect(loginUrl(req));
-    }
-    return NextResponse.next();
-  }
-
-  if (need("/member")) {
-    if (session?.role !== "member") {
-      return NextResponse.redirect(loginUrl(req));
-    }
-    return NextResponse.next();
-  }
-
-  if (need("/treasurer")) {
-    if (session?.role !== "treasurer") {
-      return NextResponse.redirect(loginUrl(req));
-    }
-    return NextResponse.next();
-  }
-
-  if (need("/officer")) {
-    if (session?.role !== "officer") {
-      return NextResponse.redirect(loginUrl(req));
-    }
-    return NextResponse.next();
-  }
-
-  if (need("/super-admin")) {
-    if (session?.role !== "super_admin") {
-      return NextResponse.redirect(loginUrl(req));
-    }
-    return NextResponse.next();
-  }
-
-  return NextResponse.redirect(loginUrl(req));
+  /*
+    Nothing here claims the path. Redirecting an unknown URL to `/login` made a typo look like a
+    sign-in problem and turned a wrong link into a dead end with no way to tell which it was, so an
+    unmatched path is handed to Next.js, which renders `not-found.tsx` with the real status code.
+    Middleware's job is deciding who may open a page that exists, not inventing a destination.
+  */
+  return NextResponse.next();
 }
 
 export const config = {

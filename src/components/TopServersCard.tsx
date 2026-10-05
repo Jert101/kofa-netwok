@@ -11,19 +11,23 @@ type TopServer = {
 export function TopServersCard() {
   const [servers, setServers] = useState<TopServer[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
       try {
         const res = await fetch("/api/admin/top-servers", { credentials: "same-origin" });
         if (!res.ok) {
-          setServers([]);
+          // A failed read used to become an empty list, so a 500 rendered "No attendance records
+          // yet." -- which tells the officer they have never served. That is the opposite of the
+          // truth in the failure case, so it is named instead.
+          setLoadError("Could not load the top servers.");
           return;
         }
         const j = (await res.json()) as { top_servers?: TopServer[] };
         setServers(j.top_servers ?? []);
       } catch {
-        setServers([]);
+        setLoadError("Could not load the top servers.");
       } finally {
         setLoading(false);
       }
@@ -44,6 +48,8 @@ export function TopServersCard() {
       <div className="p-4">
         {loading ? (
           <p className="py-6 text-center text-sm text-[var(--text-muted)]">Loading…</p>
+        ) : loadError ? (
+          <p role="alert" className="py-6 text-center text-sm text-[var(--danger)]">{loadError}</p>
         ) : !servers || servers.length === 0 ? (
           <p className="rounded-xl border border-dashed border-[var(--border)] py-10 text-center text-sm text-[var(--text-muted)]">
             No attendance records yet.

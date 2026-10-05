@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { dataOf, fieldOf, messageOf, readEnvelope } from "./client";
 
 /** Minimal stand-in for the Response methods these helpers touch. */
-function jsonRes(body: unknown, ok = true): Response {
-  return { json: async () => body, ok } as unknown as Response;
+function jsonRes(body: unknown, ok = true, status = 200): Response {
+  return { json: async () => body, ok, status } as unknown as Response;
 }
 
 /** A response whose body is not JSON at all, e.g. an HTML error page from the platform. */
@@ -36,6 +36,38 @@ describe("readEnvelope", () => {
 
   it("returns null for a null body", async () => {
     expect(await readEnvelope(jsonRes(null))).toBeNull();
+  });
+
+  describe("legacy bare-error bodies", () => {
+    // The guard answered 401 as `{ error: "Unauthorized" }` and several older routes still do. Callers
+    // were getting null and showing their own generic wording, so a signed-out user was told the page
+    // failed to load rather than that they needed to sign in again.
+    it("reads a bare error string as a failure", async () => {
+      const env = await readEnvelope(jsonRes({ error: "Session expired" }, false, 401));
+      expect(env).not.toBeNull();
+      expect(env?.ok).toBe(false);
+      expect(messageOf(env, "fallback")).toBe("Session expired");
+    });
+
+    it("names a code from the status so callers can still branch on it", async () => {
+      const env = await readEnvelope(jsonRes({ error: "Unauthorized" }, false, 401));
+      expect(env?.ok === false && env.error.code).toBe("UNAUTHENTICATED");
+      const locked = await readEnvelope(jsonRes({ error: "Month is closed" }, false, 409));
+      expect(locked?.ok === false && locked.error.code).toBe("CONFLICT");
+      const missing = await readEnvelope(jsonRes({ error: "Not found." }, false, 404));
+      expect(missing?.ok === false && missing.error.code).toBe("NOT_FOUND");
+    });
+
+    it("still returns null for a bare body that is a payload, not an error", async () => {
+      // A plain route's success body must not be mistaken for a failure.
+      expect(await readEnvelope(jsonRes({ labels: ["lector"] }))).toBeNull();
+      expect(await readEnvelope(jsonRes({ members: [] }))).toBeNull();
+    });
+
+    it("ignores a non-string or empty error", async () => {
+      expect(await readEnvelope(jsonRes({ error: "" }))).toBeNull();
+      expect(await readEnvelope(jsonRes({ error: { code: "X" } }))).toBeNull();
+    });
   });
 
   it("keeps a falsy payload rather than treating it as missing", async () => {

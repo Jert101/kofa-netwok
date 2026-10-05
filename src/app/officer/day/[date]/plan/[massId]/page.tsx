@@ -4,7 +4,6 @@ import { format, parseISO } from "date-fns";
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { LiturgyPlanner } from "@/features/liturgy/ui/LiturgyPlanner";
-import type { LiturgyRow } from "@/lib/liturgy/rules";
 
 function formatLongDate(ymd: string): string {
   try {
@@ -14,42 +13,43 @@ function formatLongDate(ymd: string): string {
   }
 }
 
+/**
+ * Plan one Mass.
+ *
+ * The page used to fetch the rows itself through `/api/attendance/liturgy-planned` and hand them
+ * to the editor as `initialRows`, while the editor would have fetched the same plan through
+ * `/api/liturgy/planned` if it had not been given rows. Two read paths that spelled the payload
+ * differently (`slots` here, `rows` there) is the version of "two sources of truth" this screen had.
+ * The version it handed over was `null`, so the save-level "Updated by another device" notice could
+ * never fire either.
+ *
+ * Now the editor is the one reader: it fetches `/api/liturgy/planned`, so it starts with the rows and
+ * the version together. The only thing this page still asks for is the Mass name, because that is the
+ * heading and the editor's own title already covers the rest.
+ */
 export default function OfficerPlanMassPage() {
   const params = useParams();
   const date = String(params.date ?? "");
   const massId = String(params.massId ?? "");
   const router = useRouter();
-  const [massName, setMassName] = useState("");
-  const [rows, setRows] = useState<Array<LiturgyRow & { member_name?: string | null }>>([]);
-  const [loading, setLoading] = useState(true);
-  const [version, setVersion] = useState(0);
-
-  // Only the heading comes from here. The editor loads its own rows through `/api/liturgy/planned`,
-  // so there is one code path that knows how to read and write a plan rather than two that can
-  // disagree about the shape of it.
+  const [massName, setMassName] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
     const res = await fetch(
       `/api/attendance/liturgy-planned?date=${encodeURIComponent(date)}&mass_id=${encodeURIComponent(massId)}`,
-      { credentials: "same-origin" }
+      { credentials: "same-origin" },
     );
     if (!res.ok) {
       router.replace(`/officer/day/${date}`);
       return;
     }
-    const j = (await res.json()) as {
-      mass_name: string;
-      slots: Array<LiturgyRow & { member_name?: string | null }>;
-    };
-    setMassName(j.mass_name);
-    setRows(j.slots ?? []);
-    setLoading(false);
+    const j = (await res.json()) as { mass_name?: string };
+    setMassName(j.mass_name ?? null);
   }, [date, massId, router]);
 
   useEffect(() => {
     void load();
-  }, [load, version]);
+  }, [load]);
 
   return (
     <div>
@@ -60,22 +60,16 @@ export default function OfficerPlanMassPage() {
       >
         ← Back
       </button>
-      <h1 className="text-lg font-semibold">{loading ? "…" : massName}</h1>
+      <h1 className="text-lg font-semibold">{massName ?? "…"}</h1>
       <p className="mt-1 text-sm text-[var(--text-muted)]">{formatLongDate(date)}</p>
 
-      {!loading ? (
-        <div className="mt-4">
-          <LiturgyPlanner
-            target={{ kind: "planned", sessionDate: date, massId }}
-            title="Plan this Mass"
-            subtitle={formatLongDate(date)}
-            initialRows={rows}
-            onSaved={() => setVersion((v) => v + 1)}
-          />
-        </div>
-      ) : (
-        <p className="mt-4 text-sm text-[var(--text-muted)]">Loading…</p>
-      )}
+      <div className="mt-4">
+        <LiturgyPlanner
+          target={{ kind: "planned", sessionDate: date, massId }}
+          title="Plan this Mass"
+          subtitle={formatLongDate(date)}
+        />
+      </div>
     </div>
   );
 }

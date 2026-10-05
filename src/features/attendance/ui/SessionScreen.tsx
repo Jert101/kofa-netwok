@@ -50,6 +50,8 @@ type SessionPayload = {
     free_text: string | null;
     sort_order: number;
   }[];
+  /** The version of `liturgy_servers`, so the editor's save sends a real `expected_version`. */
+  liturgy_version?: string | null;
   locked: boolean;
   locked_reason: "pending_approval" | "approved" | null;
   locked_message: string | null;
@@ -78,6 +80,9 @@ export function SessionScreen({ sessionId, role, backHref }: Props) {
   const router = useRouter();
   const [data, setData] = useState<SessionPayload | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  /** Inline, not modal: a failed note must not interrupt someone mid-encode. */
+  const [notesError, setNotesError] = useState<string | null>(null);
+  const [notesSaved, setNotesSaved] = useState(false);
   const [version, setVersion] = useState(0);
 
   const canEncode = role === "admin" || role === "secretary";
@@ -131,16 +136,27 @@ export function SessionScreen({ sessionId, role, backHref }: Props) {
 
   const saveNotes = useCallback(
     async (notes: string) => {
+      setNotesError(null);
       try {
-        await fetch(`/api/attendance/session/${sessionId}`, {
+        const res = await fetch(`/api/attendance/session/${sessionId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           credentials: "same-origin",
           body: JSON.stringify({ notes }),
         });
+        // The status was never checked, so a 401, a 409 from the month lock, or a 500 all looked
+        // exactly like a save. The field kept what was typed and nobody was told: the secretary
+        // walked away believing the note was on the record. Saying so inline keeps the original
+        // intent -- a note is not worth interrupting an encoding session over -- while making the
+        // failure something a person can see and retry.
+        if (!res.ok) {
+          const body = (await res.json().catch(() => null)) as { error?: string } | null;
+          setNotesError(body?.error ?? "That note was not saved.");
+          return;
+        }
+        setNotesSaved(true);
       } catch {
-        // Notes are the least critical thing on the screen, and the field keeps what
-        // was typed. Failing loudly here would interrupt encoding.
+        setNotesError("That note was not saved. Check your connection and try again.");
       }
     },
     [sessionId],
@@ -193,6 +209,8 @@ export function SessionScreen({ sessionId, role, backHref }: Props) {
         editable={editability.editable}
         notes={data.session.notes}
         onNotesSave={(notes) => void saveNotes(notes)}
+        notesError={notesError}
+        notesSaved={notesSaved}
         onRefresh={refresh}
         externalVersion={version}
       />
@@ -221,6 +239,7 @@ export function SessionScreen({ sessionId, role, backHref }: Props) {
             title="Serving today"
             subtitle={data.session.mass_name}
             initialRows={data.liturgy_servers}
+            initialVersion={data.liturgy_version ?? null}
             onSaved={refresh}
           />
         </section>

@@ -26,7 +26,11 @@ const voidSchema = z.object({
  * empty body and recorded nothing, so a voided payment and a deleted one looked identical.
  */
 export async function POST(req: NextRequest, ctx: Ctx) {
-  const g = await requireRole(req.headers.get("cookie"), ["treasurer"]);
+  // `selfOnly` is load-bearing, not decoration. A session may normally act as any role it reaches,
+  // which is what lets an admin open /treasurer and use it -- but borrowing must not extend to reversing
+  // money, or the separation of duties written above stops existing. The admin still sees the Void button
+  // (it is a shared page) and still gets a 401 explaining that a treasurer has to do it.
+  const g = await requireRole(req.headers.get("cookie"), ["treasurer"], { selfOnly: true });
   if (!g.ok) return g.response;
 
   const { id } = await ctx.params;

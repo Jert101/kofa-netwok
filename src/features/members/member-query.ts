@@ -126,12 +126,20 @@ function applyBirthMonth(rows: MemberRow[], month: string): MemberRow[] {
  * "09171234567". But stripping the digits out of a *name* search leaves an empty
  * string, and every string contains an empty string, which quietly turns a search
  * for "Jerson" into "everyone with a contact number". Hence the explicit guard.
+ *
+ * `searchContactNumber` is the caller's decision, not this function's. A viewer who may not read the
+ * number must not be able to search by it either: matching against a column you are not allowed to see
+ * is an oracle, and one that hands the number over a digit at a time. See `member-visibility.ts`.
  */
-export function applySearch(rows: MemberRow[], q: string): MemberRow[] {
+export function applySearch(
+  rows: MemberRow[],
+  q: string,
+  { searchContactNumber = true }: { searchContactNumber?: boolean } = {},
+): MemberRow[] {
   const needle = normalizeName(q);
   if (!needle) return rows;
 
-  const digits = needle.replace(/\D/g, "");
+  const digits = searchContactNumber ? needle.replace(/\D/g, "") : "";
 
   return rows.filter((row) => {
     if (normalizeName(row.full_name).includes(needle)) return true;
@@ -175,7 +183,10 @@ function compare(a: MemberRow, b: MemberRow, sort: MemberSort, dir: "asc" | "des
  * text search are done here because there is no column to match on, which is why
  * those two run over the whole filtered set rather than one page of it.
  */
-export async function fetchMembers(query: MemberQuery): Promise<MemberListResult> {
+export async function fetchMembers(
+  query: MemberQuery,
+  search: { searchContactNumber?: boolean } = {},
+): Promise<MemberListResult> {
   const sb = getSupabaseAdmin();
   // No `count: "exact"` here: the real total depends on the search, which only
   // runs in this function, so a database count would be a second number that can
@@ -200,7 +211,7 @@ export async function fetchMembers(query: MemberQuery): Promise<MemberListResult
 
   // Search narrows first, then the badge count is taken before the birth month is
   // applied, so "all" really means "everything this search matched".
-  let rows = applySearch(all, query.q);
+  let rows = applySearch(all, query.q, search);
   const totalWithoutBirthMonth = rows.length;
   rows = applyBirthMonth(rows, query.birth_month);
   rows.sort((a, b) => compare(a, b, query.sort, query.dir));

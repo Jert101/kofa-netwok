@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/api/guard";
-import { badRequest, conflict, internalError, notFound } from "@/lib/api/response";
+import { badRequest, conflict, internalError, jsonOk, notFound } from "@/lib/api/response";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit/log-audit";
 import { notify } from "@/lib/notify/notify";
@@ -124,5 +124,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     ip: req.headers.get("x-forwarded-for"),
   });
 
-  return NextResponse.json({ ok: true, status, review_note: reviewNote });
+  // Enveloped on success as well as on failure. This route already answered failures through
+  // `jsonError`, but returned `{ ok: true, ... }` with the payload sitting beside `ok` rather than
+  // under `data`. The page read `error` as a string, so every 400/404/409 put an object where a string
+  // was expected and React threw "Objects are not valid as a React child" -- the approve and reject
+  // screen broke on precisely the paths that report a problem.
+  return jsonOk({ status, review_note: reviewNote });
 }

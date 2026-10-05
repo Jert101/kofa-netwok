@@ -54,6 +54,9 @@ type Props = {
   editable: boolean;
   notes: string | null;
   onNotesSave: (notes: string) => void;
+  /** Set by the parent when the last note save failed, so the field can say so. */
+  notesError?: string | null;
+  notesSaved?: boolean;
   onRefresh: () => void;
   /** Bumped by the parent when something server-side changed the roster. */
   externalVersion?: number;
@@ -71,6 +74,8 @@ export function Roster({
   editable,
   notes,
   onNotesSave,
+  notesError = null,
+  notesSaved = false,
   onRefresh,
   externalVersion,
   banner,
@@ -432,6 +437,10 @@ export function Roster({
           value={noteDraft}
           readOnly={!editable}
           disabled={!editable}
+          // `aria-invalid` and the message below are wired together so a screen reader hears
+          // that the note is not on the record, not just that a colour changed.
+          aria-invalid={notesError ? true : undefined}
+          aria-describedby={notesError ? "session-notes-status" : undefined}
           onChange={(e) => {
             notesTouched.current = true;
             setNoteDraft(e.target.value);
@@ -446,6 +455,20 @@ export function Roster({
           rows={3}
           className="mt-2"
         />
+        {/*
+          The save used to be fire-and-forget, so a rejected note looked saved and was not. The
+          failure is stated here, under the field, rather than as an alert that would interrupt
+          somebody in the middle of encoding attendance.
+        */}
+        {notesError ? (
+          <p id="session-notes-status" role="alert" className="mt-2 text-sm text-[var(--danger)]">
+            {notesError}
+          </p>
+        ) : notesSaved ? (
+          <p id="session-notes-status" className="mt-2 text-sm text-[var(--text-muted)]">
+            Note saved.
+          </p>
+        ) : null}
       </div>
 
       <BulkConfirm

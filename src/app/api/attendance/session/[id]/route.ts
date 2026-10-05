@@ -7,6 +7,7 @@ import { deleteLiturgyLinkedAnnouncement } from "@/lib/attendance/liturgy-announ
 import { monthBounds, monthLabel } from "@/lib/reports/report-lock";
 import { notifyAttendanceSessionUpdated } from "@/lib/push/attendance-notify";
 import { loadRoster, type RosterEntry } from "@/features/attendance/server/load-roster";
+import { readLiturgyRows } from "@/features/liturgy/server/liturgy-rows";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getSetting } from "@/lib/settings/store";
 import { guardReportNotGenerated } from "@/lib/reports/check-report-lock";
@@ -54,23 +55,27 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     return true;
   });
 
-  const { data: liturgyRows, error: lErr } = await sb
-    .from("session_liturgy_servers")
-    .select("id, position_label, member_id, free_text, sort_order, members(full_name)")
-    .eq("session_id", id)
-    .order("sort_order", { ascending: true });
+  // One read that knows how to build both the rows and their version. This route used to run its
+  // own query for the rows and report no version at all, which meant the planner handed the editor
+  // rows along with `expected_version: null` and the concurrent-save notice could never fire on the
+  // session screen. Now the same two values the editor gets are the ones `/api/liturgy/*` would
+  // have answered, computed once instead of re-implemented.
+  const liturgyRead = await readLiturgyRows(sb, { kind: "session", sessionId: id });
 
-  let liturgy_servers =
-    !lErr && liturgyRows?.length
-      ? liturgyRows.map((row) => ({
-          id: row.id as string,
-          position_label: row.position_label as string,
-          member_id: (row.member_id as string | null) ?? null,
-          member_name: ((row.members as { full_name?: string } | null)?.full_name ?? "").trim() || null,
-          free_text: (row.free_text as string | null) ?? null,
-          sort_order: row.sort_order as number,
-        }))
-      : [];
+  let liturgy_servers = liturgyRead.ok
+    ? liturgyRead.rows.map((row) => ({
+        id: `session-${row.sort_order}`,
+        position_label: row.position_label,
+        member_id: row.member_id,
+        member_name: (row.memberName ?? "").trim() || null,
+        free_text: row.free_text,
+        sort_order: row.sort_order,
+      }))
+    : [];
+
+  // No rows of their own yet: the session sits on the planned lineup as a seed. The version that
+  // matters is the session's own (empty here), because that is what the editor's save will replace.
+  const liturgy_version = liturgyRead.ok ? liturgyRead.version : null;
 
   if (liturgy_servers.length === 0) {
     const { data: plannedRows, error: plErr } = await sb
@@ -124,6 +129,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     },
     members,
     liturgy_servers,
+    liturgy_version,
     roster,
     locked: guard.blocked,
     locked_reason: guard.reason,
@@ -232,7 +238,8 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       .update({ notes: parsed.data.notes ?? null })
       .eq("id", id);
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error("[attendance/session] notes update failed:", error.message);
+      return NextResponse.json({ error: "Could not save that note." }, { status: 500 });
     }
     return NextResponse.json({ ok: true });
   }
@@ -244,27 +251,31 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   const blocked = await guardSessionWrite({ sb, sessionId: id });
   if (blocked) return blocked;
 
-  const unique = [...new Set(parsed.data.member_ids ?? [])];
-  await sb.from("attendance_records").delete().eq("session_id", id);
+  // One call, one transaction (`kofa_replace_attendance_roster`, migration 035). This used to be
+  // three round trips from here, and the delete's error was never read: a failed delete left the
+  // old roster, the insert added the new members on top of it, and this route answered 200 — so a
+  // member the admin had just removed stayed counted as present in the report. In the other
+  // direction, an insert that failed after a successful delete left the session with no attendance
+  // at all. Both are now impossible: the function either replaces the roster or leaves it alone.
+  const { data: rosterCount, error: replaceErr } = await sb.rpc("kofa_replace_attendance_roster", {
+    p_session_id: id,
+    p_member_ids: [...new Set(parsed.data.member_ids ?? [])],
+    p_notes: parsed.data.notes ?? null,
+  });
 
-  if (unique.length) {
-    const rows = unique.map((member_id) => ({ session_id: id, member_id, source: "encoded" }));
-    const { error: iErr } = await sb.from("attendance_records").insert(rows);
-    if (iErr) {
-      if (iErr.code === "23505") {
-        return NextResponse.json({ error: "Duplicate member in session" }, { status: 409 });
-      }
-      return NextResponse.json({ error: iErr.message }, { status: 400 });
-    }
-  }
-
-  if (parsed.data.notes !== undefined) {
-    await sb.from("attendance_sessions").update({ notes: parsed.data.notes ?? null }).eq("id", id);
+  if (replaceErr) {
+    console.error("[attendance/session] roster replace failed:", replaceErr.message);
+    // The old roster is untouched, so this is safe to retry -- which is the only thing that
+    // makes a failed roster replacement recoverable.
+    return NextResponse.json(
+      { error: "Could not replace the roster. Nothing was changed." },
+      { status: 500 },
+    );
   }
 
   void notifyAttendanceSessionUpdated(id);
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, roster_size: rosterCount ?? 0 });
 }
 
 /**

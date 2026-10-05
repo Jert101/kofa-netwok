@@ -70,6 +70,9 @@ export function ReportsHub({ isAdmin }: Props) {
   const [reports, setReports] = useState<ReportRowView[] | null>(null);
   const [gate, setGate] = useState<Gate | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  /** Distinct from `msg`: this means the page could not be read, and the sections below would
+   *  otherwise carry the wait-fields' "Loading…" forever. */
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [detail, setDetail] = useState<{ id: string; data: Detail } | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [archivingId, setArchivingId] = useState<string | null>(null);
@@ -79,17 +82,30 @@ export function ReportsHub({ isAdmin }: Props) {
   const [wizardOpen, setWizardOpen] = useState(false);
 
   const load = useCallback(async () => {
-    const [rList, rGate] = await Promise.all([
-      fetch("/api/reports", { credentials: "same-origin" }).then((r) => r.json()),
-      fetch("/api/reports/can-generate", { credentials: "same-origin" }).then((r) => r.json()),
-    ]);
-    if (Array.isArray((rList as { reports?: unknown }).reports)) {
-      setReports((rList as { reports: ReportRowView[] }).reports);
-    } else {
-      setReports([]);
-    }
-    if (rGate && typeof rGate === "object") {
-      setGate(rGate as Gate);
+    setLoadError(null);
+    try {
+      const [rList, rGate] = await Promise.all([
+        fetch("/api/reports", { credentials: "same-origin" }).then((r) => r.json()),
+        fetch("/api/reports/can-generate", { credentials: "same-origin" }).then((r) => r.json()),
+      ]);
+      if (Array.isArray((rList as { reports?: unknown }).reports)) {
+        setReports((rList as { reports: ReportRowView[] }).reports);
+      } else {
+        // A failed or malformed read used to become an empty list, which reads as "there are no
+        // past reports" -- the same shape as an honest empty. That is not a safe default for the
+        // thing an admin or secretary is about to act on, so it is reported instead.
+        setLoadError("Could not load the reports.");
+        setReports(null);
+        return;
+      }
+      if (rGate && typeof rGate === "object" && "month_start" in rGate) {
+        setGate(rGate as Gate);
+      } else {
+        setLoadError("Could not load this month's report window.");
+      }
+    } catch {
+      setLoadError("Could not load the reports. Check your connection.");
+      setReports(null);
     }
   }, []);
 
@@ -173,7 +189,18 @@ export function ReportsHub({ isAdmin }: Props) {
           </h2>
         </div>
         <div className="space-y-3 p-4">
-          {strip ? (
+          {loadError ? (
+            <div role="alert">
+              <p className="text-sm text-[var(--danger)]">{loadError}</p>
+              <button
+                type="button"
+                onClick={() => void load()}
+                className="mt-2 text-sm font-medium text-[var(--brand)] underline"
+              >
+                Try again
+              </button>
+            </div>
+          ) : strip ? (
             <div className="flex flex-col gap-2">
               <span
                 className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-semibold ${
@@ -220,8 +247,12 @@ export function ReportsHub({ isAdmin }: Props) {
           </p>
         ) : null}
 
-        {reports === null ? (
+        {reports === null && !loadError ? (
           <p className="py-6 text-center text-sm text-[var(--text-muted)]">Loading…</p>
+        ) : reports === null ? (
+          <p className="py-6 text-center text-sm text-[var(--text-muted)]">
+            The reports could not be loaded.
+          </p>
         ) : reports.length === 0 ? (
           <p className="rounded-xl border border-dashed border-[var(--border)] py-10 text-center text-sm text-[var(--text-muted)]">
             No reports yet.

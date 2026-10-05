@@ -1,15 +1,18 @@
 "use client";
 
-import { useParams } from "next/navigation";
 import { SessionScreen } from "@/features/attendance/ui/SessionScreen";
+import {
+  BadRouteParamNotice,
+  useSessionIdParam,
+} from "@/features/attendance/ui/route-params";
 
 export default function SecretarySessionPage() {
-  const params = useParams();
-  return (
-    <SessionScreen
-      sessionId={String(params.id ?? "")}
-      role="secretary"
-      backHref="/secretary"
-    />
-  );
+  const sessionId = useSessionIdParam();
+
+  // No `[date]` segment on this one, but the id is still checked before it becomes a fetch URL.
+  if (!sessionId) {
+    return <BadRouteParamNotice what="session" homeHref="/secretary" homeLabel="Back to the dashboard" />;
+  }
+
+  return <SessionScreen sessionId={sessionId} role="secretary" backHref="/secretary" />;
 }

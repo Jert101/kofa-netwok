@@ -1,16 +1,13 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
 import { RoleDayView } from "@/features/attendance/ui/DayView";
+import { BadRouteParamNotice, useDayParam } from "@/features/attendance/ui/route-params";
 
 export default function MemberDayPage() {
-  const params = useParams();
-  const date = String(params.date ?? "");
-  const router = useRouter();
+  const date = useDayParam();
 
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    router.replace("/member");
-    return null;
+  if (!date) {
+    return <BadRouteParamNotice what="date" homeHref="/member" homeLabel="Back to the dashboard" />;
   }
 
   return <RoleDayView role="member" date={date} />;

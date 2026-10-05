@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { isApiResponse } from "@/lib/api/response";
+import { formatPeso } from "@/lib/format-peso";
 import { DEACTIVATION_REASON_MAX } from "@/features/members/deactivation";
 import { DeactivateDialog } from "@/features/members/ui/DeactivateDialog";
 import { MemberSheet } from "@/features/members/ui/MemberSheet";
@@ -21,7 +22,10 @@ export function MemberProfile({ memberId }: MemberProfileProps) {
   const [member, setMember] = useState<MemberRow | null>(null);
   const [stats, setStats] = useState<MemberStats | null>(null);
   const [loading, setLoading] = useState(true);
+  /** The profile wipes only when the member cannot be read. */
   const [error, setError] = useState<string | null>(null);
+  /** A stats failure (e.g. the Sundays toggle) must not take the dossier with it. */
+  const [statsError, setStatsError] = useState<string | null>(null);
   const [sundaysOnly, setSundaysOnly] = useState(false);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
@@ -51,17 +55,26 @@ export function MemberProfile({ memberId }: MemberProfileProps) {
     );
     const body: unknown = await res.json().catch(() => null);
     if (!isApiResponse<MemberStats>(body) || !body.ok) {
-      setError(isApiResponse(body) && !body.ok ? body.error.message : "Could not load history.");
+      setStatsError(isApiResponse(body) && !body.ok ? body.error.message : "Could not load history.");
       return;
     }
+    setStatsError(null);
     setStats(body.data);
   }, [memberId, sundaysOnly]);
 
+  // Member and stats are independent. They used to live in one effect: toggling Sundays-only
+  // re-ran loadMember, flapped the whole profile through the loading state, and a failed stats read
+  // replaced the member's dossier with an error. Now the member loads once per id, and the stats
+  // reload quietly in their own section.
   useEffect(() => {
     setLoading(true);
     setError(null);
-    void Promise.all([loadMember(), loadStats()]).finally(() => setLoading(false));
-  }, [loadMember, loadStats]);
+    void loadMember().finally(() => setLoading(false));
+  }, [loadMember]);
+
+  useEffect(() => {
+    void loadStats();
+  }, [loadStats]);
 
   useEffect(() => {
     void (async () => {
@@ -182,7 +195,9 @@ export function MemberProfile({ memberId }: MemberProfileProps) {
           </div>
         </div>
 
-        {metrics === null ? (
+        {statsError ? (
+          <p role="alert" className="text-sm text-[var(--danger)]">{statsError}</p>
+        ) : metrics === null ? (
           <p className="text-sm text-[var(--text-muted)]">Loading…</p>
         ) : (
           <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -279,11 +294,11 @@ export function MemberProfile({ memberId }: MemberProfileProps) {
                         <span className="ml-1 text-xs text-[var(--text-muted)]">(closed)</span>
                       ) : null}
                     </td>
-                    <td className="px-4 py-2.5 tabular-nums">{p.amount}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{p.paid}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{formatPeso(Number(p.amount))}</td>
+                    <td className="px-4 py-2.5 tabular-nums">{formatPeso(Number(p.paid))}</td>
                     <td className="px-4 py-2.5 tabular-nums">
                       {Number(p.remaining) > 0 ? (
-                        <span className="text-[var(--danger)]">{p.remaining}</span>
+                        <span className="text-[var(--danger)]">{formatPeso(Number(p.remaining))}</span>
                       ) : (
                         <span className="text-[var(--success)]">Settled</span>
                       )}

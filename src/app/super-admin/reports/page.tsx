@@ -10,6 +10,8 @@ import {
   type ReportRejectPresetId,
 } from "@/lib/reports/review-reasons";
 import { ReportSnapshotView, fetchSnapshot, type SnapshotPayload } from "@/components/ReportSnapshotView";
+import { messageOf, readEnvelope } from "@/lib/api/client";
+import { Button } from "@/components/ui/button";
 
 type Report = {
   id: string;
@@ -44,6 +46,9 @@ export default function SuperAdminReportsPage() {
   const [msgIsError, setMsgIsError] = useState(false);
   const [draft, setDraft] = useState<RejectDraft | null>(null);
   const [draftError, setDraftError] = useState<string | null>(null);
+  // Separate from `msg`: this one means "the list could not be read", which must not be confused with a
+  // successful action or with a genuinely empty queue.
+  const [loadError, setLoadError] = useState<string | null>(null);
   /**
    * RPT-4: the on-screen grid, so a report can be decided without opening the PDF.
    *
@@ -71,14 +76,30 @@ export default function SuperAdminReportsPage() {
   }
 
   const load = useCallback(async () => {
-    const [pRes, aRes, rRes] = await Promise.all([
-      fetch("/api/super-admin/reports?status=pending", { credentials: "same-origin" }).then((r) => r.json()),
-      fetch("/api/super-admin/reports?status=approved", { credentials: "same-origin" }).then((r) => r.json()),
-      fetch("/api/super-admin/reports?status=rejected", { credentials: "same-origin" }).then((r) => r.json()),
-    ]);
-    setPending((pRes as { reports?: Report[] })?.reports ?? []);
-    setApproved((aRes as { reports?: Report[] })?.reports ?? []);
-    setRejected((rRes as { reports?: Report[] })?.reports ?? []);
+    setLoadError(null);
+    try {
+      const buckets = await Promise.all(
+        (["pending", "approved", "rejected"] as const).map(async (status) => {
+          const res = await fetch(`/api/super-admin/reports?status=${status}`, {
+            credentials: "same-origin",
+          });
+          // A failed read used to fall through `?? []`, which showed the super admin a confident
+          // "(0) / No reports pending review" for a queue it simply could not reach. An unreachable
+          // queue and an empty one look identical that way, and only one of them is true.
+          if (!res.ok) {
+            const body = (await res.json().catch(() => null)) as { error?: string } | null;
+            throw new Error(body?.error ?? `Could not load the ${status} reports.`);
+          }
+          const body = (await res.json()) as { reports?: Report[] };
+          return body.reports ?? [];
+        }),
+      );
+      setPending(buckets[0]);
+      setApproved(buckets[1]);
+      setRejected(buckets[2]);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Could not load the reports.");
+    }
   }, []);
 
   useEffect(() => {
@@ -95,10 +116,13 @@ export default function SuperAdminReportsPage() {
         credentials: "same-origin",
         body: JSON.stringify(body ?? { action }),
       });
-      const j = (await res.json()) as { error?: string };
-      if (!res.ok) {
+      // `messageOf` rather than `j.error`: the route answers failures through `jsonError`, so `error` is an
+      // object. Casting it to a string and rendering it threw "Objects are not valid as a React child"
+      // on every 400/404/409 -- the approve and reject screen broke exactly when it had something to say.
+      const env = await readEnvelope<{ status: string; review_note: string | null }>(res);
+      if (!env || !env.ok) {
         setMsgIsError(true);
-        setMsg(j.error ?? "Could not update report");
+        setMsg(messageOf(env, "Could not update report"));
         return false;
       }
       setMsgIsError(false);
@@ -228,6 +252,24 @@ export default function SuperAdminReportsPage() {
         >
           {msg}
         </p>
+      ) : null}
+
+      {/*
+        The counts below stay null on a failed read, so each section keeps saying "Loading…" instead of
+        claiming a queue is empty. This banner says which of the two it is, and offers the one action
+        that helps.
+      */}
+      {loadError ? (
+        <div
+          role="alert"
+          className="rounded-2xl border border-[var(--danger)] bg-[var(--surface)] p-4 text-sm text-[var(--danger)]"
+        >
+          <p className="font-medium">Could not load the reports.</p>
+          <p className="mt-1">{loadError}</p>
+          <Button type="button" variant="outline" className="mt-3 min-h-11" onClick={() => void load()}>
+            Retry
+          </Button>
+        </div>
       ) : null}
 
       <section>

@@ -21,7 +21,7 @@ import { LogoutButton } from "@/components/layout/LogoutButton";
 import { ThemeSwitch } from "@/components/layout/ThemeSwitch";
 import { PwaHub } from "@/components/PwaHub";
 import { ActorPicker, type ActorOption } from "@/components/auth/ActorPicker";
-import { NAV_ICONS, ROLE_LABEL, isActive, type NavItem } from "@/lib/nav/config";
+import { NAV_ICONS, ROLE_LABEL, isActive, type NavGroup } from "@/lib/nav/config";
 import { useUnreadCount } from "@/lib/comms/use-unread-count";
 import type { Role } from "@/lib/auth/roles";
 
@@ -47,14 +47,18 @@ function UnreadBadge() {
 
 export function AppSidebar({
   role,
-  links,
+  groups,
   actor = null,
 }: {
   role: Role;
-  links: readonly NavItem[];
+  groups: readonly NavGroup[];
   actor?: ActorOption | null;
 }) {
   const pathname = usePathname();
+
+  // One section keeps the label it has always had. Two or more need the role's name, or three
+  // different "Payments" in a column with nothing to tell them apart.
+  const byRole = groups.length > 1;
 
   return (
     <Sidebar collapsible="icon">
@@ -79,36 +83,44 @@ export function AppSidebar({
       </SidebarHeader>
 
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Menu</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {links.map((item) => {
-                const Icon = NAV_ICONS[item.icon];
-                const active = isActive(pathname, item);
-                return (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={active}
-                      tooltip={item.label}
-                      className="min-h-11"
-                    >
-                      <Link
-                        href={item.href}
-                        aria-current={active ? "page" : undefined}
+        {groups.map((group) => (
+          <SidebarGroup key={group.role}>
+            <SidebarGroupLabel>{byRole ? group.label : "Menu"}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {group.items.map((item) => {
+                  const Icon = NAV_ICONS[item.icon];
+                  const active = isActive(pathname, item);
+                  const own = group.role === role;
+                  return (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={active}
+                        tooltip={own ? item.label : `${group.label} · ${item.label}`}
+                        className="min-h-11"
                       >
-                        <Icon aria-hidden />
-                        <span>{item.label}</span>
-                        {item.badgeKey === "notifications" ? <UnreadBadge /> : null}
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+                        <Link
+                          href={item.href}
+                          aria-current={active ? "page" : undefined}
+                        >
+                          <Icon aria-hidden />
+                          <span>{item.label}</span>
+                          {/*
+                            The count is one number for the whole session, so it belongs on the
+                            caller's own inbox and nowhere else -- three identical badges on three
+                            inboxes reads as three different counts.
+                          */}
+                          {item.badgeKey === "notifications" && own ? <UnreadBadge /> : null}
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
       </SidebarContent>
 
       <SidebarFooter>

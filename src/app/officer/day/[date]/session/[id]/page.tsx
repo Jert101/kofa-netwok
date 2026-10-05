@@ -1,16 +1,19 @@
 "use client";
 
-import { useParams } from "next/navigation";
 import { SessionScreen } from "@/features/attendance/ui/SessionScreen";
+import {
+  BadRouteParamNotice,
+  useDayParam,
+  useSessionIdParam,
+} from "@/features/attendance/ui/route-params";
 
 export default function OfficerSessionPage() {
-  const params = useParams();
-  const date = String(params.date ?? "");
-  return (
-    <SessionScreen
-      sessionId={String(params.id ?? "")}
-      role="officer"
-      backHref={date ? `/officer/day/${date}` : "/officer"}
-    />
-  );
+  const date = useDayParam();
+  const sessionId = useSessionIdParam();
+
+  if (!date || !sessionId) {
+    return <BadRouteParamNotice what="date or session" homeHref="/officer" homeLabel="Back to the dashboard" />;
+  }
+
+  return <SessionScreen sessionId={sessionId} role="officer" backHref={`/officer/day/${date}`} />;
 }

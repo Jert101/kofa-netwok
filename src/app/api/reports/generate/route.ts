@@ -19,11 +19,17 @@ export async function POST(req: NextRequest) {
   const g = await requireRole(req.headers.get("cookie"), ["admin", "secretary"]);
   if (!g.ok) return g.response;
 
-  let json: unknown = {};
+  // A body that is not JSON at all used to become `{}`, so the missing required `session_ids` was
+  // reported as "Select at least one Mass session" -- advice about a field the request never contained,
+  // for a request that had not been parsed. Saying what actually happened costs one branch.
+  let json: unknown;
   try {
     json = await req.json();
   } catch {
-    json = {};
+    return NextResponse.json(
+      { error: "Could not read the request.", code: "BAD_REQUEST" },
+      { status: 400 },
+    );
   }
   const parsed = bodySchema.safeParse(json);
   if (!parsed.success) {

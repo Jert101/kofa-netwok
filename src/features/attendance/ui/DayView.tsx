@@ -138,7 +138,10 @@ export function RoleDayView({
       basePath={`/${role}/day/${date}`}
       sessionBasePath={sessionBasePath}
       emptyHint={role === "member" ? "No Mass was recorded on this day." : "No sessions on this day yet."}
-      canAdd={role !== "member"}
+      // Matches who can actually create a session. `POST /api/attendance/session` is declared for the
+      // secretary, so the secretary and -- because an admin reaches the secretary -- the admin can post
+      // one. The officer cannot, and offering the button used to send them to a route that did not exist.
+      canAdd={role === "secretary" || role === "admin"}
     />
   );
 }

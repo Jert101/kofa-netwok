@@ -97,6 +97,8 @@ export function MemberDirectory() {
   const [debouncedQ, setDebouncedQ] = useState("");
   const [page, setPage] = useState(1);
   const [data, setData] = useState<MemberListResult | null>(null);
+  /** Null until the first load answers, so the first paint offers the full set and then narrows. */
+  const [visibleFields, setVisibleFields] = useState<string[] | null>(null);
   const [batches, setBatches] = useState<string[]>([]);
   const [hidden, setHidden] = useState<ColumnKey[]>([]);
   const [busy, setBusy] = useState(false);
@@ -148,7 +150,7 @@ export function MemberDirectory() {
       cache: "no-store",
     });
     const body: unknown = await res.json().catch(() => null);
-    if (!isApiResponse<MemberListResult>(body) || !body.ok) {
+    if (!isApiResponse<MemberListResult & { visible_fields?: string[] }>(body) || !body.ok) {
       setData(null);
       setNotice({
         tone: "error",
@@ -157,6 +159,7 @@ export function MemberDirectory() {
       return;
     }
     setData(body.data);
+    setVisibleFields(body.data.visible_fields ?? null);
   }, [queryString, page]);
 
   useEffect(() => {
@@ -192,6 +195,20 @@ export function MemberDirectory() {
   }, [filters, debouncedQ]);
 
   const members = data?.members ?? [];
+
+  /*
+    The API now says which columns this viewer may read, and the chooser offers only those. Before, the
+    column list was fixed, so a member could add a Contact column and get a table of em dashes -- which
+    reads as a bug rather than as a decision, and invites someone to report it as one. `status` is
+    always offered because it is derived from `is_active`, which everyone may see.
+  */
+  const availableColumns = useMemo(
+    () =>
+      visibleFields === null
+        ? COLUMNS.slice()
+        : COLUMNS.filter((c) => c.key === "status" || visibleFields.includes(c.key)),
+    [visibleFields],
+  );
 
   return (
     <div className="space-y-4">
@@ -233,7 +250,18 @@ export function MemberDirectory() {
               : "border-[var(--success)] bg-[var(--success-soft)] text-[var(--success)]"
           }`}
         >
-          {notice.text}
+          <p>{notice.text}</p>
+          {/* A failed load used to leave the table saying "Loading…" forever with no way forward.
+              Retrying is the one thing that helps. */}
+          {notice.tone === "error" ? (
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="mt-2 font-medium underline"
+            >
+              Try again
+            </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -354,7 +382,7 @@ export function MemberDirectory() {
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Columns</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {COLUMNS.map((c) => (
+            {availableColumns.map((c) => (
               <DropdownMenuCheckboxItem
                 key={c.key}
                 checked={!hidden.includes(c.key)}
@@ -380,9 +408,9 @@ export function MemberDirectory() {
         </p>
       ) : null}
 
-      {data === null ? (
+      {data === null && notice?.tone !== "error" ? (
         <p className="text-sm text-[var(--text-muted)]">Loading…</p>
-      ) : members.length === 0 ? (
+      ) : data === null ? null : members.length === 0 ? (
         <p className="rounded-xl border border-dashed border-[var(--border)] py-10 text-center text-sm text-[var(--text-muted)]">
           No members match these filters.
         </p>
@@ -395,7 +423,7 @@ export function MemberDirectory() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
-                    {COLUMNS.filter((c) => !hidden.includes(c.key)).map((c) => (
+                    {availableColumns.filter((c) => !hidden.includes(c.key)).map((c) => (
                       <TableHead key={c.key}>{c.label}</TableHead>
                     ))}
                     <TableHead className="w-10" />
@@ -409,7 +437,7 @@ export function MemberDirectory() {
                           {m.full_name}
                         </Link>
                       </TableCell>
-                      {COLUMNS.filter((c) => !hidden.includes(c.key)).map((c) => (
+                      {availableColumns.filter((c) => !hidden.includes(c.key)).map((c) => (
                         <TableCell key={c.key}>
                           {c.key === "status" ? (
                             <Badge variant={m.is_active ? "default" : "secondary"}>
