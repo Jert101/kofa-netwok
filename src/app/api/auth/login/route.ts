@@ -14,8 +14,8 @@ import {
 } from "@/lib/api/response";
 import { checkLoginAllowed, recordAttempt } from "@/lib/auth/throttle";
 import { getClientIp } from "@/lib/auth/ip-hash";
-import { isActorRequired } from "@/lib/auth/session-valid";
-import { getAllInternalSettings } from "@/lib/settings/store";
+import { REQUIRE_ACTOR_KEY, isActorRequired } from "@/lib/auth/session-valid";
+import { getSettings } from "@/lib/settings/store";
 import { logAudit } from "@/lib/audit/log-audit";
 import { findRolesOnDefaultPin } from "@/lib/auth/pin-service";
 import type { Role } from "@/lib/auth/roles";
@@ -82,10 +82,15 @@ export async function POST(req: NextRequest) {
     return internalError();
   }
 
-  // AUTH-4: staff roles are asked who is using the device. Member sessions are
-  // logged without an actor, matching today's anonymous behaviour.
-  const settings = await getAllInternalSettings().catch(() => ({} as Record<string, string>));
-  const actorRequired = isActorRequired(role, settings);
+  // The actor requirement is an *exposed* setting (it is what the settings page edits), so it is
+  // never present in the internal map. `getAllInternalSettings` skips exposed keys by design, which
+  // meant `isActorRequired` always fell back to the per-role default -- "member" was always false,
+  // so the "Who's using this device?" step never appeared for a member, and a staff role's toggle
+  // was ignored in the other direction. Read the exposed keys instead.
+  const actorSettings = await getSettings([REQUIRE_ACTOR_KEY[role]]).catch(
+    () => ({} as Record<string, string>),
+  );
+  const actorRequired = isActorRequired(role, actorSettings);
   if (role !== "member") {
     await logAudit({ action: "login_succeeded", actor: { role, memberId: null, name: null }, ip });
   }

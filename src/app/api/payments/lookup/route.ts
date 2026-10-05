@@ -117,6 +117,12 @@ const isSelf = viewer.actorId === memberId;
     }>
   )
     .filter((s) => structureAppliesTo(s, memberMeta))
+    // Inactive structures are archived, not current dues. They used to flow through with
+    // `isActive: false` and an amount, so every member, officer, secretary and treasurer saw the
+    // deactivated payment type listed (as if they still owed it). Now they are filtered out here
+    // rather than rendered, matching the record sheet and the dashboards, which already only
+    // consider active structures.
+    .filter((s) => s.is_active !== false)
     .map((s) => {
       const rows = payments.filter((p) => String(p.payment_structure_id) === String(s.id));
       const b = balance(s, rows);

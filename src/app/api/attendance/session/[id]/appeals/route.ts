@@ -4,7 +4,6 @@ import { requireRole } from "@/lib/api/guard";
 import {
   appealWindowClosed,
   badRequest,
-  forbidden,
   internalError,
   jsonOk,
   notFound,
@@ -205,13 +204,6 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   }
 
   const toAppeal = eligibility.eligible;
-
-  // The member picked names that are not theirs to appeal for. Only checked when an
-  // identity was declared (module 02, AUTH-4), so a shared member PIN still works.
-  if (g.session.actor && toAppeal.some((id) => id !== g.session.actor?.id)) {
-    await recordAttempt("appeal", ip, false);
-    return forbidden("You can only appeal your own attendance.");
-  }
 
   const note = normalizeAppealNote(parsed.data.note);
 
