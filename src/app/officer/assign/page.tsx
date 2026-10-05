@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { BulkAssign } from "./BulkAssign";
+import { MemberCombobox, type MemberHit } from "@/components/MemberCombobox";
 
 type Mass = { id: string; name: string };
 type Template = { id: string; name: string; slot_count?: number };
@@ -41,7 +42,7 @@ export default function OfficerAssignPage() {
   const [templateId, setTemplateId] = useState("");
 
   const [newPosition, setNewPosition] = useState("");
-  const [newMember, setNewMember] = useState<{ id: string; name: string } | null>(null);
+  const [newMember, setNewMember] = useState<MemberHit | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -111,7 +112,7 @@ export default function OfficerAssignPage() {
         key: crypto.randomUUID(),
         position_label: newPosition.trim(),
         member_id: newMember.id,
-        member_name: newMember.name,
+        member_name: newMember.full_name,
       },
     ]);
     setNewPosition("");
@@ -391,9 +392,11 @@ export default function OfficerAssignPage() {
                   className="min-h-11 min-w-0 flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-base"
                 />
                 <div className="min-w-0 flex-1">
-                  <MemberPick
-                    value={r.member_id ? { id: r.member_id, name: r.member_name } : null}
-                    onChange={(m) => patchRow(r.key, { member_id: m?.id ?? "", member_name: m?.name ?? "" })}
+                  <MemberCombobox
+                    value={r.member_id ? { id: r.member_id, full_name: r.member_name } : null}
+                    onChange={(m) =>
+                      patchRow(r.key, { member_id: m?.id ?? "", member_name: m?.full_name ?? "" })
+                    }
                   />
                 </div>
                 {!r.member_id ? (
@@ -436,7 +439,7 @@ export default function OfficerAssignPage() {
               placeholder="Position (e.g. Thurifer)"
               className="min-h-11 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-base"
             />
-            <MemberPick value={newMember} onChange={setNewMember} />
+            <MemberCombobox value={newMember} onChange={setNewMember} />
             <Button size="sm" onClick={addRow} disabled={!newPosition.trim() || !newMember}>
               Add
             </Button>
@@ -462,99 +465,6 @@ export default function OfficerAssignPage() {
       </div>
 
       <BulkAssign masses={masses} sendPush={sendPush} />
-    </div>
-  );
-}
-
-/** Single-member picker against `/api/members/search`, because the assign save needs a real member id. */
-function MemberPick({
-  value,
-  onChange,
-}: {
-  value: { id: string; name: string } | null;
-  onChange: (v: { id: string; name: string } | null) => void;
-}) {
-  const [term, setTerm] = useState("");
-  const [hits, setHits] = useState<Array<{ id: string; full_name: string }>>([]);
-  const [open, setOpen] = useState(false);
-  const owner = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const q = term.trim();
-    if (q.length < 1) {
-      setHits([]);
-      return;
-    }
-    let cancelled = false;
-    const t = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/members/search?q=${encodeURIComponent(q)}&limit=8`, {
-          credentials: "same-origin",
-        });
-        if (!res.ok) return;
-        const body = (await res.json()) as { members?: Array<{ id: string; full_name: string }> };
-        if (!cancelled) setHits(body.members ?? []);
-      } catch {
-        /* a failed search must not interrupt typing */
-      }
-    }, 180);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
-  }, [term]);
-
-  if (value) {
-    return (
-      <div className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3">
-        <span className="min-w-0 flex-1 truncate">{value.name}</span>
-        <button
-          type="button"
-          className="min-h-11 px-1 text-[var(--danger)]"
-          onClick={() => onChange(null)}
-          aria-label="Change member"
-        >
-          ×
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="relative" ref={owner}>
-      <input
-        value={term}
-        onChange={(e) => {
-          setTerm(e.target.value);
-          setOpen(true);
-        }}
-        onFocus={() => setOpen(true)}
-        placeholder="Search member"
-        className="min-h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-base"
-      />
-      {open && term.trim().length > 0 ? (
-        <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-lg">
-          {hits.length === 0 ? (
-            <li className="px-3 py-3 text-sm text-[var(--text-muted)]">No names match.</li>
-          ) : (
-            hits.map((m) => (
-              <li key={m.id}>
-                <button
-                  type="button"
-                  className="flex min-h-11 w-full items-center px-3 text-left text-base active:bg-[var(--surface-2)]"
-                  onClick={() => {
-                    onChange({ id: m.id, name: m.full_name });
-                    setTerm("");
-                    setOpen(false);
-                  }}
-                >
-                  {m.full_name}
-                </button>
-              </li>
-            ))
-          )}
-        </ul>
-      ) : null}
     </div>
   );
 }

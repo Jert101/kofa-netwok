@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatPeso } from "@/lib/format-peso";
 import { VOID_REASONS, validateVoidReason } from "@/lib/payments/rules";
 import { churchTodayLabel } from "@/lib/time/church-time-labels";
+import { MemberCombobox } from "@/components/MemberCombobox";
 
 export type RecordDefaults = {
   as_of: string;
@@ -246,29 +247,29 @@ export function RecordPaymentSheet({
           </select>
         </label>
 
-        <label className="block">
-          <span className="text-sm font-medium">Member</span>
-          <select
-            className="mt-1 min-h-12 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3"
-            value={memberId}
-            onChange={(e) => changeMember(e.target.value)}
+        {/* A search box, not a dropdown: the roll is a hundred-odd names and a native <select> on a
+            phone means scrolling a list you cannot type into to find the one person you have in
+            front of you. */}
+        <div>
+          <MemberCombobox
+            id="record-payment-member"
+            value={member ? { id: member.id, full_name: member.full_name } : null}
+            onChange={(hit) => changeMember(hit ? hit.id : "")}
+            options={eligibleMembers}
             disabled={!structure}
-          >
-            <option value="">{structure ? "Choose a member…" : "Choose a structure first"}</option>
-            {eligibleMembers.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.full_name}
-                {m.batch ? ` (${m.batch})` : ""}
-                {!m.is_active ? " — inactive" : ""}
-              </option>
-            ))}
-          </select>
+            disabledHint="Choose a structure first"
+            placeholder="Type a member's name…"
+            emptyMessage="Nobody on this structure's batch matches that name."
+            renderMeta={(o) =>
+              `${o.batch ? `Batch ${o.batch}` : "No batch"}${o.is_active === false ? " · inactive" : ""}`
+            }
+          />
           {member?.is_active === false ? (
             <p className="mt-1 text-xs text-[var(--text-muted)]">
               This member is inactive. Recording is still allowed, for a payment made before they left.
             </p>
           ) : null}
-        </label>
+        </div>
       </div>
 
       {defaults ? (
