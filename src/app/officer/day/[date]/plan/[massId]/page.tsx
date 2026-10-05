@@ -40,7 +40,10 @@ export default function OfficerPlanMassPage() {
       { credentials: "same-origin" },
     );
     if (!res.ok) {
-      router.replace(`/officer/day/${date}`);
+      // Do not redirect away from the plan. The Mass-name fetch is a courtesy for the heading; if it
+      // fails, the editor must still render, because a redirect here is exactly how the officer lost
+      // the ability to assign servers in the "it's gone" report.
+      setMassName(null);
       return;
     }
     const j = (await res.json()) as { mass_name?: string };
