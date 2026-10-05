@@ -6,7 +6,15 @@ import { Button } from "@/components/ui/button";
 
 type Mass = { id: string; name: string };
 type Template = { id: string; name: string; slot_count?: number };
-type Row = { key: string; position_label: string; member_id: string; member_name: string };
+/** `required_gender` is the criterion the random fill uses for a position. It is a tool for choosing,
+ *  not a property of the assignment, so it is never sent to the server. */
+type Row = {
+  key: string;
+  position_label: string;
+  member_id: string;
+  member_name: string;
+  required_gender?: "male" | "female" | "any";
+};
 
 /**
  * Assign a server, by date and by Mass.
@@ -115,6 +123,74 @@ export default function OfficerAssignPage() {
 
   const patchRow = (key: string, patch: Partial<Row>) => {
     setRows((prev) => (prev ?? []).map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  };
+
+  /**
+   * Randomly fill the positions that have a name but no server yet -- the ones a template just brought
+   * in, typically. Each empty row is filled from the active roll filtered by that row's gender rule
+   * ("Anyone" takes anyone), and a member who is already serving somewhere on this date+Mass, or who
+   * was just drawn for another row, is never picked twice.
+   *
+   * Like the plan editor, this only edits the rows on screen: nothing is stored until Save, so the
+   * officer reviews the draw first and the push-notification choice still governs the save.
+   */
+  const randomFillEmpty = async () => {
+    const current = rows ?? [];
+    const targets = current.filter((r) => !r.member_id && r.position_label.trim().length > 0);
+    if (targets.length === 0) {
+      setNotice("Every named position already has a server, so there is nothing to fill.");
+      return;
+    }
+
+    setError(null);
+    let members: Array<{ id: string; full_name: string; gender: string | null }>;
+    try {
+      const res = await fetch("/api/admin/members?status=active&page_size=100", {
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      const body = (await res.json()) as {
+        data?: { members?: Array<{ id: string; full_name: string; gender?: string | null }> };
+      };
+      members = (body.data?.members ?? []).map((m) => ({
+        id: String(m.id),
+        full_name: String(m.full_name ?? ""),
+        gender: m.gender ?? null,
+      }));
+    } catch {
+      setError("Could not load the member list, so nothing was assigned.");
+      return;
+    }
+
+    const usedNow = new Set(current.map((r) => r.member_id).filter((id): id is string => Boolean(id)));
+    let filled = 0;
+    let short = 0;
+
+    const next = current.map((r) => {
+      if (r.member_id || r.position_label.trim().length === 0) return r;
+      const rule = r.required_gender ?? "any";
+      const pool = members.filter((m) => {
+        if (usedNow.has(m.id)) return false;
+        if (rule === "any") return true;
+        return (m.gender ?? "").toLowerCase() === rule;
+      });
+      if (pool.length === 0) {
+        short += 1;
+        return r;
+      }
+      const pick = pool[Math.floor(Math.random() * pool.length)];
+      usedNow.add(pick.id);
+      filled += 1;
+      return { ...r, member_id: pick.id, member_name: pick.full_name };
+    });
+
+    setRows(next);
+    setNotice(
+      short > 0
+        ? `Assigned ${filled} server${filled === 1 ? "" : "s"}; ${short} position${short === 1 ? "" : "s"} had no eligible member left and ${short === 1 ? "stays" : "stay"} unassigned. Review them, then save.`
+        : `Filled ${filled} position${filled === 1 ? "" : "s"}. Review them, then save.`,
+    );
   };
 
   /**
@@ -319,6 +395,23 @@ export default function OfficerAssignPage() {
                     onChange={(m) => patchRow(r.key, { member_id: m?.id ?? "", member_name: m?.name ?? "" })}
                   />
                 </div>
+                {!r.member_id ? (
+                  <label className="flex items-center gap-1 text-xs text-[var(--text-muted)]">
+                    <span className="sr-only">{r.position_label || "This position"} should prefer</span>
+                    <select
+                      value={r.required_gender ?? "any"}
+                      onChange={(e) =>
+                        patchRow(r.key, { required_gender: e.target.value as "male" | "female" | "any" })
+                      }
+                      aria-label={`Auto-assign preference for ${r.position_label || "this position"}`}
+                      className="min-h-11 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-2 text-xs"
+                    >
+                      <option value="any">Anyone</option>
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                    </select>
+                  </label>
+                ) : null}
                 <Button size="sm" variant="ghost" onClick={() => removeRow(r.key)}>
                   Remove
                 </Button>
@@ -358,6 +451,9 @@ export default function OfficerAssignPage() {
       <div className="flex flex-wrap gap-2">
         <Button onClick={() => void save()} disabled={!massId || !date}>
           Save assignment
+        </Button>
+        <Button variant="outline" onClick={() => void randomFillEmpty()} disabled={unassigned === 0}>
+          Auto-assign empty rows
         </Button>
         <Button variant="outline" onClick={() => void clearAll()} disabled={!massId || !date}>
           Clear all
