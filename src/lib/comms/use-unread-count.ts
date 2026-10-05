@@ -19,8 +19,10 @@ import { useCallback, useEffect, useState } from "react";
  */
 export const UNREAD_CHANGED_EVENT = "inbox:changed";
 
-/** 60 seconds, from the spec. */
-export const UNREAD_POLL_MS = 60_000;
+/** Slow enough that six tabs do not hammer the server, fast enough to read as live on a phone. The
+ *  header badge is now the (only) surface this feeds, so a parish member who taps it should see the
+ *  count drop within a couple of beats, not after a full minute. */
+export const UNREAD_POLL_MS = 15_000;
 
 let subscribers = 0;
 let sharedCount: number | null = null;

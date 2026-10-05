@@ -22,7 +22,6 @@ import { ThemeSwitch } from "@/components/layout/ThemeSwitch";
 import { PwaHub } from "@/components/PwaHub";
 import { ActorPicker, type ActorOption } from "@/components/auth/ActorPicker";
 import { NAV_ICONS, ROLE_LABEL, isActive, type NavGroup } from "@/lib/nav/config";
-import { useUnreadCount } from "@/lib/comms/use-unread-count";
 import type { Role } from "@/lib/auth/roles";
 
 /**
@@ -32,19 +31,6 @@ import type { Role } from "@/lib/auth/roles";
  * 99 because a four digit pill in a collapsed sidebar stops being a badge and starts being a layout
  * problem, and nobody needs to know that there are 4,203 unread.
  */
-function UnreadBadge() {
-  const unread = useUnreadCount();
-  if (unread === null || unread <= 0) return null;
-  return (
-    <span
-      className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--brand)] px-1.5 text-xs font-semibold text-white group-data-[collapsible=icon]:hidden"
-      aria-label={`${unread} unread`}
-    >
-      {unread > 99 ? "99+" : unread}
-    </span>
-  );
-}
-
 export function AppSidebar({
   role,
   groups,
@@ -106,12 +92,6 @@ export function AppSidebar({
                         >
                           <Icon aria-hidden />
                           <span>{item.label}</span>
-                          {/*
-                            The count is one number for the whole session, so it belongs on the
-                            caller's own inbox and nowhere else -- three identical badges on three
-                            inboxes reads as three different counts.
-                          */}
-                          {item.badgeKey === "notifications" && own ? <UnreadBadge /> : null}
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>

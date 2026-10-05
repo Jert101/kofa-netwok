@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { NotificationButton } from "@/components/layout/NotificationButton";
 import { ROLE_LABEL } from "@/lib/nav/config";
 import type { Role } from "@/lib/auth/roles";
 
@@ -22,6 +23,8 @@ export function RoleHeader({ role }: { role: Role }) {
       <span className="truncate text-sm font-semibold text-[var(--brand)] md:text-base">
         {ROLE_LABEL[role]}
       </span>
+      <span className="ml-auto" />
+      <NotificationButton role={role} />
     </header>
   );
 }
