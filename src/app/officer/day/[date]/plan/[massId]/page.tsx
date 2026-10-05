@@ -48,7 +48,7 @@ export default function OfficerPlanMassPage() {
     }
     const j = (await res.json()) as { mass_name?: string };
     setMassName(j.mass_name ?? null);
-  }, [date, massId, router]);
+  }, [date, massId]);
 
   useEffect(() => {
     void load();

@@ -6,9 +6,11 @@ import {
   Inbox,
   Layers,
   LayoutDashboard,
+  LayoutTemplate,
   Megaphone,
   ScrollText,
   Settings,
+  UserCheck,
   UserPlus,
   Users,
   Wallet,
@@ -27,7 +29,9 @@ export type NavIconName =
   | "settings"
   | "megaphone"
   | "layers"
-  | "scrollText";
+  | "scrollText"
+  | "templates"
+  | "assign";
 
 /** Resolved inside client components only. Server code imports the types with `import type`. */
 export const NAV_ICONS: Record<NavIconName, LucideIcon> = {
@@ -43,6 +47,8 @@ export const NAV_ICONS: Record<NavIconName, LucideIcon> = {
   megaphone: Megaphone,
   layers: Layers,
   scrollText: ScrollText,
+  templates: LayoutTemplate,
+  assign: UserCheck,
 };
 
 export type NavItem = {
@@ -102,6 +108,8 @@ export const NAV_BY_ROLE: Record<Role, readonly NavItem[]> = {
   officer: [
     { href: "/officer", label: "Calendar", icon: "calendar", exact: true, also: ["/officer/day"] },
     { href: "/officer/inbox", label: "Announcements", icon: "megaphone" },
+    { href: "/officer/templates", label: "Templates", icon: "templates" },
+    { href: "/officer/assign", label: "Assign", icon: "assign" },
     { href: "/officer/payments", label: "Payments", icon: "wallet" },
   ],
   treasurer: [

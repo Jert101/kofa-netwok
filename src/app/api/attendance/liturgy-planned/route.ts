@@ -53,6 +53,10 @@ export async function GET(req: NextRequest) {
 const putBodySchema = liturgySlotsBodySchema.extend({
   session_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   mass_id: z.string().uuid(),
+  /** Whether to push a "servers assigned" notification after a change. Optional: when a caller
+   *  (like the assignment page) sends it explicitly it wins; otherwise the old officer-default
+   *  applies. */
+  send_push: z.boolean().optional(),
 });
 
 export async function PUT(req: NextRequest) {
@@ -118,7 +122,9 @@ export async function PUT(req: NextRequest) {
     parsed.data.session_date,
     parsed.data.mass_id,
     massName,
-    g.session.role === "officer" && parsed.data.slots.length > 0
+    // An explicit choice from the caller always wins; otherwise keep the original default (an officer
+    // pushing actual assignments, never an empty clear).
+    parsed.data.send_push ?? (g.session.role === "officer" && parsed.data.slots.length > 0),
   );
 
   return NextResponse.json({ ok: true });
