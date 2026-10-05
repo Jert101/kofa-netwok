@@ -203,6 +203,20 @@ export function SessionScreen({ sessionId, role, backHref }: Props) {
 
       {editability.banner ? <Banner banner={editability.banner} /> : null}
 
+      {/*
+        APL-1 puts the appeal card first. A server being missing from the roster is the main reason a
+        member opens this page, and it used to wait for the whole attendance table to scroll past --
+        the part of the screen where a missing name lives was exactly the part the member's eye read
+        last. The outcomes of appeals they already sent sit right under it.
+      */}
+      {role === "member" ? (
+        <AttendanceAppealForm sessionId={sessionId} onAppealSubmitted={refresh} />
+      ) : null}
+
+      {role === "member" && data.my_appeals?.length ? (
+        <MyAppealsList appeals={data.my_appeals} />
+      ) : null}
+
       <Roster
         sessionId={sessionId}
         roster={data.roster}
@@ -214,16 +228,6 @@ export function SessionScreen({ sessionId, role, backHref }: Props) {
         onRefresh={refresh}
         externalVersion={version}
       />
-
-      {role === "member" ? (
-        <AttendanceAppealForm sessionId={sessionId} onAppealSubmitted={refresh} />
-      ) : null}
-
-      {/* APL-4: outcomes sit under the form so the member sees the answer to an appeal
-          they already sent, on the same screen they would send a new one from. */}
-      {role === "member" && data.my_appeals?.length ? (
-        <MyAppealsList appeals={data.my_appeals} />
-      ) : null}
 
       {canReviewAppeals ? (
         <AttendanceAppealsReview sessionId={sessionId} onAppealApproved={refresh} />
