@@ -5,16 +5,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 
 type Mass = { id: string; name: string };
+type Template = { id: string; name: string; slot_count?: number };
 type Row = { key: string; position_label: string; member_id: string; member_name: string };
 
 /**
  * Assign a server, by date and by Mass.
  *
- * The same assignment exists in the planned editor, but this page is the one place that says what it
- * does: pick a date and a Mass, and the roster below is exactly what will be saved for that
- * date+mass. Every row maps a position to a member, and every member is searched from the roster.
- * The save writes the whole date+mass set, and the "push to notifications" switch tells the server
- * whether to tell the parish it changed.
+ * Pick a date and a Mass and the list below is exactly what will be saved for that date+Mass. A
+ * template can seed the position list: choosing one brings in its positions, keeps anyone already
+ * assigned to a matching position, and leaves the rest for you to fill. Positions with no server yet
+ * are shown so you can finish them, but the save only writes the ones that have a server — the
+ * endpoint this page uses requires a member on every row it stores.
+ *
+ * The "push to notifications" switch tells the server whether to tell the parish about the change.
  */
 export default function OfficerAssignPage() {
   const [date, setDate] = useState("");
@@ -25,23 +28,33 @@ export default function OfficerAssignPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [templateId, setTemplateId] = useState("");
+
   const [newPosition, setNewPosition] = useState("");
   const [newMember, setNewMember] = useState<{ id: string; name: string } | null>(null);
 
-  // Load the Mass list once, and default the date to today.
   useEffect(() => {
     (async () => {
       try {
         const res = await fetch("/api/masses", { credentials: "same-origin" });
         const body = await res.json().catch(() => ({}));
-        const list = ((body as { data?: { masses?: Mass[] } }).data?.masses ?? []) as Mass[];
-        setMasses(list);
+        setMasses(((body as { data?: { masses?: Mass[] } }).data?.masses ?? []) as Mass[]);
       } catch {
         setError("Could not load the Mass list.");
       }
+      // Same list the plan editor uses, so "use a template" means the same thing on both screens.
+      try {
+        const res = await fetch("/api/officer/liturgy-templates", { credentials: "same-origin" });
+        if (res.ok) {
+          const body = (await res.json()) as { templates?: Template[] };
+          setTemplates(body.templates ?? []);
+        }
+      } catch {
+        setTemplates([]);
+      }
     })();
-    const t = new Date().toISOString().slice(0, 10);
-    setDate((d) => d || t);
+    setDate((d) => d || new Date().toISOString().slice(0, 10));
   }, []);
 
   const loadAssignments = useCallback(async () => {
@@ -60,7 +73,9 @@ export default function OfficerAssignPage() {
         setRows(null);
         return;
       }
-      const body = (await res.json()) as { slots?: Array<{ position_label: string; member_id: string; member_name?: string | null }> };
+      const body = (await res.json()) as {
+        slots?: Array<{ position_label: string; member_id: string; member_name?: string | null }>;
+      };
       setRows(
         (body.slots ?? []).map((s, i) => ({
           key: `${s.position_label}-${s.member_id}-${i}`,
@@ -83,7 +98,12 @@ export default function OfficerAssignPage() {
     if (!newPosition.trim() || !newMember) return;
     setRows((prev) => [
       ...(prev ?? []),
-      { key: crypto.randomUUID(), position_label: newPosition.trim(), member_id: newMember.id, member_name: newMember.name },
+      {
+        key: crypto.randomUUID(),
+        position_label: newPosition.trim(),
+        member_id: newMember.id,
+        member_name: newMember.name,
+      },
     ]);
     setNewPosition("");
     setNewMember(null);
@@ -93,10 +113,66 @@ export default function OfficerAssignPage() {
     setRows((prev) => (prev ?? []).filter((r) => r.key !== key));
   };
 
+  const patchRow = (key: string, patch: Partial<Row>) => {
+    setRows((prev) => (prev ?? []).map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  };
+
+  /**
+   * Seed the list from a template. Anyone already assigned to a position that the template also names
+   * keeps their server; the template's other positions arrive empty and wait to be filled. Non
+   * template rows already on screen are left alone rather than wiped.
+   */
+  const applyTemplate = async () => {
+    if (!templateId) return;
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch(`/api/officer/liturgy-templates/${encodeURIComponent(templateId)}`, {
+        credentials: "same-origin",
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        name?: string;
+        position_labels?: string[];
+      };
+      if (!res.ok) {
+        setNotice(body && "error" in body ? String((body as { error: string }).error) : "Could not load that template.");
+        return;
+      }
+      const labels = (body.position_labels ?? []).map((l) => l.trim()).filter(Boolean);
+      if (labels.length === 0) {
+        setNotice("That template has no positions in it.");
+        return;
+      }
+      setRows((prev) => {
+        const current = prev ?? [];
+        const next = [...current];
+        for (const label of labels) {
+          const already = current.some(
+            (r) => r.position_label.trim().toLowerCase() === label.toLowerCase(),
+          );
+          if (!already) {
+            next.push({
+              key: crypto.randomUUID(),
+              position_label: label,
+              member_id: "",
+              member_name: "",
+            });
+          }
+        }
+        return next;
+      });
+      setNotice(`Added ${body.name ?? "the template"}'s positions. Give each one a server, then save.`);
+    } catch {
+      setNotice("Could not load that template.");
+    }
+  };
+
   const save = async () => {
     setError(null);
     setNotice(null);
-    const slots = (rows ?? []).map((r) => ({ position_label: r.position_label.trim(), member_id: r.member_id }));
+    const slots = (rows ?? [])
+      .filter((r) => r.position_label.trim() && r.member_id)
+      .map((r) => ({ position_label: r.position_label.trim(), member_id: r.member_id }));
     const res = await fetch("/api/attendance/liturgy-planned", {
       method: "PUT",
       credentials: "same-origin",
@@ -108,7 +184,12 @@ export default function OfficerAssignPage() {
       setError(body.error ?? "Could not save the assignment.");
       return;
     }
-    setNotice(sendPush ? "Assignment saved and a notification was sent." : "Assignment saved quietly (no notification).");
+    setNotice(
+      sendPush
+        ? "Assignment saved and a notification was sent."
+        : "Assignment saved quietly (no notification).",
+    );
+    await loadAssignments();
   };
 
   const clearAll = async () => {
@@ -128,13 +209,18 @@ export default function OfficerAssignPage() {
     setNotice("Cleared the assignment for that date and Mass.");
   };
 
+  const list = rows ?? [];
+  const loading = rows === null && date && massId;
+  const unassigned = list.filter((r) => !r.member_id).length;
+
   return (
     <div className="space-y-6 pb-10">
       <header>
         <h1 className="text-lg font-semibold sm:text-xl">Assign a server</h1>
         <p className="mt-1 text-sm text-[var(--text-muted)]">
-          Choose a date and a Mass, then give each position its server. Every row is one position and
-          its server, and you decide whether saving tells the parish about the change.
+          Choose a date and a Mass, then give each position its server. A template can fill in the
+          position list for you. Every row you give a server to is what gets saved, and you decide
+          whether saving tells the parish.
         </p>
       </header>
 
@@ -174,23 +260,65 @@ export default function OfficerAssignPage() {
         </label>
       </section>
 
+      {templates.length > 0 ? (
+        <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+          <h2 className="text-sm font-medium">Use a template</h2>
+          <p className="mt-1 text-xs text-[var(--text-muted)]">
+            Brings in the positions from a saved template. Anyone already assigned to a position that
+            the template names keeps their server.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <select
+              value={templateId}
+              onChange={(e) => setTemplateId(e.target.value)}
+              className="min-h-11 min-w-0 flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-base"
+            >
+              <option value="">Choose a template…</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+            <Button size="sm" onClick={() => void applyTemplate()} disabled={!templateId}>
+              Use template
+            </Button>
+          </div>
+        </section>
+      ) : null}
+
       <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
-        <h2 className="text-sm font-medium">Positions for {masses.find((m) => m.id === massId)?.name ?? "that Mass"}</h2>
+        <h2 className="text-sm font-medium">
+          Positions for {masses.find((m) => m.id === massId)?.name ?? "that Mass"}
+        </h2>
 
-        {rows === null && date && massId ? (
-          <p className="mt-3 text-sm text-[var(--text-muted)]">Loading…</p>
+        {loading ? <p className="mt-3 text-sm text-[var(--text-muted)]">Loading…</p> : null}
+        {!loading && list.length === 0 ? (
+          <p className="mt-3 text-sm text-[var(--text-muted)]">
+            No servers are assigned yet. Add one below, or start from a template.
+          </p>
         ) : null}
 
-        {(rows ?? []).length === 0 && !(rows === null && date && massId) ? (
-          <p className="mt-3 text-sm text-[var(--text-muted)]">No servers are assigned yet.</p>
-        ) : null}
-
-        {(rows ?? []).length > 0 ? (
+        {list.length > 0 ? (
           <ul className="mt-3 space-y-2">
-            {(rows ?? []).map((r) => (
-              <li key={r.key} className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2">
-                <span className="min-w-0 flex-1 truncate text-sm font-medium">{r.position_label}</span>
-                <span className="text-sm text-[var(--text-muted)]">→ {r.member_name}</span>
+            {list.map((r) => (
+              <li
+                key={r.key}
+                className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2"
+              >
+                <input
+                  value={r.position_label}
+                  onChange={(e) => patchRow(r.key, { position_label: e.target.value })}
+                  placeholder="Position"
+                  aria-label="Position"
+                  className="min-h-11 min-w-0 flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-base"
+                />
+                <div className="min-w-0 flex-1">
+                  <MemberPick
+                    value={r.member_id ? { id: r.member_id, name: r.member_name } : null}
+                    onChange={(m) => patchRow(r.key, { member_id: m?.id ?? "", member_name: m?.name ?? "" })}
+                  />
+                </div>
                 <Button size="sm" variant="ghost" onClick={() => removeRow(r.key)}>
                   Remove
                 </Button>
@@ -199,7 +327,14 @@ export default function OfficerAssignPage() {
           </ul>
         ) : null}
 
-        <div className="mt-4 space-y-2 border-t border-[var(--border)] pt-4">
+        {unassigned > 0 ? (
+          <p className="mt-2 text-xs text-[var(--text-muted)]">
+            {unassigned} position{unassigned === 1 ? " has" : "s have"} no server yet. Only positions
+            with a server are saved.
+          </p>
+        ) : null}
+
+        <div className="mt-4 border-t border-[var(--border)] pt-4">
           <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
             <input
               value={newPosition}
@@ -232,8 +367,7 @@ export default function OfficerAssignPage() {
   );
 }
 
-/** Small single-member picker against `/api/members/search`, because the assign save needs a real
- *  member id, not a free-text name. */
+/** Single-member picker against `/api/members/search`, because the assign save needs a real member id. */
 function MemberPick({
   value,
   onChange,
@@ -255,12 +389,14 @@ function MemberPick({
     let cancelled = false;
     const t = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/members/search?q=${encodeURIComponent(q)}&limit=8`, { credentials: "same-origin" });
+        const res = await fetch(`/api/members/search?q=${encodeURIComponent(q)}&limit=8`, {
+          credentials: "same-origin",
+        });
         if (!res.ok) return;
         const body = (await res.json()) as { members?: Array<{ id: string; full_name: string }> };
         if (!cancelled) setHits(body.members ?? []);
       } catch {
-        /* search must not interrupt typing */
+        /* a failed search must not interrupt typing */
       }
     }, 180);
     return () => {
@@ -273,7 +409,12 @@ function MemberPick({
     return (
       <div className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3">
         <span className="min-w-0 flex-1 truncate">{value.name}</span>
-        <button type="button" className="text-[var(--danger)]" onClick={() => onChange(null)} aria-label="Change member">
+        <button
+          type="button"
+          className="min-h-11 px-1 text-[var(--danger)]"
+          onClick={() => onChange(null)}
+          aria-label="Change member"
+        >
           ×
         </button>
       </div>
