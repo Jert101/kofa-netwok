@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
 
     const { data: pending, error } = await sb
       .from("reports")
-      .select("id, report_month, title, created_at, submitted_by_role")
+      .select("id, report_month, title, created_at, generated_by")
       .eq("status", "pending")
       .order("created_at", { ascending: true })
       .limit(50);
@@ -57,7 +57,10 @@ export async function GET(req: NextRequest) {
         id: String(r.id),
         title: (r.title as string | null) ?? "Monthly report",
         report_month: String(r.report_month),
-        submitted_by_role: (r.submitted_by_role as string | null) ?? null,
+        // The column is `generated_by`; this route's output field name stays `submitted_by_role`
+        // for its client. It used to select a `submitted_by_role` column on reports, which does not
+        // exist, so the super admin's dashboard returned 500 against a real database.
+        submitted_by_role: (r.generated_by as string | null) ?? null,
       })),
       last_decisions: (decided ?? []).map((r) => ({
         id: String(r.id),

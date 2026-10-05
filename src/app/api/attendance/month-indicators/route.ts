@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { endOfMonth, format as formatDate } from "date-fns";
 import { z } from "zod";
 import { requireRole } from "@/lib/api/guard";
-import { internalError, jsonOk } from "@/lib/api/response";
+import { badRequest, internalError, jsonOk } from "@/lib/api/response";
 import { decideReportLock, monthLabel } from "@/lib/reports/report-lock";
 import { needsEncoding } from "@/lib/attendance/calendar-indicators";
 import { getSetting } from "@/lib/settings/store";
@@ -45,7 +45,10 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const parsed = qSchema.safeParse({ month: url.searchParams.get("month") });
   if (!parsed.success) {
-    return internalError("Invalid month.");
+    // A missing or malformed query is a client error, not a server fault. This used to answer
+    // a 500, which claimed the month calendar was broken when the only problem was that no month
+    // was asked for.
+    return badRequest("Provide a valid month as YYYY-MM.");
   }
 
   const month = parsed.data.month;

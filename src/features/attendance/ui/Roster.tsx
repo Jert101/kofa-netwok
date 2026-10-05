@@ -84,7 +84,10 @@ export function Roster({
     () => new Set(roster.filter((r) => r.present).map((r) => r.member_id)),
   );
   const [term, setTerm] = useState("");
-  const [filter, setFilter] = useState<Filter>("all");
+  // Defaults to "present": the people who actually came are the reason this screen exists, and the
+  // "all" default surfaced the whole roll, which reads as noise at an encoding session. "Absent"
+  // stays one tap away for checking the remainder.
+  const [filter, setFilter] = useState<Filter>("present");
   const [sortMode, setSortMode] = useState<SortMode>("alphabetical");
   const [undoStack, setUndoStack] = useState<QueueEntry[]>([]);
   const [queue, setQueue] = useState<QueueEntry[]>(() => queueFor(sessionId));
