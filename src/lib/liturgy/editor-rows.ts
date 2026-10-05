@@ -15,6 +15,9 @@ import { normalizeLabel, type LiturgyRow, type LiturgySlotInput } from "./rules"
 
 export type AssigneeKind = "member" | "guest" | "empty";
 
+/** What the position wants from a randomly assigned server. */
+export type GenderRule = "male" | "female" | "any";
+
 export type EditorRow = {
   /** Stable across reorders and edits, so React keys and drag state survive both. */
   id: string;
@@ -24,6 +27,13 @@ export type EditorRow = {
   free_text: string | null;
   /** Which picker this row is using. Switching to guest clears the member, and back again. */
   assignee: AssigneeKind;
+  /**
+   * The criterion a "randomly fill" offer uses for this row. Client-side only: it is not stored
+   * with the plan, because it is the tool used to *choose* who serves, not a property of the
+   * assignment itself. `any` is the normal case; the toggle exists so a position that is, say, a
+   * women's thurifer gets a woman.
+   */
+  required_gender?: GenderRule;
 };
 
 /**

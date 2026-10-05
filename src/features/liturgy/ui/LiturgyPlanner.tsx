@@ -249,6 +249,73 @@ export function LiturgyPlanner({ target, title, subtitle, initialRows, initialVe
     setRows((r) => insertRow(r, afterId, newRow(id)));
   };
 
+  /**
+   * Fill only the positions that are still empty but have a label, picking a random active member
+   * whose gender matches that row's rule. Already-assigned members and guest/free-text rows are left
+   * untouched. It sets the editors' rows only -- nothing is saved until the officer taps Save, so the
+   * leave-guard and the normal save path both still apply.
+   */
+  const randomFillEmpty = async () => {
+    const targets = rows.filter((r) => r.assignee === "empty" && r.position_label.trim().length > 0);
+    if (targets.length === 0) {
+      setStatus({ tone: "warn", text: "Every labeled position already has someone, so there is nothing to fill." });
+      return;
+    }
+
+    let members: Array<{ id: string; full_name: string; gender: string | null }> = [];
+    try {
+      const res = await fetch("/api/admin/members?status=active&page_size=100", {
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      const body = (await res.json()) as { data?: { members?: Array<{ id: string; full_name: string; gender?: string | null }> } };
+      members = (body.data?.members ?? []).map((m) => ({
+        id: String(m.id),
+        full_name: String(m.full_name ?? ""),
+        gender: m.gender ?? null,
+      }));
+    } catch {
+      setStatus({ tone: "bad", text: "Could not load the member list, so nothing was assigned." });
+      return;
+    }
+
+    const usedNow = new Set(
+      rows.filter((r) => r.assignee === "member" && r.member_id).map((r) => r.member_id as string),
+    );
+    const next = rows.map((r) => ({ ...r }));
+    let filled = 0;
+    let short = 0;
+
+    for (const r of next) {
+      if (!(r.assignee === "empty" && r.position_label.trim().length > 0)) continue;
+      const rule = r.required_gender ?? "any";
+      const pool = members.filter((m) => {
+        if (usedNow.has(m.id)) return false;
+        if (rule === "any") return true;
+        return (m.gender ?? "").toLowerCase() === rule;
+      });
+      if (pool.length === 0) {
+        short += 1;
+        continue;
+      }
+      const pick = pool[Math.floor(Math.random() * pool.length)];
+      Object.assign(r, { assignee: "member", member_id: pick.id, member_name: pick.full_name, free_text: null });
+      usedNow.add(pick.id);
+      filled += 1;
+    }
+
+    setRows(next);
+    setStatus(
+      short > 0
+        ? {
+            tone: "warn",
+            text: `Assigned ${filled} server${filled === 1 ? "" : "s"}; ${short} position${short === 1 ? "" : "s"} had no eligible member left, so ${short === 1 ? "it stays" : "they stay"} unassigned.`,
+          }
+        : { tone: "ok", text: `Filled ${filled} empty row${filled === 1 ? "" : "s"}. Review them, then Save.` },
+    );
+  };
+
   if (state === "loading") {
     return <p className="py-6 text-center text-sm text-[var(--text-muted)]">Loading the plan…</p>;
   }
@@ -369,6 +436,28 @@ export function LiturgyPlanner({ target, title, subtitle, initialRows, initialVe
                   onTypeGuest={(name) => patchRow(row.id, (r) => withGuest(r, name))}
                   onClear={() => patchRow(row.id, (r) => withNoAssignee(r))}
                 />
+                {row.assignee === "empty" ? (
+                  <label className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+                    <span>Auto-assign should prefer</span>
+                    <select
+                      value={row.required_gender ?? "any"}
+                      onChange={(e) =>
+                        setRows((prev) =>
+                          prev.map((x) =>
+                            x.id === row.id
+                              ? { ...x, required_gender: e.target.value as "male" | "female" | "any" }
+                              : x,
+                          ),
+                        )
+                      }
+                      className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs"
+                    >
+                      <option value="any">Anyone</option>
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                    </select>
+                  </label>
+                ) : null}
               </div>
 
               <div className="flex shrink-0 flex-col">
@@ -411,9 +500,14 @@ export function LiturgyPlanner({ target, title, subtitle, initialRows, initialVe
       </ul>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Button type="button" variant="outline" onClick={() => addRow(rows[rows.length - 1]?.id ?? null)}>
-          Add position
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" variant="outline" onClick={() => addRow(rows[rows.length - 1]?.id ?? null)}>
+            Add position
+          </Button>
+          <Button type="button" variant="outline" onClick={() => void randomFillEmpty()}>
+            Auto-assign empty rows
+          </Button>
+        </div>
         <p className="text-xs text-[var(--text-muted)]">
           {totalRows} position{totalRows === 1 ? "" : "s"}
         </p>
