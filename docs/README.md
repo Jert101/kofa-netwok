@@ -721,7 +721,7 @@ Vercel Cron config in `vercel.json`; secret via `CRON_SECRET`. Both unattended j
 - Offline-first attendance with sync queue
 - Multi-parish / multi-organization tenancy; white-label theming UI
 - Advanced analytics (trend charts, export XLSX, scheduled email digests)
-- Financial ledger features (expenses, reports to donors, receipts numbering)
+- Financial ledger features (expenses, donor statements; expense categories — receipt control numbering now exists, see `037_payment_control_number.sql`)
 - Audit log UI (currently implicit via timestamps/roles)
 - Localization (i18n) beyond English/Filipino-neutral copy
 
@@ -1001,6 +1001,9 @@ src/app/member/day/[date]/page.tsx
 src/app/member/day/[date]/session/[id]/page.tsx
 src/app/member/page.tsx
 src/app/member/payments/page.tsx
+src/app/member/receipts/page.tsx
+src/app/officer/assign/page.tsx
+src/app/officer/templates/page.tsx
 src/app/officer/day/[date]/page.tsx
 src/app/officer/day/[date]/plan/[massId]/page.tsx
 src/app/officer/day/[date]/session/[id]/page.tsx
@@ -1151,6 +1154,7 @@ import { RoleNav } from "@/components/RoleNav";
 const links = [
   { href: "/member", label: "Home" },
   { href: "/member/payments", label: "Payments" },
+  { href: "/member/receipts", label: "Receipts" },
 ] as const;
 
 export default function MemberLayout({ children }: { children: React.ReactNode }) {

@@ -104,6 +104,7 @@ export const NAV_BY_ROLE: Record<Role, readonly NavItem[]> = {
     // a dead end with extra steps.
     { href: "/member/announcements", label: "Announcements", icon: "megaphone" },
     { href: "/member/payments", label: "Payments", icon: "wallet" },
+    { href: "/member/receipts", label: "Receipts", icon: "fileText" },
   ],
   officer: [
     { href: "/officer", label: "Calendar", icon: "calendar", exact: true, also: ["/officer/day"] },

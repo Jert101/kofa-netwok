@@ -12,7 +12,11 @@ const postSchema = z.object({
 });
 
 export async function GET(req: NextRequest) {
-  const g = await requireRole(req.headers.get("cookie"), ["admin", "treasurer", "member", "officer", "secretary"]);
+  // admin and treasurer only. This route answers the whole parish's payments with names and amounts,
+  // and it was still declared for member, officer and secretary -- the exact leak that PAY-7 closed
+  // on the lookup route but which was left open here. A member's own receipts come from
+  // `/api/member/receipts`, which can only ever answer for the signed-in member.
+  const g = await requireRole(req.headers.get("cookie"), ["admin", "treasurer"]);
   if (!g.ok) return g.response;
 
   const url = new URL(req.url);
@@ -28,7 +32,7 @@ export async function GET(req: NextRequest) {
     // PGRST201 "more than one relationship was found". This embed had to name the constraint. Only the
     // payer, never the recorder or the voider.
     .select(
-      "id, amount_paid, paid_at, notes, voided, payment_structures(name, amount), members!payments_member_id_fkey(full_name)",
+      "id, control_no, amount_paid, paid_at, notes, voided, payment_structures(name, amount), members!payments_member_id_fkey(full_name)",
     )
     .order("paid_at", { ascending: false })
     .order("created_at", { ascending: false });
@@ -67,9 +71,11 @@ export async function POST(req: NextRequest) {
       paid_at: parsed.data.paid_at || undefined,
       notes: parsed.data.notes || null,
     })
-    .select("id")
+    .select("id, control_no")
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ id: data?.id });
+  // `control_no` comes back from the insert because the BEFORE INSERT trigger assigned it; returning
+  // it lets the caller print the receipt immediately instead of re-reading the row to find the number.
+  return NextResponse.json({ id: data?.id, control_no: data?.control_no ?? null });
 }

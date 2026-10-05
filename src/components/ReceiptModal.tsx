@@ -8,7 +8,8 @@ interface ReceiptData {
   structureName: string;
   amountPaid: number;
   date: string;
-  receiptId: string;
+  /** The sequential control number (KOA-2026-00042). Falls back to the payment id. */
+  controlNo: string;
 }
 
 function numberToWords(n: number): string {
@@ -150,7 +151,7 @@ export default function ReceiptModal({
       y += lineH;
     }
 
-    drawDetail("Receipt No.:", data.receiptId.slice(0, 8).toUpperCase());
+    drawDetail("Control No.:", data.controlNo);
     drawDetail("Date:", data.date);
 
     y += 4;
@@ -217,7 +218,7 @@ export default function ReceiptModal({
 
     ctx.font = "9px sans-serif";
     ctx.fillStyle = "#bbb";
-    ctx.fillText(`Receipt ID: ${data.receiptId}`, W / 2, y);
+    ctx.fillText(`Control No. ${data.controlNo}`, W / 2, y);
     y += 20;
 
     ctx.strokeStyle = DARK;
@@ -250,13 +251,48 @@ export default function ReceiptModal({
     draw();
   }, [data]);
 
+  function fileName(): string {
+    return `receipt-${data.controlNo}.png`;
+  }
+
   function downloadPng() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const link = document.createElement("a");
-    link.download = `receipt-${data.receiptId.slice(0, 8)}.png`;
+    link.download = fileName();
     link.href = canvas.toDataURL("image/png");
     link.click();
+  }
+
+  /**
+   * Hand the PNG to the phone's share sheet, which is how the receipt actually reaches the member's
+   * Messenger. Only offered where the browser can share files; everywhere else the download button is
+   * the way to get the same image.
+   */
+  const canShare =
+    typeof navigator !== "undefined" && typeof navigator.canShare === "function";
+
+  async function sharePng() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob((b) => resolve(b), "image/png"),
+    );
+    if (!blob) return;
+    const file = new File([blob], fileName(), { type: "image/png" });
+    if (!navigator.canShare?.({ files: [file] })) {
+      downloadPng();
+      return;
+    }
+    try {
+      await navigator.share({
+        files: [file],
+        title: `Receipt ${data.controlNo}`,
+        text: `Official receipt ${data.controlNo} from Knights of the Altar.`,
+      });
+    } catch {
+      // A cancelled share sheet is not an error worth reporting to the treasurer.
+    }
   }
 
   return (
@@ -270,7 +306,7 @@ export default function ReceiptModal({
             style={{ aspectRatio: "520 / 740" }}
           />
         </div>
-        <div className="mt-6 flex gap-3">
+        <div className="mt-6 flex flex-wrap gap-3">
           <button
             type="button"
             onClick={downloadPng}
@@ -278,6 +314,15 @@ export default function ReceiptModal({
           >
             Download PNG
           </button>
+          {canShare ? (
+            <button
+              type="button"
+              onClick={() => void sharePng()}
+              className="min-h-11 flex-1 rounded-xl border border-[var(--brand)] text-sm font-semibold text-[var(--brand)]"
+            >
+              Share / send
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={onClose}
@@ -286,6 +331,10 @@ export default function ReceiptModal({
             Close
           </button>
         </div>
+        <p className="mt-3 text-center text-xs text-[var(--text-muted)]">
+          Control No. <span className="font-mono">{data.controlNo}</span> — quote this if anyone needs to
+          trace the payment.
+        </p>
       </div>
     </div>
   );

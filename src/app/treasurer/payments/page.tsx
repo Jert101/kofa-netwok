@@ -15,6 +15,8 @@ import { churchTodayLabel, truncateName } from "@/lib/time/church-time-labels";
 
 type PaymentRow = {
   id: string;
+  /** Sequential receipt number, e.g. KOA-2026-00042. Null on a row recorded before migration 037. */
+  control_no: string | null;
   amount_paid: number;
   paid_at: string | null;
   notes: string | null;
@@ -46,7 +48,7 @@ export default function TreasurerPaymentsPage() {
     structureName: string;
     amountPaid: number;
     date: string;
-    receiptId: string;
+    controlNo: string;
   } | null>(null);
   const [ledgerMemberId, setLedgerMemberId] = useState<string | null>(null);
 
@@ -55,7 +57,7 @@ export default function TreasurerPaymentsPage() {
     try {
       const [structureRes, memberRes, paymentRes] = await Promise.all([
         fetch("/api/admin/payment-structures?all=1", { credentials: "same-origin", cache: "no-store" }),
-        fetch("/api/admin/members?all=1", { credentials: "same-origin", cache: "no-store" }),
+        fetch("/api/admin/members?status=active&page_size=100", { credentials: "same-origin", cache: "no-store" }),
         fetch("/api/admin/payments?include_voided=1", { credentials: "same-origin", cache: "no-store" }),
       ]);
 
@@ -66,13 +68,18 @@ export default function TreasurerPaymentsPage() {
 
       const [structureJson, memberJson, paymentJson] = await Promise.all([
         structureRes.json() as Promise<{ structures?: Array<Record<string, unknown>> }>,
-        memberRes.json() as Promise<{ members?: Array<Record<string, unknown>> }>,
+        memberRes.json() as Promise<{ data?: { members?: Array<Record<string, unknown>> } }>,
         paymentRes.json() as Promise<{ payments?: PaymentRow[] }>,
       ]);
 
       setStructures((structureJson.structures ?? []) as unknown as StructureRow[]);
+      // `/api/admin/members` answers with the standard envelope, so the rows live under `data`.
+      // This read the top-level `members`, which is always absent on that route, so the list handed
+      // to the record sheet was empty and there was nobody to search for -- the picker looked broken
+      // rather than empty. `status=active&page_size=100` is explicit because `?all=1` was never a
+      // parameter the route knew, so the call silently took the default page of 25.
       setMembers(
-        (memberJson.members ?? []).map((m) => ({
+        (memberJson.data?.members ?? []).map((m) => ({
           id: String(m.id),
           full_name: String(m.full_name ?? ""),
           batch: (m.batch as string | null) ?? null,
@@ -167,7 +174,7 @@ export default function TreasurerPaymentsPage() {
                 structureName: result.structureName,
                 amountPaid: result.amount,
                 date: result.date,
-                receiptId: result.id,
+                controlNo: result.controlNo,
               });
               void load();
             }}
@@ -220,6 +227,11 @@ export default function TreasurerPaymentsPage() {
                             {p.payment_structures?.name ?? "Unknown structure"}
                             {p.paid_at ? ` · ${churchTodayLabel(p.paid_at)}` : ""}
                           </p>
+                          {/* The number the member is told to quote. Shown on every row so the
+                              treasurer can trace a receipt without opening it. */}
+                          <p className="mt-0.5 font-mono text-xs text-[var(--text-muted)]">
+                            {p.control_no ?? `KOA-${p.id.slice(0, 8).toUpperCase()}`}
+                          </p>
                           {p.notes ? <p className="mt-1 text-sm text-[var(--text-muted)]">{p.notes}</p> : null}
                           {p.voided ? (
                             <p className="mt-1 text-sm text-[var(--danger)]">
@@ -247,6 +259,21 @@ export default function TreasurerPaymentsPage() {
                               Void
                             </button>
                           ) : null}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setReceipt({
+                                memberName: name.text,
+                                structureName: p.payment_structures?.name ?? "Payment",
+                                amountPaid: p.amount_paid,
+                                date: p.paid_at ?? "",
+                                controlNo: p.control_no ?? `KOA-${p.id.slice(0, 8).toUpperCase()}`,
+                              })
+                            }
+                            className="min-h-11 rounded-xl border border-[var(--border)] px-3 text-sm"
+                          >
+                            Receipt
+                          </button>
                           <button
                             type="button"
                             onClick={() => setLedgerMemberId(p.member_id)}

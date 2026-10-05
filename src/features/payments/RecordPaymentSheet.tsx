@@ -44,7 +44,15 @@ export type RecordPaymentSheetProps = {
   structures: StructureOption[];
   members: MemberOption[];
   today: string;
-  onRecorded?: (result: { id: string; memberName: string; structureName: string; amount: number; date: string }) => void;
+  onRecorded?: (result: {
+    id: string;
+    /** The sequential control number assigned by the database, e.g. KOA-2026-00042. */
+    controlNo: string;
+    memberName: string;
+    structureName: string;
+    amount: number;
+    date: string;
+  }) => void;
 };
 
 /**
@@ -169,7 +177,10 @@ export function RecordPaymentSheet({
       });
 
       const json = (await res.json().catch(() => null)) as
-        | { data?: { id: string; still_due: number }; error?: { message?: string; fields?: Record<string, string> } }
+        | {
+            data?: { id: string; control_no?: string | null; still_due: number };
+            error?: { message?: string; fields?: Record<string, string> };
+          }
         | null;
 
       if (res.status === 409) {
@@ -183,8 +194,13 @@ export function RecordPaymentSheet({
       }
 
       const id = json?.data?.id ?? "";
+      // The server assigns the control number in a BEFORE INSERT trigger and hands it back, so the
+      // receipt can print the real number rather than a slice of the uuid. If it is somehow absent
+      // (a payment recorded before the migration), fall back so the receipt still says something.
+      const controlNo = json?.data?.control_no ?? `KOA-${id.slice(0, 8).toUpperCase()}`;
       onRecorded?.({
         id,
+        controlNo,
         memberName: member.full_name,
         structureName: structure.name,
         amount: value,
