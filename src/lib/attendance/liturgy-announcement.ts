@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { notify } from "@/lib/notify/notify";
+import { insertOnceByDedupeKey } from "@/lib/announcements/upsert-by-key";
 
 export type LiturgySlotLine = {
   position_label: string;
@@ -62,12 +63,71 @@ export function liturgyPushNotificationTitle(sessionDate: string, massName: stri
   return `Servers · ${sessionDate} · ${massName}`;
 }
 
-/** Removes legacy auto-posted liturgy rows from the announcements table (if any). */
+/**
+ * The idempotency key for the announcement about one date and Mass's roster.
+ *
+ * Two columns could have done this -- the parish asked for one announcement per date and Mass, and
+ * migration 010 put a unique index on exactly that pair -- but `dedupe_key` is used instead because
+ * it comes with a helper that resolves the collision explicitly. Asking PostgREST to treat a
+ * composite unique index as its upsert arbiter is a thing that works until it does not.
+ */
+export function liturgyAnnouncementKey(sessionDate: string, massId: string): string {
+  return `liturgy-servers:${sessionDate}:${massId}`;
+}
+
+/**
+ * Post, or refresh, the announcement about one Mass's roster.
+ *
+ * `delete_at` is an instant computed by the caller from the day the officer picked, so the post
+ * stays readable through that day rather than disappearing at midnight on it.
+ *
+ * `created_at` is refreshed on the way through. The roster of next Sunday is not the same document
+ * as the roster of this Sunday, and leaving the original timestamp means re-announcing a Mass sits
+ * at the bottom of the feed where nobody reads it -- while `updated_at` is left alone, because
+ * "Edited" on a generated post would suggest a human rewrote it.
+ */
+export async function upsertLiturgyRosterAnnouncement(
+  sb: SupabaseClient,
+  params: {
+    sessionDate: string;
+    massId: string;
+    title: string;
+    body: string;
+    deleteAt: string;
+    fromRole: string;
+  }
+): Promise<string | null> {
+  const result = await insertOnceByDedupeKey(sb, {
+    dedupe_key: liturgyAnnouncementKey(params.sessionDate, params.massId),
+    title: params.title,
+    body: params.body,
+    created_by: params.fromRole,
+    created_at: new Date().toISOString(),
+    delete_at: params.deleteAt,
+    // Linked as well as keyed: this is what lets "clear the roster" take the notice about it with it.
+    liturgy_session_date: params.sessionDate,
+    liturgy_mass_id: params.massId,
+    // Empty means everyone, which is what a Mass roster is. Stated rather than left null so a
+    // reader of the row does not have to know that null and empty both mean the parish.
+    audience_roles: [],
+    audience_batches: [],
+    pinned: false,
+  });
+  return result.id;
+}
+
+/** Removes the announcement about one date and Mass's roster, however it was found. */
 export async function deleteLiturgyLinkedAnnouncement(
   sb: SupabaseClient,
   sessionDate: string,
   massId: string
 ): Promise<void> {
+  // Both the keyed rows and the older link-only ones. A parish upgrading from before the key existed
+  // would otherwise keep seeing a notice about a roster somebody cleared.
+  await sb
+    .from("announcements")
+    .delete()
+    .eq("dedupe_key", liturgyAnnouncementKey(sessionDate, massId));
   await sb
     .from("announcements")
     .delete()
@@ -76,26 +136,32 @@ export async function deleteLiturgyLinkedAnnouncement(
 }
 
 /**
- * Web push only — liturgy assignments are not stored as announcements.
+ * Tell the parish a roster changed.
  *
- * The wording is the catalog's, not this file's. The old version built "Servers · date · mass" here
- * and appended the entire roster, so the parish read other people's names on a lock screen and the
- * body overran the tray on any phone with four lines of service. The event now says how many
- * positions changed and links to the day, which is what the recipient wanted anyway.
+ * The wording is the catalog's, not this file's. What this decides is only *how much* to say: an
+ * ordinary save sends the count, and a save the officer chose to announce sends the same lines the
+ * announcement carries. `roster` is the difference, and passing it is the caller's decision.
+ *
+ * The old version always appended the entire roster, so the parish read other people's names on a
+ * lock screen whether or not anyone had announced anything. That is now something the officer asks
+ * for per assignment rather than something the app does to everyone.
  */
 export async function pushLiturgyAssignmentsNotification(params: {
   sessionDate: string;
   massName: string;
   slots: LiturgySlotLine[];
   sendPush: boolean;
+  /** One "Position: Name" line per slot. Omitted for a plain save, which sends the count only. */
+  roster?: readonly string[];
 }): Promise<void> {
-  const { sessionDate, massName, slots, sendPush } = params;
+  const { sessionDate, massName, slots, sendPush, roster } = params;
   if (!sendPush || slots.length === 0) return;
 
   await notify("liturgy_servers_assigned", {
     date: sessionDate,
     mass_label: massName,
     slot_count: slots.length,
+    ...(roster && roster.length > 0 ? { roster } : {}),
   });
 }
 

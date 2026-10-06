@@ -352,6 +352,61 @@ describe("event catalog", () => {
     expect(selectTargets([sub({ id: "a", role: "member", member_id: "m1" })], target!)).toEqual([]);
   });
 
+  it("names the whole roster when the officer announced that assignment", () => {
+    const copy = copyFor("liturgy_servers_assigned", {
+      date: "2026-10-04",
+      mass_label: "High Mass",
+      slot_count: 2,
+      roster: ["Thurifer: Ana Reyes", "Cantor: Ben Cruz"],
+    });
+    expect(copy.body).toContain("High Mass");
+    expect(copy.body).toContain("Thurifer: Ana Reyes");
+    expect(copy.body).toContain("Cantor: Ben Cruz");
+  });
+
+  it("sends only the count for a save that was not announced", () => {
+    // The old behaviour, deliberately kept: an ordinary edit of one Mass is not a parish-wide event
+    // about who is serving, and naming people for it is how the roster reached every lock screen.
+    const copy = copyFor("liturgy_servers_assigned", {
+      date: "2026-10-04",
+      mass_label: "High Mass",
+      slot_count: 2,
+    });
+    expect(copy.body).not.toContain("Ana");
+    expect(copy.body).toContain("2 positions");
+  });
+
+  it("falls back to the count when the roster arrives empty", () => {
+    const copy = copyFor("liturgy_servers_assigned", {
+      date: "2026-10-04",
+      mass_label: "High Mass",
+      slot_count: 1,
+      roster: ["  "],
+    });
+    expect(copy.body).toContain("1 position");
+  });
+
+  it("still says a clear was a clear", () => {
+    const copy = copyFor("liturgy_servers_assigned", {
+      date: "2026-10-04",
+      mass_label: "High Mass",
+      slot_count: 0,
+      roster: [],
+    });
+    expect(copy.title).toMatch(/cleared/i);
+  });
+
+  it("keeps the announcements topic so a device that customised its topics still hears it", () => {
+    // Moving this to the liturgy topic would silently stop it reaching the people it already reached.
+    expect(
+      pushTargetFor("liturgy_servers_assigned", {
+        date: "2026-10-04",
+        mass_label: "High Mass",
+        slot_count: 2,
+      }),
+    ).toEqual({ everyone: true, topic: "announcements" });
+  });
+
   it("does not push for a reviewed registration", () => {
     expect(pushTargetFor("registration_reviewed", { member_name: "Ana", outcome: "approved" })).toBeNull();
   });

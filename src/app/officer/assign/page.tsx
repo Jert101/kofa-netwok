@@ -4,10 +4,28 @@ import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { BulkAssign } from "./BulkAssign";
+import { NewAssignmentModal } from "./NewAssignmentModal";
 import { MemberCombobox, type MemberHit } from "@/components/MemberCombobox";
+import { draftKey, upsertDraft, type AssignmentDraft } from "@/lib/liturgy/assign-batch";
+import { churchTodayLabel } from "@/lib/time/church-time-labels";
 
-type Mass = { id: string; name: string };
+/** `is_active` is kept because the "add new assignment" modal offers only the active ones. The Mass
+ *  dropdown lower down still lists every Mass, because a roster that was set before a Mass was
+ *  switched off is still a roster somebody has to be able to open and fix. */
+type Mass = { id: string; name: string; is_active?: boolean };
 type Template = { id: string; name: string; slot_count?: number };
+
+type EntryResult = {
+  session_date: string;
+  mass_id: string;
+  mass_name: string;
+  ok: boolean;
+  saved: number;
+  unfilled: number;
+  announced: boolean;
+  announcement_id: string | null;
+  message: string;
+};
 /** `required_gender` is the criterion the random fill uses for a position. It is a tool for choosing,
  *  not a property of the assignment, so it is never sent to the server. */
 type Row = {
@@ -44,6 +62,15 @@ export default function OfficerAssignPage() {
   const [newPosition, setNewPosition] = useState("");
   const [newMember, setNewMember] = useState<MemberHit | null>(null);
 
+  // The queue: assignments added through the modal and not yet written.
+  const [drafts, setDrafts] = useState<AssignmentDraft[]>([]);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [savingQueue, setSavingQueue] = useState(false);
+  const [replaceExisting, setReplaceExisting] = useState(false);
+  const [queueReport, setQueueReport] = useState<EntryResult[] | null>(null);
+  /** The parish's today, not the browser's. An officer in Manila at 07:00 is not planning yesterday. */
+  const [today, setToday] = useState("");
+
   useEffect(() => {
     (async () => {
       try {
@@ -64,8 +91,84 @@ export default function OfficerAssignPage() {
         setTemplates([]);
       }
     })();
-    setDate((d) => d || new Date().toISOString().slice(0, 10));
+    // Fall back to the browser's date only if the parish's cannot be read. Both are far better than
+    // opening the modal on an empty date field.
+    fetch("/api/church-date", { credentials: "same-origin" })
+      .then(async (res) => {
+        const body = (await res.json().catch(() => ({}))) as { data?: { today?: string } };
+        return body.data?.today ?? "";
+      })
+      .catch(() => "")
+      .then((value) => {
+        const day = value || new Date().toISOString().slice(0, 10);
+        setToday(day);
+        setDate((d) => d || day);
+      });
   }, []);
+
+  const addDraft = (draft: AssignmentDraft) => {
+    const { drafts: next, replaced } = upsertDraft(drafts, draft);
+    setDrafts(next);
+    setQueueReport(null);
+    setNotice(
+      replaced
+        ? "That date and Mass was already on the list, so it was updated rather than added twice."
+        : `Added ${churchTodayLabel(draft.session_date)}. Add another, or save the list.`,
+    );
+  };
+
+  const saveDrafts = async () => {
+    if (drafts.length === 0) return;
+    setSavingQueue(true);
+    setError(null);
+    setNotice(null);
+    setQueueReport(null);
+    try {
+      const res = await fetch("/api/officer/assign", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          assignments: drafts.map((d) => ({
+            session_date: d.session_date,
+            mass_id: d.mass_id,
+            template_id: d.template_id,
+            announce: d.announce,
+            announce_delete_at: d.announce ? d.announce_delete_at : null,
+            replace: replaceExisting,
+          })),
+        }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { error?: string; results?: EntryResult[] };
+      if (!res.ok || !body.results) {
+        setError(body.error ?? "Could not save the assignments.");
+        return;
+      }
+      const results = body.results;
+      setQueueReport(results);
+      // Only the entries that went are taken off the list. Dropping the lot would silently discard
+      // the ones the server refused, which is the opposite of what an officer pressing Save again
+      // expects to happen.
+      const saved = new Set(
+        results.filter((r) => r.ok).map((r) => `${r.session_date}|${r.mass_id}`),
+      );
+      setDrafts((prev) => prev.filter((d) => !saved.has(draftKey(d))));
+      const added = results.filter((r) => r.ok).length;
+      const refused = results.length - added;
+      setNotice(
+        [
+          added > 0 ? `Saved ${added} assignment${added === 1 ? "" : "s"}.` : "Nothing was saved.",
+          refused > 0 ? `${refused} stayed on the list because ${refused === 1 ? "it" : "they"} could not be saved.` : "",
+        ]
+          .filter(Boolean)
+          .join(" "),
+      );
+    } catch {
+      setError("Could not reach the server, so nothing was saved.");
+    } finally {
+      setSavingQueue(false);
+    }
+  };
 
   const loadAssignments = useCallback(async () => {
     if (!date || !massId) {
@@ -296,14 +399,112 @@ export default function OfficerAssignPage() {
       <header>
         <h1 className="text-lg font-semibold sm:text-xl">Assign a server</h1>
         <p className="mt-1 text-sm text-[var(--text-muted)]">
-          Choose a date and a Mass, then give each position its server. A template can fill in the
-          position list for you. Every row you give a server to is what gets saved, and you decide
-          whether saving tells the parish.
+          Add an assignment for a date and Mass, and the template fills the positions and draws the
+          servers. Add as many as you like, then save the lot — and choose per assignment whether it
+          goes out as an announcement. Further down you can still hand-pick one Mass, or fill a whole
+          date range.
         </p>
       </header>
 
       {error ? <p role="alert" className="text-sm text-[var(--danger)]">{error}</p> : null}
       {notice ? <p role="status" className="text-sm text-[var(--text-muted)]">{notice}</p> : null}
+
+      <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-medium">New assignments</h2>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              Nothing is stored until you save. Servers are drawn once per date, so two Masses on one
+              Sunday never get the same person.
+            </p>
+          </div>
+          <Button onClick={() => setModalOpen(true)}>Add new assignment</Button>
+        </div>
+
+        {drafts.length === 0 ? (
+          <p className="mt-3 text-sm text-[var(--text-muted)]">
+            The list is empty. Add an assignment, then save when you have them all.
+          </p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {drafts.map((d) => (
+              <li
+                key={draftKey(d)}
+                className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2 text-sm"
+              >
+                <span className="font-medium">{churchTodayLabel(d.session_date)}</span>
+                <span className="text-[var(--text-muted)]">
+                  {masses.find((m) => m.id === d.mass_id)?.name ?? "Unknown Mass"}
+                </span>
+                <span className="text-[var(--text-muted)]">
+                  from {templates.find((t) => t.id === d.template_id)?.name ?? "a template"}
+                </span>
+                <span className="ml-auto text-xs text-[var(--text-muted)]">
+                  {d.announce
+                    ? `Announced until ${churchTodayLabel(d.announce_delete_at)}`
+                    : "Saved quietly"}
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setDrafts((prev) => prev.filter((x) => draftKey(x) !== draftKey(d)))}
+                >
+                  Remove
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {drafts.length > 0 ? (
+          <>
+            <label className="mt-3 flex items-center gap-2 text-xs text-[var(--text-muted)]">
+              <input
+                type="checkbox"
+                checked={replaceExisting}
+                onChange={(e) => setReplaceExisting(e.target.checked)}
+              />
+              <span>
+                Rebuild any date and Mass that already has servers (leave unticked and they are left
+                alone)
+              </span>
+            </label>
+
+            <div className="mt-3">
+              <Button onClick={() => void saveDrafts()} disabled={savingQueue}>
+                {savingQueue
+                  ? "Saving…"
+                  : `Save ${drafts.length} assignment${drafts.length === 1 ? "" : "s"}`}
+              </Button>
+            </div>
+          </>
+        ) : null}
+
+        {queueReport && queueReport.length > 0 ? (
+          <ul className="mt-3 space-y-1 text-sm">
+            {queueReport.map((r) => (
+              <li key={`${r.session_date}|${r.mass_id}`} className="text-[var(--text-muted)]">
+                <span className="font-medium text-[var(--text)]">
+                  {churchTodayLabel(r.session_date)} · {r.mass_name}
+                </span>{" "}
+                — {r.message}
+                {r.announced ? " Announced and a notification sent." : ""}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </section>
+
+      <NewAssignmentModal
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        masses={masses}
+        templates={templates}
+        defaultDate={today || date}
+        onAdd={addDraft}
+      />
+
+      <h2 className="text-sm font-medium text-[var(--brand)]">Hand-pick one Mass</h2>
 
       <section className="grid gap-3 sm:grid-cols-2">
         <label className="block">

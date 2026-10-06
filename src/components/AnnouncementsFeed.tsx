@@ -12,6 +12,8 @@ export type AnnouncementItem = {
   delete_at: string | null;
   pinned: boolean;
   audience?: string;
+  /** The date of the Mass, when this post is a generated roster rather than a written notice. */
+  liturgy?: string | null;
 };
 
 const PAGE = 5;
@@ -80,6 +82,7 @@ export function AnnouncementsFeed() {
           <ul className="mt-3 space-y-2">
             {visible.map((a) => {
               const system = a.created_by === "system";
+              const roster = Boolean(a.liturgy);
               return (
                 <li
                   key={a.id}
@@ -87,7 +90,7 @@ export function AnnouncementsFeed() {
                   className={
                     "rounded-xl border bg-[var(--surface-2)] " +
                     (a.pinned ? "border-[var(--brand)]" : "border-[var(--border)]") +
-                    (system ? " bg-[var(--surface)]" : "")
+                    (system || roster ? " bg-[var(--surface)]" : "")
                   }
                 >
                   <details className="group">
@@ -99,10 +102,21 @@ export function AnnouncementsFeed() {
                               Pinned
                             </span>
                           ) : null}
+                          {/* A generated roster in the same style as a typed notice reads as
+                              something a human wrote to the parish, so it is labelled instead. */}
+                          {roster ? (
+                            <span className="rounded-full border border-[var(--border)] px-2 py-0.5 text-xs text-[var(--text-muted)]">
+                              Servers
+                            </span>
+                          ) : null}
                           <span className="font-medium text-[var(--text)]">{a.title}</span>
                         </span>
                         <span className="mt-1 block text-xs text-[var(--text-muted)]">
-                          {system ? "Parish office" : `By ${a.created_by}`}
+                          {roster
+                            ? "Server assignment"
+                            : system
+                              ? "Parish office"
+                              : `By ${a.created_by}`}
                           {" · "}
                           {new Date(a.created_at).toLocaleDateString()}
                           {a.updated_at ? " · Edited" : ""}

@@ -87,8 +87,25 @@ export type NotifyPayloads = {
   liturgy_reminder: { member_id: string; position_label: string; mass_label: string; date: string };
   /** The officer's advance plan for a Mass, before the day itself. */
   liturgy_planned: { date: string; mass_label: string; slot_count: number };
-  /** The published roster for a session, or the fact that it was cleared. */
-  liturgy_servers_assigned: { date: string; mass_label: string; slot_count: number };
+  /**
+   * The published roster for a session, or the fact that it was cleared.
+   *
+   * `roster` is one "Position: Name" line per slot, in roster order, and it is present only when
+   * the officer chose to announce that assignment. Its absence means "there is nothing to name",
+   * which is what an ordinary save sends.
+   *
+   * This used to name nobody, deliberately: an earlier version appended the whole roster and the
+   * parish read other people's names on a lock screen. That has changed, and the reason it can is
+   * that the same lines are already published in the announcements feed to everyone -- the push
+   * repeats what the app says in public rather than disclosing anything new, which is the line the
+   * old version was on the wrong side of.
+   */
+  liturgy_servers_assigned: {
+    date: string;
+    mass_label: string;
+    slot_count: number;
+    roster?: readonly string[];
+  };
   /** A finished report that no longer needs anyone's review. */
   report_generated: { role: Role; report_label: string; period_label: string };
   /** A note an officer sent the secretary by hand, rather than a system event. */
@@ -254,14 +271,14 @@ export const EVENTS: { [K in NotifyEventKey]: EventSpec<K> } = {
 
   liturgy_servers_assigned: {
     inbox: [],
+    // "announcements" rather than "liturgy", deliberately unchanged: a device that has customised
+    // its topics has announcements switched on and liturgy switched off, and moving the topic would
+    // silently stop this reaching exactly the people it already reached.
     push: { everyone: true, topic: "announcements" },
     link: (p: NotifyPayloads["liturgy_servers_assigned"]) => `/member/day/${encodeURIComponent(p.date)}`,
     copy: (p: NotifyPayloads["liturgy_servers_assigned"]) => ({
       title: p.slot_count > 0 ? "Liturgy servers assigned" : "Liturgy assignments cleared",
-      body:
-        p.slot_count > 0
-          ? `${p.mass_label} on ${p.date}: ${p.slot_count} positions assigned.`
-          : `${p.mass_label} on ${p.date} has no assigned positions.`,
+      body: serversAssignedBody(p),
     }),
   },
 
@@ -332,6 +349,23 @@ export function formatNameList(names: readonly string[]): string {
   if (names.length === 1) return names[0];
   if (names.length === 2) return `${names[0]} and ${names[1]}`;
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+/**
+ * The body for `liturgy_servers_assigned`.
+ *
+ * With a roster it names the Mass and date, then one line per position, because "High Mass on
+ * 2026-10-11" alone leaves the reader to open the app to find out whether they are on it. Without
+ * one it falls back to the count, which is all there is to say.
+ */
+function serversAssignedBody(p: NotifyPayloads["liturgy_servers_assigned"]): string {
+  if (p.slot_count === 0) return `${p.mass_label} on ${p.date} has no assigned positions.`;
+  const head = `${p.mass_label} on ${p.date}:`;
+  const roster = (p.roster ?? []).filter((line) => line.trim().length > 0);
+  if (roster.length === 0) {
+    return `${head} ${p.slot_count} position${p.slot_count === 1 ? "" : "s"} assigned.`;
+  }
+  return [head, ...roster].join("\n");
 }
 
 /** "1st", "2nd", "3rd", and "11th" for anything past the third. */

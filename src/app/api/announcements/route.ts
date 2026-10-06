@@ -69,12 +69,17 @@ export async function GET(req: NextRequest) {
   const mine = url.searchParams.get("mine") === "1";
   const now = new Date();
 
+  // Roster announcements are in the feed again. They used to be filtered out with
+  // `.is("liturgy_session_date", null)`: migration 011 removed them because they named every server
+  // on a lock screen, and hiding them was the fix. The parish asked for an assignment to appear as
+  // an announcement, which is a different request -- the officer chooses it per assignment, it
+  // expires on a date they pick, and the same lines are in the notification they asked for. So the
+  // column is now selected rather than excluded, and the feed labels the row instead of hiding it.
   let q = sb
     .from("announcements")
     .select(
-      "id, title, body, created_by, created_at, delete_at, audience_roles, audience_batches, pinned, updated_at",
+      "id, title, body, created_by, created_at, delete_at, audience_roles, audience_batches, pinned, updated_at, liturgy_session_date, liturgy_mass_id",
     )
-    .is("liturgy_session_date", null)
     .order("pinned", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(60);
@@ -106,6 +111,8 @@ export async function GET(req: NextRequest) {
     announcements: visible.map((r) => ({
       ...r,
       audience: describeAudience(audienceOf(r)),
+      // The feed prints a tag rather than presenting a generated roster as something a human wrote.
+      liturgy: r.liturgy_session_date ? String(r.liturgy_session_date) : null,
       // The same rule the write route enforces, so the composer does not offer an Edit button that
       // comes back 403 and a secretary wonders which of the two is wrong.
       can_edit: canModify(r, g.session.role),

@@ -487,7 +487,13 @@ liturgy_template_slots(id, template_id→templates CASCADE,
 
 ```txt
 announcements(id, title, body, created_by ∈{admin,secretary,officer,system},
-              delete_at?, liturgy_* legacy nullables, created_at)
+              delete_at?, dedupe_key?, pinned, updated_at?,
+              liturgy_session_date?, liturgy_mass_id?, created_at)
+-- liturgy_* are set on a Mass roster the officer chose to announce. The feed used to exclude those
+-- rows (migration 011) because they named every server; the parish asked for an assignment to show
+-- up as an announcement, so they are now included and labelled "Servers" instead. The key is
+-- `liturgy-servers:<date>:<massId>`, which makes re-announcing an edit rather than a duplicate post,
+-- and clearing a roster takes its notice with it.
 
 notifications(id, from_role ∈{admin,secretary,member,system,super_admin}, -- 022 widened
               to_role ∈{admin,secretary,super_admin},                    -- 022 widened
@@ -611,6 +617,13 @@ Legend: 🔓 public · role list = `requireRole` allowlist.
 | GET/PUT | `/api/liturgy/session/[id]` | admin, officer |
 | GET/POST | `/api/officer/liturgy-templates` | officer, admin |
 | GET/DELETE | `/api/officer/liturgy-templates/[id]` | officer, admin |
+| POST | `/api/officer/assign` | officer, admin |
+
+`POST /api/officer/assign` saves the queue built on `/officer/assign`: a list of
+`{session_date, mass_id, template_id, announce, announce_delete_at, replace}`. The draw happens on
+the server so the announcement and the notification are both built from the roster that was actually
+written, and the used-set is threaded across the whole batch so two Masses on one Sunday cannot be
+given the same person. Each entry reports its own outcome, so one refusal does not abort the rest.
 
 ### Announcements / notifications / payments / settings
 

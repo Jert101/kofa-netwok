@@ -34,6 +34,15 @@ export type AnnouncementRow = {
   audience_batches?: string[] | null;
   delete_at?: string | null;
   pinned?: boolean | null;
+  /**
+   * Set when the post is a Mass roster rather than something a person typed.
+   *
+   * Carried on the row because the feed has to be able to say so: a generated list of servers
+   * rendered in the same style as an officer's notice reads as something a human wrote to the
+   * parish. Null for every ordinary post.
+   */
+  liturgy_session_date?: string | null;
+  liturgy_mass_id?: string | null;
 };
 
 export type Viewer = {
