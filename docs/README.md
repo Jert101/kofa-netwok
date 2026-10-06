@@ -618,12 +618,25 @@ Legend: 🔓 public · role list = `requireRole` allowlist.
 | GET/POST | `/api/officer/liturgy-templates` | officer, admin |
 | GET/DELETE | `/api/officer/liturgy-templates/[id]` | officer, admin |
 | GET/POST/PUT/DELETE | `/api/officer/assign` | officer, admin |
+| POST | `/api/officer/assign/draw` | officer, admin |
+
+`POST /api/officer/assign/draw` fills the positions that have no server yet and returns the whole
+lineup in the order the officer listed it. It is a separate step rather than part of the save so the
+draw can be reviewed and changed first, and it lives on the server because the rule it must honour --
+nobody serving two Masses on the same Sunday -- needs to know who is already assigned that date, which
+is in the database. Rows that already have a member are passed through, so drawing twice fills the
+gaps rather than discarding the first draw.
 
 `POST` saves the queue built on `/officer/assign`: a list of
 `{session_date, mass_id, template_id, announce, announce_delete_at, replace}`. The draw happens on
 the server so the announcement and the notification are both built from the roster that was actually
 written, and the used-set is threaded across the whole batch so two Masses on one Sunday cannot be
 given the same person. Each entry reports its own outcome, so one refusal does not abort the rest.
+
+`slots` is the lineup the officer reviewed on screen, required. `template_id` is optional — the template
+is a shortcut for filling the position list in, not a requirement, so an officer can build one unusual
+lineup by hand and a saved roster (which does not record where it came from) can still be reopened for
+correction.
 
 `GET` lists what is already saved (defaults to the next 90 days, capped at 185) so the page can show
 existing assignments rather than only what it is about to write. `PUT` re-announces one saved

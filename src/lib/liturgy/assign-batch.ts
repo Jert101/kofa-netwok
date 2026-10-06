@@ -15,6 +15,7 @@
 
 import { daysBetween, isIsoDate, resolveTimeZone, shiftDays, zoneOffsetMinutes } from "@/lib/time/church-time";
 import { BODY_MAX, TITLE_MAX } from "@/lib/announcements/audience";
+import { normalizeLabel, type GenderRule } from "@/lib/liturgy/rules";
 
 /** A season, not a plan. Anything longer than this is a typo rather than an intention. */
 export const MAX_DRAFTS = 62;
@@ -23,8 +24,25 @@ export type MassOption = { id: string; name: string; is_active?: boolean };
 
 export type TemplateOption = { id: string; name: string };
 
-/** One queued assignment: a date, a Mass, the template that supplies the lineup, and whether saving
- *  it tells the parish. */
+/**
+ * One position in the queue, with the server on it or not.
+ *
+ * `key` is a client-side identity so React can keep a combobox's focus and open state while rows are
+ * added and removed around it. It is never sent anywhere.
+ *
+ * `required_gender` rides along because it decides who a random draw may pick for this position. It
+ * is a tool for drawing, not a property of the assignment, so it is not part of what gets written.
+ */
+export type DraftRow = {
+  key: string;
+  position_label: string;
+  member_id: string;
+  member_name: string;
+  required_gender: GenderRule;
+};
+
+/** One queued assignment: a date, a Mass, the lineup the officer chose, and whether saving it tells
+ *  the parish. */
 export type AssignmentDraft = {
   session_date: string;
   mass_id: string;
@@ -33,6 +51,7 @@ export type AssignmentDraft = {
   announce: boolean;
   /** `YYYY-MM-DD`. The day the announcement stops being shown. Required when `announce`. */
   announce_delete_at: string;
+  rows: DraftRow[];
 };
 
 export function draftKey(draft: { session_date: string; mass_id: string }): string {
@@ -93,8 +112,16 @@ export function validateDraft(
   if (!mass) return "Choose which Mass this assignment is for.";
   if (mass.is_active !== true) return `${mass.name} is not active, so it cannot be newly assigned.`;
 
-  if (!context.templates.some((t) => t.id === draft.template_id)) {
-    return "Choose a template. It supplies the positions and who can take each one.";
+  if (!context.templates.some((t) => t.id === draft.template_id) && draft.template_id !== "") {
+    return "That template no longer exists. Choose another, or clear it and build the positions by hand.";
+  }
+
+  // The template is a shortcut, not a requirement. It was required while the draw was the only way to
+  // get a server onto a position, which left two things broken: an officer who wanted one unusual
+  // position had to pick a template to get at the add button, and a saved roster -- which does not
+  // record where it came from -- could not be opened for correction at all.
+  if (draft.rows.filter((r) => r.position_label.trim().length > 0).length === 0) {
+    return "Add at least one position before saving.";
   }
 
   if (draft.announce) {
@@ -107,6 +134,61 @@ export function validateDraft(
   }
 
   return null;
+}
+
+/** A fresh row with nothing on it. */
+export function blankRow(required_gender: GenderRule = "any"): DraftRow {
+  return { key: crypto.randomUUID(), position_label: "", member_id: "", member_name: "", required_gender };
+}
+
+/**
+ * Bring in a template's positions without disturbing what is already there.
+ *
+ * A position the sheet already has is left exactly as it is, member included, so choosing a template
+ * twice -- or choosing one after picking servers by hand -- never silently un-books somebody. Compared
+ * normalized, because "Crucifix" and "crucifix " are one position and a second row for it would be
+ * two rows the save would write.
+ */
+export function seedRowsFromTemplate(
+  rows: readonly DraftRow[],
+  positions: ReadonlyArray<{ position_label: string; required_gender: GenderRule }>,
+): DraftRow[] {
+  const present = new Set(rows.map((r) => normalizeLabel(r.position_label)).filter(Boolean));
+  const next = [...rows];
+  for (const p of positions) {
+    const label = p.position_label.trim();
+    const norm = normalizeLabel(label);
+    if (norm.length === 0 || present.has(norm)) continue;
+    present.add(norm);
+    next.push({ ...blankRow(p.required_gender), position_label: label });
+  }
+  return next;
+}
+
+/**
+ * The rows that will actually be written.
+ *
+ * A position with no server is dropped rather than stored empty, because the write endpoint requires
+ * a member on every row it keeps -- an empty row would read as a position nobody can take, which is a
+ * different statement from "not planned yet". `draftUnassigned` is what tells the officer which ones
+ * were dropped.
+ */
+export function draftSlots(
+  draft: AssignmentDraft,
+): Array<{ position_label: string; member_id: string }> {
+  return draft.rows
+    .filter((r) => r.position_label.trim().length > 0 && r.member_id)
+    .map((r) => ({ position_label: r.position_label.trim(), member_id: r.member_id }));
+}
+
+/** Positions with a name but nobody on them. */
+export function draftUnassigned(draft: AssignmentDraft): number {
+  return draft.rows.filter((r) => r.position_label.trim().length > 0 && !r.member_id).length;
+}
+
+/** Positions with a server, as the queue list shows them. */
+export function draftFilled(draft: AssignmentDraft): number {
+  return draftSlots(draft).length;
 }
 
 /**

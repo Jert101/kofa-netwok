@@ -4,8 +4,7 @@ import { requireRole } from "@/lib/api/guard";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getSetting } from "@/lib/settings/store";
 import { logAudit } from "@/lib/audit/log-audit";
-import { drawSlots, type BulkMember } from "@/lib/liturgy/bulk-assign";
-import { asGenderRule, type TemplatePosition } from "@/lib/liturgy/rules";
+import { liturgySlotSchema } from "@/lib/attendance/liturgy-slots";
 import {
   MAX_DRAFTS,
   announcementBody,
@@ -47,7 +46,12 @@ import { churchToday, shiftDays } from "@/lib/time/church-time";
 const draftSchema = z.object({
   session_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a date."),
   mass_id: z.string().uuid(),
-  template_id: z.string().uuid(),
+  /**
+   * Optional. It is a shortcut for filling the position list in, recorded so the audit row can name
+   * where the lineup came from -- not required, because an officer may build one by hand and a saved
+   * roster does not remember its origin.
+   */
+  template_id: z.string().uuid().nullable().default(null),
   announce: z.boolean().default(false),
   /** Checked against `announce` below rather than in the schema, so the message can name both. */
   announce_delete_at: z
@@ -55,6 +59,15 @@ const draftSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .nullable()
     .default(null),
+  /**
+   * The lineup the officer reviewed on screen. Required, and drawn server-side no longer.
+   *
+   * The draw used to happen here, which meant the announcement and the notification were the only
+   * description of a lineup nobody had looked at. It is `/draw` now, and this is what that produced --
+   * so what gets saved is what the officer approved, and the announcement can only describe the roster
+   * that was actually written.
+   */
+  slots: z.array(liturgySlotSchema).max(48).default([]),
   /**
    * Replace a roster that is already stored for this date and Mass.
    *
@@ -90,7 +103,7 @@ export async function GET(req: NextRequest) {
   const sb = getSupabaseAdmin();
   const { data, error } = await sb
     .from("liturgy_planned")
-    .select("session_date, mass_id, position_label, sort_order, members(full_name), masses(id, name)")
+    .select("session_date, mass_id, position_label, member_id, sort_order, members(full_name), masses(id, name)")
     .gte("session_date", from)
     .lte("session_date", to)
     .order("session_date", { ascending: true })
@@ -102,6 +115,7 @@ export async function GET(req: NextRequest) {
     session_date: string;
     mass_id: string;
     position_label: string;
+    member_id: string | null;
     sort_order: number;
     members: unknown;
     masses: unknown;
@@ -115,7 +129,7 @@ export async function GET(req: NextRequest) {
       session_date: string;
       mass_id: string;
       mass_name: string;
-      slots: Array<{ position_label: string; member_name: string | null }>;
+      slots: Array<{ position_label: string; member_id: string | null; member_name: string | null }>;
     }
   >();
   for (const row of rows) {
@@ -126,8 +140,12 @@ export async function GET(req: NextRequest) {
       mass_name: massNameFromJoin(row.masses) ?? "Mass",
       slots: [],
     };
+    // The id is carried so the page can reopen this roster for correction. A name alone cannot be
+    // saved back -- the write needs a real member id, and guessing one from a name would be a lookup
+    // that matches the wrong person sooner or later.
     entry.slots.push({
       position_label: row.position_label,
+      member_id: row.member_id,
       member_name: memberNameFromJoin(row.members),
     });
     byKey.set(key, entry);
@@ -338,7 +356,6 @@ type EntryResult = {
   mass_name: string;
   ok: boolean;
   saved: number;
-  unfilled: number;
   announced: boolean;
   announcement_id: string | null;
   /** Why this entry did not go, in the officer's words rather than a constraint name. */
@@ -405,22 +422,22 @@ export async function POST(req: NextRequest) {
 
   const sb = getSupabaseAdmin();
 
-  // Everything the batch needs, read once. Six Sundays is six round trips otherwise, and the roll
-  // does not change while the request is in flight.
+  // Everything the batch needs, read once. Six Sundays is six round trips otherwise, and none of it
+  // changes while the request is in flight.
   const massIds = [...new Set(drafts.map((d) => d.mass_id))];
-  const templateIds = [...new Set(drafts.map((d) => d.template_id))];
-  const dates = [...new Set(drafts.map((d) => d.session_date))];
+  const templateIds = [...new Set(drafts.map((d) => d.template_id).filter((t): t is string => Boolean(t)))];
 
-  const [{ data: massRows }, { data: templateRows }, { data: slotRows }, { data: memberRows }] =
-    await Promise.all([
-      sb.from("masses").select("id, name, is_active").in("id", massIds),
-      sb.from("liturgy_templates").select("id, name").in("id", templateIds),
-      sb.from("liturgy_template_slots")
-        .select("template_id, position_label, required_gender")
-        .in("template_id", templateIds)
-        .order("sort_order", { ascending: true }),
-      sb.from("members").select("id, full_name, gender").eq("is_active", true),
-    ]);
+  const [{ data: massRows }, { data: templateRows }, { data: memberRows }] = await Promise.all([
+    sb.from("masses").select("id, name, is_active").in("id", massIds),
+    templateIds.length > 0
+      ? sb.from("liturgy_templates").select("id, name").in("id", templateIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+    // Names only, so the announcement can print who is on it. The ids themselves were chosen on
+    // screen, and `saveEntry` re-checks that each one is still an active member.
+    sb.from("members")
+      .select("id, full_name, is_active")
+      .in("id", [...new Set(drafts.flatMap((d) => d.slots.map((s) => s.member_id)))]),
+  ]);
 
   const massById = new Map(
     ((massRows ?? []) as Array<{ id: string; name: string; is_active: boolean }>).map((m) => [
@@ -431,52 +448,17 @@ export async function POST(req: NextRequest) {
   const templateNameById = new Map(
     ((templateRows ?? []) as Array<{ id: string; name: string }>).map((t) => [t.id, t.name]),
   );
-  const positionsByTemplate = new Map<string, TemplatePosition[]>();
-  for (const s of (slotRows ?? []) as Array<{
-    template_id: string;
-    position_label: string;
-    required_gender: string | null;
-  }>) {
-    const list = positionsByTemplate.get(s.template_id) ?? [];
-    list.push({
-      position_label: String(s.position_label),
-      required_gender: asGenderRule(s.required_gender),
-    });
-    positionsByTemplate.set(s.template_id, list);
-  }
-  const roll: BulkMember[] = ((memberRows ?? []) as Array<{
-    id: string;
-    full_name: string;
-    gender: string | null;
-  }>).map((m) => ({ id: m.id, full_name: m.full_name, gender: m.gender }));
-
-  const nameById = new Map(roll.map((m) => [m.id, m.full_name]));
-
-  // Who is already serving on each date, split by Mass, from the state on disk before this batch
-  // touched anything. Kept as a snapshot rather than a running set because the two Masses of one
-  // Sunday need opposite answers: the second must avoid the first's *new* draw, while the first must
-  // still avoid whatever the second already had. One mutable set cannot be both, and folding the
-  // two together is how one Sunday ends up with the same person in two Masses.
-  const onDiskByDate = new Map<string, Map<string, string[]>>();
-  const sameDay = await sb
-    .from("liturgy_planned")
-    .select("session_date, mass_id, member_id")
-    .in("session_date", dates);
-  for (const row of (sameDay.data ?? []) as Array<{
-    session_date: string;
-    mass_id: string;
-    member_id: string | null;
-  }>) {
-    if (!row.member_id) continue;
-    const byMass = onDiskByDate.get(row.session_date) ?? new Map<string, string[]>();
-    const list = byMass.get(row.mass_id) ?? [];
-    list.push(row.member_id);
-    byMass.set(row.mass_id, list);
-    onDiskByDate.set(row.session_date, byMass);
-  }
-
-  // Grown as entries are saved, so the second Mass of a Sunday respects the first one's draw.
-  const drawnByDate = new Map<string, Set<string>>();
+  const nameById = new Map(
+    ((memberRows ?? []) as Array<{ id: string; full_name: string; is_active: boolean }>).map((m) => [
+      m.id,
+      m.full_name,
+    ]),
+  );
+  const inactiveIds = new Set(
+    ((memberRows ?? []) as Array<{ id: string; is_active: boolean }>)
+      .filter((m) => !m.is_active)
+      .map((m) => m.id),
+  );
 
   const timezone = await getSetting("report_timezone");
   const results: EntryResult[] = [];
@@ -487,11 +469,8 @@ export async function POST(req: NextRequest) {
         draft,
         massById,
         templateNameById,
-        positionsByTemplate,
-        roll,
         nameById,
-        onDiskByDate,
-        drawnByDate,
+        inactiveIds,
         timezone,
         fromRole: g.session.role,
       }),
@@ -521,11 +500,8 @@ async function saveEntry(input: {
   draft: Draft;
   massById: Map<string, { id: string; name: string; is_active: boolean }>;
   templateNameById: Map<string, string>;
-  positionsByTemplate: Map<string, TemplatePosition[]>;
-  roll: BulkMember[];
   nameById: Map<string, string>;
-  onDiskByDate: Map<string, Map<string, string[]>>;
-  drawnByDate: Map<string, Set<string>>;
+  inactiveIds: Set<string>;
   timezone: string;
   fromRole: string;
 }): Promise<EntryResult> {
@@ -538,7 +514,6 @@ async function saveEntry(input: {
     mass_name: mass?.name ?? "Mass",
     ok: false,
     saved: 0,
-    unfilled: 0,
     announced: false,
     announcement_id: null,
     message: "",
@@ -549,9 +524,21 @@ async function saveEntry(input: {
   // that names a retired Mass would otherwise fill a plan the parish can no longer see anywhere.
   if (!mass.is_active) return { ...result, message: `${mass.name} is not active any more.` };
 
-  const positions = input.positionsByTemplate.get(draft.template_id) ?? [];
-  if (positions.length === 0) {
-    return { ...result, message: "That template has no positions in it." };
+  const slots = draft.slots;
+  if (slots.length === 0) {
+    return { ...result, message: "Give each position a server before saving." };
+  }
+
+  // Every id on screen is re-checked. A member can be deactivated between the draw and the save --
+  // by another officer, or by the secretary -- and writing them would put somebody on a roster who is
+  // no longer on the roll.
+  const gone = slots.map((s) => s.member_id).filter((id) => input.inactiveIds.has(id));
+  if (gone.length > 0) {
+    const names = [...new Set(gone.map((id) => input.nameById.get(id) ?? "someone"))];
+    return {
+      ...result,
+      message: `${names.join(", ")} ${names.length === 1 ? "is" : "are"} no longer active. Pick someone else.`,
+    };
   }
 
   const { data: existingRows } = await sb
@@ -566,26 +553,6 @@ async function saveEntry(input: {
       message: `${result.mass_name} on ${draft.session_date} already has ${alreadyThere.length} server${
         alreadyThere.length === 1 ? "" : "s"
       }. Tick replace to rebuild it.`,
-    };
-  }
-
-  // Two sources, unioned: whoever an earlier entry in this same request has just drawn, and
-  // whoever was already serving this date in a *different* Mass. The rows being replaced are left
-  // out on purpose -- they are about to stop existing, and treating them as taken would make a Mass
-  // impossible to refill with the same people it had last week.
-  const used = new Set<string>(input.drawnByDate.get(draft.session_date) ?? []);
-  for (const [otherMassId, memberIds] of input.onDiskByDate.get(draft.session_date) ?? []) {
-    if (otherMassId === draft.mass_id) continue;
-    for (const id of memberIds) used.add(id);
-  }
-
-  const { slots, unfilled } = drawSlots(positions, input.roll, used);
-  input.drawnByDate.set(draft.session_date, used);
-  if (slots.length === 0) {
-    return {
-      ...result,
-      unfilled,
-      message: "No member on the roll can take any of this template's positions.",
     };
   }
 
@@ -636,7 +603,6 @@ async function saveEntry(input: {
         ...result,
         ok: true,
         saved: slots.length,
-        unfilled,
         message: `Saved, but the announcement could not be posted: ${e instanceof Error ? e.message : "unknown error"}`,
       };
     }
@@ -659,17 +625,17 @@ async function saveEntry(input: {
     });
   }
 
+  const template = draft.template_id
+    ? input.templateNameById.get(draft.template_id)
+    : undefined;
   return {
     ...result,
     ok: true,
     saved: slots.length,
-    unfilled,
     announced: draft.announce,
     announcement_id: announcementId,
-    message: unfilled > 0
-      ? `Added with ${slots.length} server${slots.length === 1 ? "" : "s"} from ${input.templateNameById.get(draft.template_id) ?? "the template"}; ${unfilled} position${
-          unfilled === 1 ? " had" : "s had"
-        } nobody eligible and ${unfilled === 1 ? "was" : "were"} left open.`
-      : `Added ${slots.length} server${slots.length === 1 ? "" : "s"} from ${input.templateNameById.get(draft.template_id) ?? "the template"}.`,
+    message: `Saved ${slots.length} server${slots.length === 1 ? "" : "s"} for ${result.mass_name}${
+      template ? ` from ${template}` : ""
+    }.`,
   };
 }

@@ -18,36 +18,38 @@ export type SavedAssignment = {
   mass_id: string;
   mass_name: string;
   position_count: number;
-  slots: Array<{ position_label: string; member_name: string | null }>;
+  /** `member_id` is included so a roster can be reopened for correction; a name alone cannot be
+   *  written back, because the save needs a real member id. */
+  slots: Array<{ position_label: string; member_id: string | null; member_name: string | null }>;
   announced: boolean;
   announcement_delete_at: string | null;
   announcement_expired: boolean;
 };
 
 /**
- * What has actually been saved, with the three things you can do to each one.
+ * What has actually been saved, with the things you can do to each one.
  *
  * This is the read half of the CRUD, and its absence is why the queue felt like a dead end: saving a
  * month of assignments and closing the tab left no way back to them short of remembering a date and
- * typing it into the editor by hand. Everything below it is a way of *writing* an assignment; this is
- * the one screen that says what is already there.
+ * typing it into the dialog by hand.
  *
- * Three actions, deliberately not four. Editing the servers is not offered here because the plan
- * editor below already does it properly, one row at a time, and a second editor is a second set of
- * rules to get wrong. So this links to that one instead of reimplementing it.
+ * Editing hands the whole roster -- positions and servers -- to the same dialog that creates one, so
+ * there is one editor in the product rather than two that drift. The announcement is a separate action
+ * because it is a separate decision: `PUT` changes who the parish was told about without touching
+ * who is serving.
  */
 export function SavedAssignments({
   today,
   version,
-  onEditRoster,
+  onEdit,
   onChanged,
 }: {
   /** The parish's today, used to decide what can still be deleted. */
   today: string;
   /** Bumped by the page when the queue saved, to reload without remounting and losing what is open. */
   version: number;
-  /** Load a date and Mass into the plan editor below. */
-  onEditRoster: (sessionDate: string, massId: string) => void;
+  /** Open this roster in the assignment dialog, so a correction can be made before it is written. */
+  onEdit: (row: SavedAssignment) => void;
   /** Tell the page something changed so it can refresh whatever else it is showing. */
   onChanged: () => void;
 }) {
@@ -114,7 +116,8 @@ export function SavedAssignments({
     <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
       <h2 className="text-sm font-medium">Saved assignments</h2>
       <p className="mt-1 text-xs text-[var(--text-muted)]">
-        Upcoming Masses that already have servers. Editing a roster opens it in the editor below.
+        Upcoming Masses that already have servers. Editing one opens it in the same dialog, positions
+        and all, so a correction is made before it is written back.
       </p>
 
       {error ? (
@@ -169,8 +172,8 @@ export function SavedAssignments({
                   </span>
 
                   <span className="ml-auto flex flex-wrap gap-1">
-                    <Button size="sm" variant="outline" onClick={() => onEditRoster(row.session_date, row.mass_id)}>
-                      Edit servers
+                    <Button size="sm" variant="outline" onClick={() => onEdit(row)}>
+                      Edit
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => setAnnouncing(row)}>
                       {row.announced ? "Change announcement" : "Announce"}

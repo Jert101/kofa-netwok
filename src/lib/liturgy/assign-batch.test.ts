@@ -6,13 +6,18 @@ import {
   activeMasses,
   announcementBody,
   announcementTitle,
+  draftFilled,
   draftKey,
+  draftSlots,
+  draftUnassigned,
   endOfDayInstant,
   listWindow,
   rosterLines,
+  seedRowsFromTemplate,
   upsertDraft,
   validateDraft,
   type AssignmentDraft,
+  type DraftRow,
   type MassOption,
   type TemplateOption,
 } from "./assign-batch";
@@ -28,6 +33,17 @@ const masses: MassOption[] = [
 
 const templates: TemplateOption[] = [{ id: "t-sunday", name: "Sunday servers" }];
 
+function row(patch: Partial<DraftRow> = {}): DraftRow {
+  return {
+    key: `k-${Math.random()}`,
+    position_label: "Thurifer",
+    member_id: "m1",
+    member_name: "Ana Reyes",
+    required_gender: "any",
+    ...patch,
+  };
+}
+
 function draft(patch: Partial<AssignmentDraft> = {}): AssignmentDraft {
   return {
     session_date: "2026-10-11",
@@ -35,6 +51,7 @@ function draft(patch: Partial<AssignmentDraft> = {}): AssignmentDraft {
     template_id: "t-sunday",
     announce: false,
     announce_delete_at: "2026-10-11",
+    rows: [row()],
     ...patch,
   };
 }
@@ -78,8 +95,26 @@ describe("validateDraft", () => {
     expect(problem).toContain("Solemn High Mass");
   });
 
-  it("rejects a draft with no template, because the template is what supplies the lineup", () => {
-    expect(validateDraft(draft({ template_id: "" }), context)).toMatch(/template/i);
+  it("rejects a draft with no positions at all", () => {
+    expect(validateDraft(draft({ rows: [] }), context)).toMatch(/position/i);
+    // A row with a blank name is not a position, and writing it would store an empty label.
+    expect(validateDraft(draft({ rows: [row({ position_label: "  " })] }), context)).toMatch(/position/i);
+  });
+
+  it("allows no template, because it is a shortcut and not a requirement", () => {
+    // Required while the draw was the only way to get somebody on a position, which meant a saved
+    // roster -- which does not remember where it came from -- could not be opened for correction.
+    expect(validateDraft(draft({ template_id: "" }), context)).toBeNull();
+  });
+
+  it("rejects a template that has been deleted since it was chosen", () => {
+    expect(validateDraft(draft({ template_id: "t-gone" }), context)).toMatch(/no longer exists/i);
+  });
+
+  it("allows positions the officer typed even with no template", () => {
+    expect(
+      validateDraft(draft({ template_id: "", rows: [row({ position_label: "Candle 1" })] }), context),
+    ).toBeNull();
   });
 
   it("allows a missing delete date when the draft is not announced", () => {
@@ -240,6 +275,107 @@ describe("upsertDraft", () => {
 
   it("keys the same way everywhere", () => {
     expect(draftKey(draft())).toBe("2026-10-11|m-high");
+  });
+});
+
+describe("seedRowsFromTemplate", () => {
+  const template = [
+    { position_label: "Thurifer", required_gender: "female" as const },
+    { position_label: "Cantor", required_gender: "any" as const },
+  ];
+
+  it("brings in every position the template names", () => {
+    const rows = seedRowsFromTemplate([], template);
+    expect(rows.map((r) => r.position_label)).toEqual(["Thurifer", "Cantor"]);
+    expect(rows[0].required_gender).toBe("female");
+  });
+
+  it("leaves an existing row exactly as it is, member included", () => {
+    // The rule that stops picking a template from silently un-booking somebody.
+    const mine = [row({ position_label: "Thurifer", member_id: "m9", member_name: "Ben Cruz" })];
+    const rows = seedRowsFromTemplate(mine, template);
+    expect(rows).toHaveLength(2);
+    expect(rows[0].member_id).toBe("m9");
+    expect(rows[0].member_name).toBe("Ben Cruz");
+  });
+
+  it("matches a position regardless of case or stray spaces", () => {
+    const mine = [row({ position_label: "  thurifer " })];
+    const rows = seedRowsFromTemplate(mine, template);
+    expect(rows).toHaveLength(2);
+  });
+
+  it("still adds the template positions the sheet does not have yet", () => {
+    const rows = seedRowsFromTemplate([row({ position_label: "Extra" })], template);
+    expect(rows.map((r) => r.position_label)).toEqual(["Extra", "Thurifer", "Cantor"]);
+  });
+
+  it("adds nothing for a template that repeats a position", () => {
+    const rows = seedRowsFromTemplate([], [
+      { position_label: "Crucifix", required_gender: "any" },
+      { position_label: "crucifix", required_gender: "any" },
+    ]);
+    expect(rows).toHaveLength(1);
+  });
+
+  it("skips a blank position rather than adding an empty row", () => {
+    expect(seedRowsFromTemplate([], [{ position_label: "   ", required_gender: "any" }])).toEqual([]);
+  });
+
+  it("does not mutate the rows it was given", () => {
+    const mine = [row({ position_label: "Thurifer" })];
+    seedRowsFromTemplate(mine, template);
+    expect(mine).toHaveLength(1);
+  });
+});
+
+describe("draftSlots", () => {
+  it("writes the filled rows and drops the rest", () => {
+    const slots = draftSlots(
+      draft({
+        rows: [
+          row({ position_label: "Thurifer", member_id: "m1" }),
+          row({ position_label: "Cantor", member_id: "" }),
+        ],
+      }),
+    );
+    expect(slots).toEqual([{ position_label: "Thurifer", member_id: "m1" }]);
+  });
+
+  it("trims the label and drops a row whose name is only spaces", () => {
+    const slots = draftSlots(
+      draft({
+        rows: [
+          row({ position_label: "  Thurifer  ", member_id: "m1" }),
+          row({ position_label: "  ", member_id: "m2" }),
+        ],
+      }),
+    );
+    expect(slots).toEqual([{ position_label: "Thurifer", member_id: "m1" }]);
+  });
+
+  it("is empty for a draft with nothing on it, which the save refuses", () => {
+    expect(draftSlots(draft({ rows: [row({ member_id: "" })] }))).toEqual([]);
+  });
+});
+
+describe("draftUnassigned and draftFilled", () => {
+  it("count positions rather than rows, and separate the two states", () => {
+    const d = draft({
+      rows: [
+        row({ position_label: "Thurifer", member_id: "m1" }),
+        row({ position_label: "Cantor", member_id: "" }),
+      ],
+    });
+    expect(draftFilled(d)).toBe(1);
+    expect(draftUnassigned(d)).toBe(1);
+  });
+
+  it("does not count a blank row as an unassigned position", () => {
+    // Otherwise adding three rows and typing one name reports "2 unfilled" for two rows that are
+    // not positions at all.
+    const d = draft({ rows: [row({ member_id: "" }), row({ position_label: "", member_id: "" })] });
+    expect(draftUnassigned(d)).toBe(1);
   });
 });
 
