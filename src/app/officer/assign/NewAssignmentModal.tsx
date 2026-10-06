@@ -25,6 +25,7 @@ import {
   type TemplateOption,
 } from "@/lib/liturgy/assign-batch";
 import { GENDER_RULES, type GenderRule, type TemplatePosition } from "@/lib/liturgy/rules";
+import { isIsoDate } from "@/lib/time/church-time";
 
 type TemplatePositions = { positions: TemplatePosition[] };
 
@@ -124,6 +125,18 @@ export function NewAssignmentModal({
    */
   const drawRandom = async () => {
     const named = rows.filter((r) => r.position_label.trim().length > 0);
+
+    // Checked here, in the officer's words, rather than left to the schema. All three of these used
+    // to be either a silently dead button or a raw "Invalid UUID" from the server, which is no answer
+    // at all to somebody who has a date, a Mass and a template in front of them.
+    if (!isIsoDate(sessionDate)) {
+      setProblem("Choose the date of the Mass before drawing.");
+      return;
+    }
+    if (!massId) {
+      setProblem("Choose which Mass this is before drawing, so nobody already serving it is picked again.");
+      return;
+    }
     if (named.length === 0) {
       setProblem("Add at least one position before drawing.");
       return;
@@ -214,6 +227,21 @@ export function NewAssignmentModal({
   const unassigned = draftUnassigned(draft);
   const named = rows.filter((r) => r.position_label.trim().length > 0).length;
 
+  /**
+   * What is still missing before a draw can run, said up front rather than after a dead press.
+   *
+   * All three are asked of the officer, so they are named here rather than left to be discovered. A
+   * template can be chosen without a Mass, which is exactly how somebody ends up with positions on
+   * screen and a button that does nothing.
+   */
+  const blocker = !isIsoDate(sessionDate)
+    ? "choose the date of the Mass"
+    : !massId
+      ? "choose which Mass this is"
+      : named === 0
+        ? "add a position"
+        : null;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
@@ -289,12 +317,15 @@ export function NewAssignmentModal({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-medium">Positions and servers</h3>
             <div className="flex flex-wrap gap-2">
+              {/* Never disabled for a missing prerequisite. A greyed-out button with the reason
+                  hidden in a `title` is the same as no reason at all on a phone, and the officer
+                  cannot see why the one control they came for is dead. Pressing it says which of the
+                  three things is missing. */}
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => void drawRandom()}
-                disabled={drawing || !massId || named === 0}
-                title={!massId ? "Choose a Mass first" : undefined}
+                disabled={drawing}
               >
                 {drawing ? "Drawing…" : "Draw randomly"}
               </Button>
@@ -308,6 +339,10 @@ export function NewAssignmentModal({
               ) : null}
             </div>
           </div>
+
+          {blocker ? (
+            <p className="text-xs text-[var(--text-muted)]">To draw: {blocker}</p>
+          ) : null}
 
           {rows.length === 0 ? (
             <p className="text-sm text-[var(--text-muted)]">

@@ -26,9 +26,9 @@ const rowSchema = z.object({
 });
 
 const bodySchema = z.object({
-  session_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  mass_id: z.string().uuid(),
-  rows: z.array(rowSchema).min(1).max(48),
+  session_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose the date of the Mass first."),
+  mass_id: z.string().uuid("Choose which Mass this is first."),
+  rows: z.array(rowSchema).min(1, "Add at least one position first.").max(48),
 });
 
 export async function POST(req: NextRequest) {
@@ -43,6 +43,9 @@ export async function POST(req: NextRequest) {
   }
   const parsed = bodySchema.safeParse(json);
   if (!parsed.success) {
+    // Each field carries its own message rather than zod's default, because "Invalid UUID" is the
+    // answer the officer got when this button was reachable with nothing chosen: technically true and
+    // useless. The dialog checks first now, but a crafted request should still get a sentence.
     return NextResponse.json(
       { error: parsed.error.issues[0]?.message ?? "That could not be read." },
       { status: 400 },
