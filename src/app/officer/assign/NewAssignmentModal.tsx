@@ -26,6 +26,9 @@ import {
  * own for hand-editing one Mass, and two sets of those controls sitting next to each other is how
  * somebody fills in the wrong one. This one adds to a queue; the other edits a single roster.
  *
+ * `draft` turns the same four fields into an edit of an entry already on the queue, which is why it
+ * is one component rather than an "add" and an "edit" that drift apart.
+ *
  * Nothing is stored from here. The officer can add several and save them together, which is the whole
  * point -- planning next month's Sundays is one action, not six.
  *
@@ -39,6 +42,8 @@ export function NewAssignmentModal({
   masses,
   templates,
   defaultDate,
+  /** An entry already on the queue, when this is an edit rather than an add. */
+  draft: editing = null,
   onAdd,
 }: {
   open: boolean;
@@ -46,6 +51,7 @@ export function NewAssignmentModal({
   masses: readonly MassOption[];
   templates: readonly TemplateOption[];
   defaultDate: string;
+  draft?: AssignmentDraft | null;
   onAdd: (draft: AssignmentDraft) => void;
 }) {
   const [sessionDate, setSessionDate] = useState(defaultDate);
@@ -59,16 +65,16 @@ export function NewAssignmentModal({
 
   // Reopening starts from today's date and a clean sheet rather than from whatever the last one
   // happened to be holding: the common case is adding several Sundays in a row, and a stale date is
-  // the mistake that is easiest to make and hardest to see.
+  // the mistake that is easiest to make and hardest to see. An edit opens on what it is editing.
   useEffect(() => {
     if (!open) return;
-    setSessionDate(defaultDate);
-    setDeleteAt(defaultDate);
-    setMassId("");
-    setTemplateId("");
-    setAnnounce(true);
+    setSessionDate(editing?.session_date ?? defaultDate);
+    setDeleteAt(editing?.announce_delete_at ?? defaultDate);
+    setMassId(editing?.mass_id ?? "");
+    setTemplateId(editing?.template_id ?? "");
+    setAnnounce(editing ? editing.announce : true);
     setProblem(null);
-  }, [open, defaultDate]);
+  }, [open, defaultDate, editing]);
 
   const draft: AssignmentDraft = {
     session_date: sessionDate,
@@ -92,7 +98,7 @@ export function NewAssignmentModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add a new assignment</DialogTitle>
+          <DialogTitle>{editing ? "Edit this assignment" : "Add a new assignment"}</DialogTitle>
           <DialogDescription>
             Pick the date and Mass, and the template that supplies the positions. Saving adds the
             servers for you — one draw per date, so nobody is given two Masses on the same Sunday.
@@ -199,7 +205,7 @@ export function NewAssignmentModal({
             Cancel
           </Button>
           <Button onClick={submit} disabled={active.length === 0 || templates.length === 0}>
-            Add to the list
+            {editing ? "Save the change" : "Add to the list"}
           </Button>
         </DialogFooter>
       </DialogContent>

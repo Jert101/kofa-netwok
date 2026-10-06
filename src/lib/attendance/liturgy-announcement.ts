@@ -8,16 +8,28 @@ export type LiturgySlotLine = {
   free_text: string | null;
 };
 
+/**
+ * The single row behind an embedded join.
+ *
+ * PostgREST returns a to-one embed as an object, but its generated typings say array, so every
+ * reader ends up handling both shapes. Answered once here rather than in each of them.
+ */
+export function joinedRow(joined: unknown): Record<string, unknown> | null {
+  if (joined == null) return null;
+  if (Array.isArray(joined)) return (joined[0] as Record<string, unknown> | undefined) ?? null;
+  return joined as Record<string, unknown>;
+}
+
 /** PostgREST may return `members` as object or single-element array depending on typings. */
 export function memberNameFromJoin(members: unknown): string | null {
-  const row =
-    members == null
-      ? null
-      : Array.isArray(members)
-        ? (members[0] as { full_name?: string } | undefined)
-        : (members as { full_name?: string });
-  const name = row?.full_name?.trim();
-  return name || null;
+  const name = joinedRow(members)?.full_name;
+  return typeof name === "string" && name.trim() ? name.trim() : null;
+}
+
+/** The Mass name behind an embedded `masses` join, for the same reason. */
+export function massNameFromJoin(masses: unknown): string | null {
+  const name = joinedRow(masses)?.name;
+  return typeof name === "string" && name.trim() ? name.trim() : null;
 }
 
 function mapJoinedRows(
@@ -133,6 +145,33 @@ export async function deleteLiturgyLinkedAnnouncement(
     .delete()
     .eq("liturgy_session_date", sessionDate)
     .eq("liturgy_mass_id", massId);
+}
+
+/**
+ * Remove one Mass's roster entirely, and the notice about it.
+ *
+ * One function because two routes can do this -- the editor's "Clear all" and the assign page's
+ * delete -- and they used to be two copies that drifted. The session rows go too: a plan that has
+ * been cleared but whose session sheet still names last month's servers is what makes a roster look
+ * like it came back on its own.
+ */
+export async function clearPlannedRoster(
+  sb: SupabaseClient,
+  sessionDate: string,
+  massId: string,
+): Promise<void> {
+  await sb.from("liturgy_planned").delete().eq("session_date", sessionDate).eq("mass_id", massId);
+
+  const { data: sessions } = await sb
+    .from("attendance_sessions")
+    .select("id")
+    .eq("session_date", sessionDate)
+    .eq("mass_id", massId);
+  for (const s of sessions ?? []) {
+    await sb.from("session_liturgy_servers").delete().eq("session_id", s.id as string);
+  }
+
+  await deleteLiturgyLinkedAnnouncement(sb, sessionDate, massId);
 }
 
 /**

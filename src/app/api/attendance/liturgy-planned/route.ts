@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/api/guard";
-import { deleteLiturgyLinkedAnnouncement, notifyLiturgyFromPlanned } from "@/lib/attendance/liturgy-announcement";
+import { clearPlannedRoster, notifyLiturgyFromPlanned } from "@/lib/attendance/liturgy-announcement";
 import { liturgySlotsBodySchema } from "@/lib/attendance/liturgy-slots";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -141,23 +141,10 @@ export async function DELETE(req: NextRequest) {
   }
 
   const sb = getSupabaseAdmin();
-  const { error: dErr } = await sb
-    .from("liturgy_planned")
-    .delete()
-    .eq("session_date", parsed.data.date)
-    .eq("mass_id", parsed.data.mass_id);
-  if (dErr) return NextResponse.json({ error: dErr.message }, { status: 500 });
-
-  const { data: sessions } = await sb
-    .from("attendance_sessions")
-    .select("id")
-    .eq("session_date", parsed.data.date)
-    .eq("mass_id", parsed.data.mass_id);
-  for (const s of sessions ?? []) {
-    await sb.from("session_liturgy_servers").delete().eq("session_id", s.id as string);
-  }
-
-  await deleteLiturgyLinkedAnnouncement(sb, parsed.data.date, parsed.data.mass_id);
+  // One function, because the assign page can also delete an assignment and the two copies of this
+  // had already drifted once: the roster, the session sheet and the announcement have to go
+  // together, and a route that forgets the third leaves a notice about servers nobody is serving.
+  await clearPlannedRoster(sb, parsed.data.date, parsed.data.mass_id);
 
   return NextResponse.json({ ok: true });
 }

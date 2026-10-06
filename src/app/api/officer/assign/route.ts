@@ -11,13 +11,20 @@ import {
   announcementBody,
   announcementTitle,
   endOfDayInstant,
+  listWindow,
   rosterLines,
 } from "@/lib/liturgy/assign-batch";
 import {
+  clearPlannedRoster,
+  deleteLiturgyLinkedAnnouncement,
+  liturgyAnnouncementKey,
+  massNameFromJoin,
+  memberNameFromJoin,
   pushLiturgyAssignmentsNotification,
   upsertLiturgyRosterAnnouncement,
 } from "@/lib/attendance/liturgy-announcement";
 import { churchTodayLabel } from "@/lib/time/church-time-labels";
+import { churchToday, shiftDays } from "@/lib/time/church-time";
 
 /**
  * Save a queue of assignments the officer built on /officer/assign.
@@ -58,6 +65,270 @@ const draftSchema = z.object({
 });
 
 const bodySchema = z.object({ assignments: z.array(draftSchema).min(1).max(MAX_DRAFTS) });
+
+/**
+ * The saved assignments, so the page can show what exists rather than only what it is about to write.
+ *
+ * The read half of the CRUD was the missing piece and it is the one that matters most: an officer who
+ * saved a month of assignments and then closed the tab had no way back to them short of remembering
+ * a date and typing it into the editor by hand.
+ */
+export async function GET(req: NextRequest) {
+  const g = await requireRole(req.headers.get("cookie"), ["officer", "admin"]);
+  if (!g.ok) return g.response;
+
+  const url = new URL(req.url);
+  const timezone = await getSetting("report_timezone");
+  const today = churchToday(timezone);
+  const { from, to } = listWindow(
+    url.searchParams.get("from"),
+    url.searchParams.get("to"),
+    today,
+    shiftDays(today, 90),
+  );
+
+  const sb = getSupabaseAdmin();
+  const { data, error } = await sb
+    .from("liturgy_planned")
+    .select("session_date, mass_id, position_label, sort_order, members(full_name), masses(id, name)")
+    .gte("session_date", from)
+    .lte("session_date", to)
+    .order("session_date", { ascending: true })
+    .order("sort_order", { ascending: true });
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const rows = (data ?? []) as Array<{
+    session_date: string;
+    mass_id: string;
+    position_label: string;
+    sort_order: number;
+    members: unknown;
+    masses: unknown;
+  }>;
+
+  // Grouped here rather than in the component so the page does not have to know that a Mass's
+  // assignment is several rows that happen to share a date and a Mass.
+  const byKey = new Map<
+    string,
+    {
+      session_date: string;
+      mass_id: string;
+      mass_name: string;
+      slots: Array<{ position_label: string; member_name: string | null }>;
+    }
+  >();
+  for (const row of rows) {
+    const key = `${row.session_date}|${row.mass_id}`;
+    const entry = byKey.get(key) ?? {
+      session_date: row.session_date,
+      mass_id: row.mass_id,
+      mass_name: massNameFromJoin(row.masses) ?? "Mass",
+      slots: [],
+    };
+    entry.slots.push({
+      position_label: row.position_label,
+      member_name: memberNameFromJoin(row.members),
+    });
+    byKey.set(key, entry);
+  }
+
+  // Whether each one was announced, so the list can say so rather than the officer having to remember.
+  // Matched by exact key rather than a `LIKE 'liturgy-servers:%'` prefix: the keys are already known,
+  // an `in` list uses the partial unique index, and a prefix match does not -- so this would grow into
+  // a table scan of every roster the parish has ever announced as the history builds up.
+  const keys = [...byKey.keys()];
+  const notices = new Map<string, { delete_at: string | null; expired: boolean }>();
+  if (keys.length > 0) {
+    const keyByAssignment = new Map(
+      keys.map((k) => {
+        const [sessionDate, massId] = k.split("|") as [string, string];
+        return [liturgyAnnouncementKey(sessionDate, massId), k];
+      }),
+    );
+    const { data: announced } = await sb
+      .from("announcements")
+      .select("dedupe_key, delete_at")
+      .in("dedupe_key", [...keyByAssignment.keys()]);
+    const now = Date.now();
+    for (const a of (announced ?? []) as Array<{ dedupe_key: string | null; delete_at: string | null }>) {
+      const assignmentKey = a.dedupe_key ? keyByAssignment.get(a.dedupe_key) : undefined;
+      if (!assignmentKey) continue;
+      notices.set(assignmentKey, {
+        delete_at: a.delete_at,
+        expired: a.delete_at ? new Date(a.delete_at).getTime() <= now : false,
+      });
+    }
+  }
+
+  return NextResponse.json({
+    ok: true,
+    from,
+    to,
+    assignments: [...byKey.values()].map((entry) => {
+      const notice = notices.get(`${entry.session_date}|${entry.mass_id}`);
+      return {
+        ...entry,
+        position_count: entry.slots.length,
+        announced: Boolean(notice),
+        announcement_delete_at: notice?.delete_at ?? null,
+        announcement_expired: notice?.expired ?? false,
+      };
+    }),
+  });
+}
+
+/**
+ * Re-announce a saved assignment, or take its notice down.
+ *
+ * The roster is not touched. Editing who serves is what the plan editor is for, and redrawing from a
+ * template on the way past would undo a correction the officer made by hand. What this changes is
+ * the publication: whether the parish was told, and until when.
+ *
+ * Turning `announce` off removes the notice rather than leaving an expired one in the feed. "Stop
+ * telling people" and "tell them until it quietly runs out" are different requests and only one of
+ * them is what the button says.
+ */
+export async function PUT(req: NextRequest) {
+  const g = await requireRole(req.headers.get("cookie"), ["officer", "admin"]);
+  if (!g.ok) return g.response;
+
+  let json: unknown;
+  try {
+    json = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+  const parsed = z
+    .object({
+      session_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      mass_id: z.string().uuid(),
+      announce: z.boolean(),
+      announce_delete_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().default(null),
+    })
+    .safeParse(json);
+
+  if (!parsed.success) {
+    return NextResponse.json({ error: "That could not be read." }, { status: 400 });
+  }
+  const { session_date, mass_id, announce, announce_delete_at } = parsed.data;
+
+  const sb = getSupabaseAdmin();
+
+  // Resolved once so the narrowing is real for the rest of the handler rather than depending on
+  // `announce` still being in scope as the reason a value exists.
+  const deleteAt = announce ? announce_delete_at : null;
+  if (announce && !deleteAt) {
+    return NextResponse.json(
+      { error: "Choose the day the announcement will be removed, or untick announcing." },
+      { status: 400 },
+    );
+  }
+  if (deleteAt && deleteAt < session_date) {
+    return NextResponse.json(
+      { error: "The announcement would be removed before the Mass it is announcing." },
+      { status: 400 },
+    );
+  }
+
+  const [{ data: mass }, { data: slots }] = await Promise.all([
+    sb.from("masses").select("name").eq("id", mass_id).maybeSingle(),
+    sb
+      .from("liturgy_planned")
+      .select("position_label, members(full_name)")
+      .eq("session_date", session_date)
+      .eq("mass_id", mass_id)
+      .order("sort_order", { ascending: true }),
+  ]);
+
+  if (!mass) return NextResponse.json({ error: "That Mass no longer exists." }, { status: 404 });
+
+  // No roster means there is nothing to announce, and a notice saying so would be worse than none:
+  // the parish would read "nobody is assigned" about a Mass that was simply never planned.
+  if ((slots ?? []).length === 0) {
+    return NextResponse.json(
+      { error: "There are no servers assigned to that Mass yet." },
+      { status: 409 },
+    );
+  }
+
+  if (!announce || !deleteAt) {
+    await deleteLiturgyLinkedAnnouncement(sb, session_date, mass_id);
+    return NextResponse.json({ ok: true, announced: false });
+  }
+
+  const massName = (mass.name as string) ?? "Mass";
+  const dateLabel = churchTodayLabel(session_date);
+  const lines = rosterLines(
+    ((slots ?? []) as Array<{ position_label: string; members: unknown }>).map((s) => ({
+      position_label: s.position_label,
+      member_name: memberNameFromJoin(s.members),
+    })),
+  );
+
+  try {
+    const id = await upsertLiturgyRosterAnnouncement(sb, {
+      sessionDate: session_date,
+      massId: mass_id,
+      title: announcementTitle(massName, dateLabel),
+      body: announcementBody(`These are the servers for ${massName} on ${dateLabel}.`, lines),
+      deleteAt: endOfDayInstant(deleteAt, await getSetting("report_timezone")),
+      fromRole: g.session.role,
+    });
+    return NextResponse.json({ ok: true, announced: true, announcement_id: id });
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "Could not post the announcement." },
+      { status: 500 },
+    );
+  }
+}
+
+/**
+ * Delete one Mass's roster, and the notice about it.
+ *
+ * Refuses a date in the past. A Mass that has already happened has an attendance session whose sheet
+ * was copied from this roster, and removing it would leave a record of a Sunday that happened with
+ * nobody serving it -- which is not something a delete button should be able to do by accident.
+ */
+export async function DELETE(req: NextRequest) {
+  const g = await requireRole(req.headers.get("cookie"), ["officer", "admin"]);
+  if (!g.ok) return g.response;
+
+  const url = new URL(req.url);
+  const sessionDate = url.searchParams.get("session_date");
+  const massId = url.searchParams.get("mass_id");
+  if (!sessionDate || !/^\d{4}-\d{2}-\d{2}$/.test(sessionDate) || !massId || !/^[0-9a-f-]{36}$/i.test(massId)) {
+    return NextResponse.json({ error: "Which assignment?" }, { status: 400 });
+  }
+
+  const sb = getSupabaseAdmin();
+  const timezone = await getSetting("report_timezone");
+  const today = churchToday(timezone);
+  if (sessionDate < today) {
+    return NextResponse.json(
+      { error: "That Mass has already happened, so its record stays as it was." },
+      { status: 409 },
+    );
+  }
+
+  await clearPlannedRoster(sb, sessionDate, massId);
+
+  await logAudit({
+    actor: {
+      role: g.session.role,
+      memberId: g.session.actor?.id ?? null,
+      name: g.session.actor?.name ?? null,
+    },
+    action: "liturgy_cleared",
+    entityType: "liturgy_planned",
+    entityId: massId,
+    meta: { session_date: sessionDate },
+    ip: req.headers.get("x-forwarded-for"),
+  });
+
+  return NextResponse.json({ ok: true });
+}
 
 type Draft = z.infer<typeof draftSchema>;
 

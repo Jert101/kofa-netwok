@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { BulkAssign } from "./BulkAssign";
 import { NewAssignmentModal } from "./NewAssignmentModal";
+import { SavedAssignments } from "./SavedAssignments";
 import { MemberCombobox, type MemberHit } from "@/components/MemberCombobox";
 import { draftKey, upsertDraft, type AssignmentDraft } from "@/lib/liturgy/assign-batch";
 import { churchTodayLabel } from "@/lib/time/church-time-labels";
@@ -65,9 +66,14 @@ export default function OfficerAssignPage() {
   // The queue: assignments added through the modal and not yet written.
   const [drafts, setDrafts] = useState<AssignmentDraft[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
+  /** The queue entry the modal is editing, or null when it is adding. */
+  const [editingDraft, setEditingDraft] = useState<AssignmentDraft | null>(null);
   const [savingQueue, setSavingQueue] = useState(false);
   const [replaceExisting, setReplaceExisting] = useState(false);
   const [queueReport, setQueueReport] = useState<EntryResult[] | null>(null);
+  /** Bumped to make the saved list reload; a counter rather than a boolean so two changes in a row
+   *  cannot collapse into one render. */
+  const [listVersion, setListVersion] = useState(0);
   /** The parish's today, not the browser's. An officer in Manila at 07:00 is not planning yesterday. */
   const [today, setToday] = useState("");
 
@@ -107,14 +113,32 @@ export default function OfficerAssignPage() {
   }, []);
 
   const addDraft = (draft: AssignmentDraft) => {
+    const wasEditing = editingDraft !== null;
     const { drafts: next, replaced } = upsertDraft(drafts, draft);
     setDrafts(next);
+    setEditingDraft(null);
     setQueueReport(null);
     setNotice(
       replaced
         ? "That date and Mass was already on the list, so it was updated rather than added twice."
         : `Added ${churchTodayLabel(draft.session_date)}. Add another, or save the list.`,
     );
+    // Nothing else to say after an edit that landed where it was expected to.
+    if (wasEditing && !replaced) setNotice(`Updated ${churchTodayLabel(draft.session_date)}.`);
+  };
+
+  /** Open the modal on an entry already queued. */
+  const editDraft = (draft: AssignmentDraft) => {
+    setEditingDraft(draft);
+    setModalOpen(true);
+  };
+
+  /** Load a saved assignment into the hand-pick editor further down. */
+  const editRoster = (sessionDate: string, mass: string) => {
+    setDate(sessionDate);
+    setMassId(mass);
+    setRows(null);
+    setNotice(`Editing ${churchTodayLabel(sessionDate)}. Change a row and save it below.`);
   };
 
   const saveDrafts = async () => {
@@ -153,6 +177,9 @@ export default function OfficerAssignPage() {
         results.filter((r) => r.ok).map((r) => `${r.session_date}|${r.mass_id}`),
       );
       setDrafts((prev) => prev.filter((d) => !saved.has(draftKey(d))));
+      // The saved list has to follow, or the officer saves six Sundays and the screen below still
+      // says nothing is saved.
+      setListVersion((n) => n + 1);
       const added = results.filter((r) => r.ok).length;
       const refused = results.length - added;
       setNotice(
@@ -444,13 +471,18 @@ export default function OfficerAssignPage() {
                     ? `Announced until ${churchTodayLabel(d.announce_delete_at)}`
                     : "Saved quietly"}
                 </span>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setDrafts((prev) => prev.filter((x) => draftKey(x) !== draftKey(d)))}
-                >
-                  Remove
-                </Button>
+                <span className="ml-auto flex gap-1">
+                  <Button size="sm" variant="ghost" onClick={() => editDraft(d)}>
+                    Edit
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setDrafts((prev) => prev.filter((x) => draftKey(x) !== draftKey(d)))}
+                  >
+                    Remove
+                  </Button>
+                </span>
               </li>
             ))}
           </ul>
@@ -497,11 +529,23 @@ export default function OfficerAssignPage() {
 
       <NewAssignmentModal
         open={modalOpen}
-        onOpenChange={setModalOpen}
+        onOpenChange={(open) => {
+          setModalOpen(open);
+          // Closing an edit must not leave the next "Add new assignment" opening on stale values.
+          if (!open) setEditingDraft(null);
+        }}
         masses={masses}
         templates={templates}
         defaultDate={today || date}
+        draft={editingDraft}
         onAdd={addDraft}
+      />
+
+      <SavedAssignments
+        today={today}
+        version={listVersion}
+        onEditRoster={editRoster}
+        onChanged={() => setListVersion((n) => n + 1)}
       />
 
       <h2 className="text-sm font-medium text-[var(--brand)]">Hand-pick one Mass</h2>

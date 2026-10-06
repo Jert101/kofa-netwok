@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   MAX_DRAFTS,
+  LIST_MAX_DAYS,
   activeMasses,
   announcementBody,
   announcementTitle,
   draftKey,
   endOfDayInstant,
+  listWindow,
   rosterLines,
   upsertDraft,
   validateDraft,
@@ -15,6 +17,7 @@ import {
   type TemplateOption,
 } from "./assign-batch";
 import { BODY_MAX, TITLE_MAX } from "@/lib/announcements/audience";
+import { daysBetween, shiftDays } from "@/lib/time/church-time";
 
 const MANILA = "Asia/Manila";
 
@@ -243,5 +246,54 @@ describe("upsertDraft", () => {
 describe("MAX_DRAFTS", () => {
   it("is a season rather than a plan", () => {
     expect(MAX_DRAFTS).toBe(62);
+  });
+});
+
+describe("listWindow", () => {
+  const today = "2026-10-11";
+  const soon = "2027-01-08";
+
+  it("uses what it is given when both ends are dates", () => {
+    expect(listWindow("2026-11-01", "2026-12-01", today, soon)).toEqual({
+      from: "2026-11-01",
+      to: "2026-12-01",
+    });
+  });
+
+  it("falls back per end rather than discarding the one that worked", () => {
+    expect(listWindow("2026-11-01", null, today, soon)).toEqual({ from: "2026-11-01", to: soon });
+    expect(listWindow(null, "2026-12-01", today, soon)).toEqual({ from: today, to: "2026-12-01" });
+  });
+
+  it("recovers from a date field that was left empty", () => {
+    // What a screen with no date in it sends, not a mistake anybody made on purpose.
+    expect(listWindow("", "", today, soon)).toEqual({ from: today, to: soon });
+    expect(listWindow(null, null, today, soon)).toEqual({ from: today, to: soon });
+  });
+
+  it("recovers from a date that only looks like one", () => {
+    expect(listWindow("not-a-date", "2026-13-40", today, soon)).toEqual({ from: today, to: soon });
+  });
+
+  it("puts the ends the right way round rather than returning an empty range", () => {
+    expect(listWindow("2026-12-01", "2026-11-01", today, soon)).toEqual({
+      from: "2026-11-01",
+      to: "2026-12-01",
+    });
+  });
+
+  it("keeps an end that is after the window rather than swapping it in", () => {
+    // Measured back from the far end, which is the direction the officer asked for: they want the
+    // near future, so a request that reaches a year out is shortened from the start, not the end.
+    const far = "2027-10-01";
+    expect(listWindow(far, null, today, soon)).toEqual({
+      from: shiftDays(far, -LIST_MAX_DAYS),
+      to: far,
+    });
+  });
+
+  it("caps an absurd request rather than reading the parish's whole history", () => {
+    const win = listWindow("2000-01-01", null, today, soon);
+    expect(daysBetween(win.from, win.to)).toBeLessThanOrEqual(LIST_MAX_DAYS);
   });
 });

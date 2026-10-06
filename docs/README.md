@@ -617,13 +617,20 @@ Legend: 🔓 public · role list = `requireRole` allowlist.
 | GET/PUT | `/api/liturgy/session/[id]` | admin, officer |
 | GET/POST | `/api/officer/liturgy-templates` | officer, admin |
 | GET/DELETE | `/api/officer/liturgy-templates/[id]` | officer, admin |
-| POST | `/api/officer/assign` | officer, admin |
+| GET/POST/PUT/DELETE | `/api/officer/assign` | officer, admin |
 
-`POST /api/officer/assign` saves the queue built on `/officer/assign`: a list of
+`POST` saves the queue built on `/officer/assign`: a list of
 `{session_date, mass_id, template_id, announce, announce_delete_at, replace}`. The draw happens on
 the server so the announcement and the notification are both built from the roster that was actually
 written, and the used-set is threaded across the whole batch so two Masses on one Sunday cannot be
 given the same person. Each entry reports its own outcome, so one refusal does not abort the rest.
+
+`GET` lists what is already saved (defaults to the next 90 days, capped at 185) so the page can show
+existing assignments rather than only what it is about to write. `PUT` re-announces one saved
+assignment or takes its notice down, **without touching who is serving** — editing the roster is the
+plan editor's job, and redrawing from a template on the way past would undo a hand-made correction.
+`DELETE` removes one Mass's roster along with its session sheet and its announcement, and refuses a
+date in the past so a Sunday that already happened cannot be edited out of the record.
 
 ### Announcements / notifications / payments / settings
 

@@ -13,7 +13,7 @@
  *   convenience rather than a rule -- the route re-checks.
  */
 
-import { isIsoDate, resolveTimeZone, zoneOffsetMinutes } from "@/lib/time/church-time";
+import { daysBetween, isIsoDate, resolveTimeZone, shiftDays, zoneOffsetMinutes } from "@/lib/time/church-time";
 import { BODY_MAX, TITLE_MAX } from "@/lib/announcements/audience";
 
 /** A season, not a plan. Anything longer than this is a typo rather than an intention. */
@@ -37,6 +37,32 @@ export type AssignmentDraft = {
 
 export function draftKey(draft: { session_date: string; mass_id: string }): string {
   return `${draft.session_date}|${draft.mass_id}`;
+}
+
+/** The cap on the list of saved assignments a screen asks for. */
+export const LIST_MAX_DAYS = 185;
+
+/**
+ * Where the list of saved assignments starts and ends.
+ *
+ * Both ends are clamped, and the window is capped, because the two failure modes are different and
+ * both are real. Unbounded: an officer asking for the whole history drags every planned row the
+ * parish has ever had into one response. Backwards: a start date before the beginning of time is
+ * what a page with an empty date field sends, and it is not a mistake anybody made on purpose.
+ */
+export function listWindow(
+  from: string | null,
+  to: string | null,
+  fallbackFrom: string,
+  fallbackTo: string,
+): { from: string; to: string } {
+  const start = typeof from === "string" && isIsoDate(from) ? from : fallbackFrom;
+  const end = typeof to === "string" && isIsoDate(to) ? to : fallbackTo;
+  const [lo, hi] = start <= end ? [start, end] : [end, start];
+  if (daysBetween(lo, hi) <= LIST_MAX_DAYS) return { from: lo, to: hi };
+  // Trimmed from the far end, so the window still ends where the officer asked. An `in` filter on
+  // the announcements below needs `from` to be the earlier of the two.
+  return { from: shiftDays(hi, -LIST_MAX_DAYS), to: hi };
 }
 
 /**
