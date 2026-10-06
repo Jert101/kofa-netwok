@@ -16,21 +16,19 @@ const voidSchema = z.object({
 /**
  * PAY-3: void a payment.
  *
- * Spec §PAY-3: treasurer only, and **the admin cannot void**. That is deliberate and unusual -- the
- * admin can edit announcements and approve registrations but not reverse money -- so it is worth saying
- * why: the treasurer is the person who reconciles the book, and a second role being able to erase an
- * entry weakens the claim that the ledger says what actually happened. An admin who needs a correction
- * asks the treasurer, which is one conversation instead of an untraceable edit.
+ * Spec §PAY-3 asks for treasurer only, and this route used to enforce that with `selfOnly: true` so
+ * that the admin, who can open `/treasurer` and record payments, still could not reverse one. The parish
+ * asked for the admin to be able to do this as well, so the exception is gone and the route is declared
+ * for the treasurer like every other treasurer route -- which means an admin (and the super admin, who
+ * reaches everything) may void too.
  *
- * A reason is mandatory and stored with the row, plus who and when. The old handler voided with an
- * empty body and recorded nothing, so a voided payment and a deleted one looked identical.
+ * What the rule was protecting is kept: a void is never a silent edit. A reason is mandatory, a note is
+ * mandatory for "Other", and the row stores who voided it and when. The old handler voided with an empty
+ * body and recorded nothing, so a voided payment and a deleted one looked identical -- that is the part
+ * that actually mattered, and it is still here.
  */
 export async function POST(req: NextRequest, ctx: Ctx) {
-  // `selfOnly` is load-bearing, not decoration. A session may normally act as any role it reaches,
-  // which is what lets an admin open /treasurer and use it -- but borrowing must not extend to reversing
-  // money, or the separation of duties written above stops existing. The admin still sees the Void button
-  // (it is a shared page) and still gets a 401 explaining that a treasurer has to do it.
-  const g = await requireRole(req.headers.get("cookie"), ["treasurer"], { selfOnly: true });
+  const g = await requireRole(req.headers.get("cookie"), ["treasurer"]);
   if (!g.ok) return g.response;
 
   const { id } = await ctx.params;

@@ -166,12 +166,12 @@ export default function TreasurerPaymentsPage() {
         </p>
       ) : null}
 
-      {/* Say the rule instead of hiding the reason. The treasurer is the one who reconciles the book,
-          so reversing an entry stays theirs alone (PAY-3); an admin who needs a correction asks them. */}
+      {/* Say the rule instead of hiding the reason. Voiding is for the treasurer and the admin; anyone else
+          who can see this page is told why there is no button. */}
       {canVoid === false ? (
         <p className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3 text-sm text-[var(--text-muted)]">
-          Voiding a payment is the treasurer&apos;s alone, so that is why there is no Void button here. Ask
-          the treasurer to reverse an entry — it keeps a reason and their name against it.
+          Voiding a payment is the treasurer&apos;s or the admin&apos;s, so that is why there is no Void button
+          for you here. Every void keeps a reason and the name of whoever did it.
         </p>
       ) : null}
 

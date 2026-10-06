@@ -43,13 +43,12 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await q;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  // PAY-3 keeps voiding with the treasurer alone, and the void route enforces it with `selfOnly`. This
-  // page is shared with the admin, so the API says outright whether this caller may void rather than
-  // leaving the button on screen to fail: an action that is refused on every press reads as a broken
-  // page, not as a rule.
+  // The treasurer and the admin may both void; this page is also reachable by the secretary and officer,
+  // who may not. The API says so outright rather than leaving a button on screen that fails: an action
+  // that is refused on every press reads as a broken page, not as a rule.
   return NextResponse.json({
     payments: data ?? [],
-    can_void: g.session.role === "treasurer",
+    can_void: g.session.role === "treasurer" || g.session.role === "admin",
   });
 }
 
