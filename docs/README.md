@@ -633,10 +633,18 @@ the server so the announcement and the notification are both built from the rost
 written, and the used-set is threaded across the whole batch so two Masses on one Sunday cannot be
 given the same person. Each entry reports its own outcome, so one refusal does not abort the rest.
 
-`slots` is the lineup the officer reviewed on screen, required. `template_id` is optional — the template
+`slots` is the lineup the officer reviewed on screen, required. It is one entry per **person**, not per
+position, because a position can have more than one server — two crucifixes, a thurifer and an assistant.
+Neither `liturgy_planned` nor `session_liturgy_servers` has a uniqueness constraint on `position_label`
+(only `liturgy_templates` and the `liturgy_positions` suggestion catalog are deduped), so several rows
+sharing a label are legal all the way through to the session sheet. `rosterLines` is what prints them
+back as one line per position — `Crucifix: Ana Reyes, Ben Cruz` — since two consecutive identical
+labels otherwise read as two positions the officer mistyped.
+
+`template_id` is optional — the template
 is a shortcut for filling the position list in, not a requirement, so an officer can build one unusual
 lineup by hand and a saved roster (which does not record where it came from) can still be reopened for
-correction.
+correction. A template seeds one server per position; adding a second is a button on the position.
 
 `GET` lists what is already saved (defaults to the next 90 days, capped at 185) so the page can show
 existing assignments rather than only what it is about to write. `PUT` re-announces one saved

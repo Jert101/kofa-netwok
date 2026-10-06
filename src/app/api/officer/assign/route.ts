@@ -67,7 +67,12 @@ const draftSchema = z.object({
    * so what gets saved is what the officer approved, and the announcement can only describe the roster
    * that was actually written.
    */
-  slots: z.array(liturgySlotSchema).max(48).default([]),
+  slots: z
+    .array(liturgySlotSchema)
+    // Said in words, because the default is "Array must contain at most 48 element(s)", which would be
+    // the whole answer an officer gets after adding a server to a position for the fortieth time.
+    .max(48, "That is more than 48 servers for one Mass. Split them across two Masses.")
+    .default([]),
   /**
    * Replace a roster that is already stored for this date and Mass.
    *

@@ -8,10 +8,11 @@ import { SavedAssignments, type SavedAssignment } from "./SavedAssignments";
 import {
   draftFilled,
   draftKey,
-  draftUnassigned,
   draftSlots,
+  draftUnassigned,
   upsertDraft,
   type AssignmentDraft,
+  type DraftRow,
 } from "@/lib/liturgy/assign-batch";
 import { churchTodayLabel } from "@/lib/time/church-time-labels";
 
@@ -129,6 +130,27 @@ export default function OfficerAssignPage() {
   const editSaved = (row: SavedAssignment) => {
     const key = `${row.session_date}|${row.mass_id}`;
     setEditingSaved((prev) => new Set(prev).add(key));
+
+    // Grouped back into one position per label. The roster stores one row per person, so two people
+    // on "Crucifix" arrive as two rows; showing them as two positions would invite the officer to
+    // split them again the next time they saved.
+    const byLabel = new Map<string, DraftRow>();
+    for (const s of row.slots) {
+      const label = s.position_label.trim();
+      if (label.length === 0) continue;
+      const existing = byLabel.get(label);
+      if (existing) {
+        existing.members.push({ member_id: s.member_id ?? "", member_name: s.member_name ?? "" });
+        continue;
+      }
+      byLabel.set(label, {
+        key: crypto.randomUUID(),
+        position_label: label,
+        members: [{ member_id: s.member_id ?? "", member_name: s.member_name ?? "" }],
+        required_gender: "any",
+      });
+    }
+
     setEditingDraft({
       session_date: row.session_date,
       mass_id: row.mass_id,
@@ -138,13 +160,7 @@ export default function OfficerAssignPage() {
       template_id: "",
       announce: row.announced,
       announce_delete_at: row.announcement_delete_at?.slice(0, 10) ?? row.session_date,
-      rows: row.slots.map((s) => ({
-        key: crypto.randomUUID(),
-        position_label: s.position_label,
-        member_id: s.member_id ?? "",
-        member_name: s.member_name ?? "",
-        required_gender: "any" as const,
-      })),
+      rows: [...byLabel.values()],
     });
     setModalOpen(true);
   };

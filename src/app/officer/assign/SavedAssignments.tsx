@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { churchTodayLabel } from "@/lib/time/church-time-labels";
+import { rosterLines } from "@/lib/liturgy/assign-batch";
 
 export type SavedAssignment = {
   session_date: string;
@@ -202,11 +203,10 @@ export function SavedAssignments({
 
                 {expanded === key ? (
                   <ul className="mt-2 space-y-1 border-t border-[var(--border)] pt-2 text-sm text-[var(--text-muted)]">
-                    {row.slots.map((s, i) => (
-                      <li key={`${s.position_label}-${i}`}>
-                        <span className="text-[var(--text)]">{s.position_label}</span> —{" "}
-                        {s.member_name ?? "nobody yet"}
-                      </li>
+                    {/* The same function the announcement is written with, so a position with two
+                        servers reads the same here as it does in the parish's feed. */}
+                    {rosterLines(row.slots).map((line) => (
+                      <li key={line}>{line}</li>
                     ))}
                   </ul>
                 ) : null}

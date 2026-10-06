@@ -25,19 +25,29 @@ export type MassOption = { id: string; name: string; is_active?: boolean };
 export type TemplateOption = { id: string; name: string };
 
 /**
- * One position in the queue, with the server on it or not.
+ * One server slot: a member, or empty.
+ *
+ * Separate from the position because a position can need more than one. Two crucifixes, two candle
+ * bearers, a thurifer and an assistant who both stand at the same place -- all the same label, two
+ * people, and the roster has to be able to say so.
+ */
+export type DraftMember = { member_id: string; member_name: string };
+
+/**
+ * One position in the queue, and however many servers it needs.
  *
  * `key` is a client-side identity so React can keep a combobox's focus and open state while rows are
  * added and removed around it. It is never sent anywhere.
  *
  * `required_gender` rides along because it decides who a random draw may pick for this position. It
  * is a tool for drawing, not a property of the assignment, so it is not part of what gets written.
+ * It applies to every slot in the row: a position that needs two women needs two women.
  */
 export type DraftRow = {
   key: string;
   position_label: string;
-  member_id: string;
-  member_name: string;
+  /** One entry per server this position needs, so a half-filled position can still be saved. */
+  members: DraftMember[];
   required_gender: GenderRule;
 };
 
@@ -136,16 +146,26 @@ export function validateDraft(
   return null;
 }
 
-/** A fresh row with nothing on it. */
+/** A fresh position with nobody on it yet. */
 export function blankRow(required_gender: GenderRule = "any"): DraftRow {
-  return { key: crypto.randomUUID(), position_label: "", member_id: "", member_name: "", required_gender };
+  return {
+    key: crypto.randomUUID(),
+    position_label: "",
+    members: [{ member_id: "", member_name: "" }],
+    required_gender,
+  };
+}
+
+/** An empty server slot, for the second (and third) person on one position. */
+export function blankMember(): DraftMember {
+  return { member_id: "", member_name: "" };
 }
 
 /**
  * Bring in a template's positions without disturbing what is already there.
  *
- * A position the sheet already has is left exactly as it is, member included, so choosing a template
- * twice -- or choosing one after picking servers by hand -- never silently un-books somebody. Compared
+ * A position the sheet already has is left exactly as it is, servers included, so choosing a template
+ * twice -- or choosing one after picking servers by hand -- never silently un-books anybody. Compared
  * normalized, because "Crucifix" and "crucifix " are one position and a second row for it would be
  * two rows the save would write.
  */
@@ -166,29 +186,48 @@ export function seedRowsFromTemplate(
 }
 
 /**
- * The rows that will actually be written.
+ * Every server slot on the sheet, flattened, in the order the officer arranged them.
  *
- * A position with no server is dropped rather than stored empty, because the write endpoint requires
- * a member on every row it keeps -- an empty row would read as a position nobody can take, which is a
- * different statement from "not planned yet". `draftUnassigned` is what tells the officer which ones
- * were dropped.
+ * The draw endpoint takes one entry per person rather than one per position, so this is what both the
+ * draw and the save speak. Flattened here rather than in either caller so the two cannot disagree
+ * about which slot a drawn member belongs in.
  */
-export function draftSlots(
-  draft: AssignmentDraft,
-): Array<{ position_label: string; member_id: string }> {
-  return draft.rows
-    .filter((r) => r.position_label.trim().length > 0 && r.member_id)
-    .map((r) => ({ position_label: r.position_label.trim(), member_id: r.member_id }));
+export function draftSlots(draft: AssignmentDraft): Array<{ position_label: string; member_id: string }> {
+  const out: Array<{ position_label: string; member_id: string }> = [];
+  for (const r of draft.rows) {
+    const label = r.position_label.trim();
+    if (label.length === 0) continue;
+    for (const m of r.members) {
+      if (m.member_id) out.push({ position_label: label, member_id: m.member_id });
+    }
+  }
+  return out;
 }
 
-/** Positions with a name but nobody on them. */
+/** Server slots with nobody on them. Counted per person, not per position: a position needing two
+ *  with one filled is one short, and saying "unfilled" about the whole position would read as both
+ *  were missing. */
 export function draftUnassigned(draft: AssignmentDraft): number {
-  return draft.rows.filter((r) => r.position_label.trim().length > 0 && !r.member_id).length;
+  let n = 0;
+  for (const r of draft.rows) {
+    if (r.position_label.trim().length === 0) continue;
+    n += r.members.filter((m) => !m.member_id).length;
+  }
+  return n;
 }
 
-/** Positions with a server, as the queue list shows them. */
+/** Server slots with somebody on them. */
 export function draftFilled(draft: AssignmentDraft): number {
   return draftSlots(draft).length;
+}
+
+/** How many people the sheet is asking for in total, filled or not. */
+export function draftDemand(draft: AssignmentDraft): number {
+  let n = 0;
+  for (const r of draft.rows) {
+    if (r.position_label.trim().length > 0) n += r.members.length;
+  }
+  return n;
 }
 
 /**
@@ -211,11 +250,29 @@ export function endOfDayInstant(date: string, timezone: string | null | undefine
   return new Date(wall - zoneOffsetMinutes(zone, new Date(firstPass)) * 60_000).toISOString();
 }
 
-/** One line per position, for both the announcement and the notification. */
+/**
+ * One line per position for both the announcement and the notification, with everybody on that
+ * position on the same line.
+ *
+ * "Crucifix: Ana Reyes" and "Crucifix: Ben Cruz" on consecutive lines reads as two positions the
+ * officer mistyped. "Crucifix: Ana Reyes, Ben Cruz" reads as the one position it is. Grouping is by
+ * exact label and keeps first-seen order, so the lineup the officer arranged is the one printed.
+ */
 export function rosterLines(
   slots: ReadonlyArray<{ position_label: string; member_name: string | null }>,
 ): string[] {
-  return slots.map((s) => `${s.position_label}: ${s.member_name?.trim() || "not filled"}`);
+  const order: string[] = [];
+  const byLabel = new Map<string, string[]>();
+  for (const s of slots) {
+    const label = s.position_label.trim();
+    if (label.length === 0) continue;
+    if (!byLabel.has(label)) {
+      byLabel.set(label, []);
+      order.push(label);
+    }
+    byLabel.get(label)!.push(s.member_name?.trim() || "not filled");
+  }
+  return order.map((label) => `${label}: ${byLabel.get(label)!.join(", ")}`);
 }
 
 export function announcementTitle(massName: string, dateLabel: string): string {

@@ -117,7 +117,9 @@ export function MemberCombobox({
   if (value) {
     return (
       <div>
-        <span className="text-sm font-medium">{label}</span>
+        {/* Empty label renders nothing: inside a position row the position is already named a few
+            pixels above, and "Server" printed over "Server" is noise on a screen with four of them. */}
+        {label ? <span className="text-sm font-medium">{label}</span> : null}
         <div className="mt-1 flex min-h-12 items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3">
           <span className="min-w-0 flex-1 truncate font-medium">{value.full_name}</span>
           <button
@@ -138,9 +140,11 @@ export function MemberCombobox({
 
   return (
     <div>
-      <label className="text-sm font-medium" htmlFor={id}>
-        {label}
-      </label>
+      {label ? (
+        <label className="text-sm font-medium" htmlFor={id}>
+          {label}
+        </label>
+      ) : null}
       <div className="relative" ref={boxRef}>
         <input
           id={id}

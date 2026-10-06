@@ -6,6 +6,7 @@ import {
   activeMasses,
   announcementBody,
   announcementTitle,
+  draftDemand,
   draftFilled,
   draftKey,
   draftSlots,
@@ -33,14 +34,27 @@ const masses: MassOption[] = [
 
 const templates: TemplateOption[] = [{ id: "t-sunday", name: "Sunday servers" }];
 
+/** A position, optionally with the given servers on it. */
 function row(patch: Partial<DraftRow> = {}): DraftRow {
   return {
     key: `k-${Math.random()}`,
     position_label: "Thurifer",
-    member_id: "m1",
-    member_name: "Ana Reyes",
+    members: [{ member_id: "m1", member_name: "Ana Reyes" }],
     required_gender: "any",
     ...patch,
+  };
+}
+
+/** One position with `slots` server slots, the first `filled` of them holding a member. */
+function position(label: string, slots: number, filled = slots, prefix = "m"): DraftRow {
+  return {
+    key: `k-${label}-${slots}-${prefix}-${Math.random()}`,
+    position_label: label,
+    members: Array.from({ length: slots }, (_, i) => ({
+      member_id: i < filled ? `${prefix}${i + 1}` : "",
+      member_name: i < filled ? `${prefix} name ${i + 1}` : "",
+    })),
+    required_gender: "any",
   };
 }
 
@@ -207,6 +221,50 @@ describe("rosterLines", () => {
       "not filled",
     );
   });
+
+  it("puts everybody on one position on the same line", () => {
+    // "Crucifix: Ana" then "Crucifix: Ben" reads as two positions the officer mistyped. This is the
+    // case the multi-server position exists for, so it is also the case the parish has to read right.
+    expect(
+      rosterLines([
+        { position_label: "Crucifix", member_name: "Ana Reyes" },
+        { position_label: "Crucifix", member_name: "Ben Cruz" },
+      ]),
+    ).toEqual(["Crucifix: Ana Reyes, Ben Cruz"]);
+  });
+
+  it("puts three on one position on one line", () => {
+    expect(
+      rosterLines([
+        { position_label: "Candle", member_name: "Ana" },
+        { position_label: "Candle", member_name: "Ben" },
+        { position_label: "Candle", member_name: "Cora" },
+      ]),
+    ).toEqual(["Candle: Ana, Ben, Cora"]);
+  });
+
+  it("keeps first-seen order when a label comes back later", () => {
+    expect(
+      rosterLines([
+        { position_label: "Thurifer", member_name: "Ana" },
+        { position_label: "Crucifix", member_name: "Ben" },
+        { position_label: "Thurifer", member_name: "Cora" },
+      ]),
+    ).toEqual(["Thurifer: Ana, Cora", "Crucifix: Ben"]);
+  });
+
+  it("says so inside the group when one of them is unfilled", () => {
+    expect(
+      rosterLines([
+        { position_label: "Crucifix", member_name: "Ana" },
+        { position_label: "Crucifix", member_name: null },
+      ]),
+    ).toEqual(["Crucifix: Ana, not filled"]);
+  });
+
+  it("skips a slot with no label at all", () => {
+    expect(rosterLines([{ position_label: "   ", member_name: "Ana" }])).toEqual([]);
+  });
 });
 
 describe("announcementTitle", () => {
@@ -290,13 +348,20 @@ describe("seedRowsFromTemplate", () => {
     expect(rows[0].required_gender).toBe("female");
   });
 
-  it("leaves an existing row exactly as it is, member included", () => {
+  it("leaves an existing row exactly as it is, servers included", () => {
     // The rule that stops picking a template from silently un-booking somebody.
-    const mine = [row({ position_label: "Thurifer", member_id: "m9", member_name: "Ben Cruz" })];
+    const mine = [
+      row({ position_label: "Thurifer", members: [{ member_id: "m9", member_name: "Ben Cruz" }] }),
+    ];
     const rows = seedRowsFromTemplate(mine, template);
     expect(rows).toHaveLength(2);
-    expect(rows[0].member_id).toBe("m9");
-    expect(rows[0].member_name).toBe("Ben Cruz");
+    expect(rows[0].members).toEqual([{ member_id: "m9", member_name: "Ben Cruz" }]);
+  });
+
+  it("leaves a two-server position with both of its servers", () => {
+    const mine = [position("Thurifer", 2, 2, "x")];
+    const rows = seedRowsFromTemplate(mine, template);
+    expect(rows[0].members).toHaveLength(2);
   });
 
   it("matches a position regardless of case or stray spaces", () => {
@@ -330,52 +395,68 @@ describe("seedRowsFromTemplate", () => {
 });
 
 describe("draftSlots", () => {
-  it("writes the filled rows and drops the rest", () => {
-    const slots = draftSlots(
-      draft({
-        rows: [
-          row({ position_label: "Thurifer", member_id: "m1" }),
-          row({ position_label: "Cantor", member_id: "" }),
-        ],
-      }),
-    );
+  it("writes one row per person and drops the empty slots", () => {
+    const slots = draftSlots(draft({ rows: [position("Thurifer", 1), position("Cantor", 1, 0)] }));
     expect(slots).toEqual([{ position_label: "Thurifer", member_id: "m1" }]);
   });
 
-  it("trims the label and drops a row whose name is only spaces", () => {
+  it("writes two rows for a position that has two servers", () => {
+    // The feature: one label, two people, two stored rows.
+    const slots = draftSlots(draft({ rows: [position("Crucifix", 2, 2)] }));
+    expect(slots).toEqual([
+      { position_label: "Crucifix", member_id: "m1" },
+      { position_label: "Crucifix", member_id: "m2" },
+    ]);
+  });
+
+  it("writes only the filled slot of a half-filled two-server position", () => {
+    const slots = draftSlots(draft({ rows: [position("Crucifix", 2, 1)] }));
+    expect(slots).toEqual([{ position_label: "Crucifix", member_id: "m1" }]);
+  });
+
+  it("keeps the order the officer arranged, across positions", () => {
     const slots = draftSlots(
-      draft({
-        rows: [
-          row({ position_label: "  Thurifer  ", member_id: "m1" }),
-          row({ position_label: "  ", member_id: "m2" }),
-        ],
-      }),
+      draft({ rows: [position("Thurifer", 1, 1, "a"), position("Crucifix", 2, 2, "b")] }),
+    );
+    expect(slots.map((s) => `${s.position_label}/${s.member_id}`)).toEqual([
+      "Thurifer/a1",
+      "Crucifix/b1",
+      "Crucifix/b2",
+    ]);
+  });
+
+  it("trims the label and drops a position whose name is only spaces", () => {
+    const slots = draftSlots(
+      draft({ rows: [row({ position_label: "  Thurifer  " }), position("   ", 1, 1, "z")] }),
     );
     expect(slots).toEqual([{ position_label: "Thurifer", member_id: "m1" }]);
   });
 
   it("is empty for a draft with nothing on it, which the save refuses", () => {
-    expect(draftSlots(draft({ rows: [row({ member_id: "" })] }))).toEqual([]);
+    expect(draftSlots(draft({ rows: [position("Thurifer", 1, 0)] }))).toEqual([]);
   });
 });
 
-describe("draftUnassigned and draftFilled", () => {
-  it("count positions rather than rows, and separate the two states", () => {
-    const d = draft({
-      rows: [
-        row({ position_label: "Thurifer", member_id: "m1" }),
-        row({ position_label: "Cantor", member_id: "" }),
-      ],
-    });
+describe("draftUnassigned, draftFilled and draftDemand", () => {
+  it("count server slots, not positions", () => {
+    const d = draft({ rows: [position("Thurifer", 1, 1), position("Cantor", 1, 0)] });
     expect(draftFilled(d)).toBe(1);
     expect(draftUnassigned(d)).toBe(1);
+    expect(draftDemand(d)).toBe(2);
   });
 
-  it("does not count a blank row as an unassigned position", () => {
-    // Otherwise adding three rows and typing one name reports "2 unfilled" for two rows that are
-    // not positions at all.
-    const d = draft({ rows: [row({ member_id: "" }), row({ position_label: "", member_id: "" })] });
+  it("reports one short for a half-filled two-server position, not the whole position", () => {
+    // Saying "Crucifix is unfilled" when one of its two servers is on the roster is how an officer
+    // ends up putting a third person there.
+    const d = draft({ rows: [position("Crucifix", 2, 1)] });
     expect(draftUnassigned(d)).toBe(1);
+    expect(draftDemand(d)).toBe(2);
+  });
+
+  it("does not count a blank position as an unfilled slot", () => {
+    const d = draft({ rows: [position("Thurifer", 1, 0), position("", 1, 0, "z")] });
+    expect(draftUnassigned(d)).toBe(1);
+    expect(draftDemand(d)).toBe(1);
   });
 });
 
