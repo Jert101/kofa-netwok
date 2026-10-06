@@ -43,6 +43,8 @@ export default function TreasurerPaymentsPage() {
   const [showVoided, setShowVoided] = useState(true);
   const [voidTarget, setVoidTarget] = useState<PaymentRow | null>(null);
   const [voidBusy, setVoidBusy] = useState(false);
+  /** Null until the payments load answers; PAY-3 keeps voiding with the treasurer alone. */
+  const [canVoid, setCanVoid] = useState<boolean | null>(null);
   const [receipt, setReceipt] = useState<{
     memberName: string;
     structureName: string;
@@ -69,8 +71,12 @@ export default function TreasurerPaymentsPage() {
       const [structureJson, memberJson, paymentJson] = await Promise.all([
         structureRes.json() as Promise<{ structures?: Array<Record<string, unknown>> }>,
         memberRes.json() as Promise<{ data?: { members?: Array<Record<string, unknown>> } }>,
-        paymentRes.json() as Promise<{ payments?: PaymentRow[] }>,
+        paymentRes.json() as Promise<{ payments?: PaymentRow[]; can_void?: boolean }>,
       ]);
+
+      // Voiding is the treasurer's alone (PAY-3). The button used to be rendered for the admin too and
+      // failed on every press with a bare "Unauthorized", which is indistinguishable from a broken page.
+      setCanVoid(paymentJson.can_void === true);
 
       setStructures((structureJson.structures ?? []) as unknown as StructureRow[]);
       // `/api/admin/members` answers with the standard envelope, so the rows live under `data`.
@@ -157,6 +163,15 @@ export default function TreasurerPaymentsPage() {
       {error ? (
         <p role="alert" className="text-sm text-[var(--danger)]">
           {error}
+        </p>
+      ) : null}
+
+      {/* Say the rule instead of hiding the reason. The treasurer is the one who reconciles the book,
+          so reversing an entry stays theirs alone (PAY-3); an admin who needs a correction asks them. */}
+      {canVoid === false ? (
+        <p className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3 text-sm text-[var(--text-muted)]">
+          Voiding a payment is the treasurer&apos;s alone, so that is why there is no Void button here. Ask
+          the treasurer to reverse an entry — it keeps a reason and their name against it.
         </p>
       ) : null}
 
@@ -250,7 +265,7 @@ export default function TreasurerPaymentsPage() {
                               </span>
                             ) : null}
                           </span>
-                          {!p.voided ? (
+                          {!p.voided && canVoid ? (
                             <button
                               type="button"
                               onClick={() => setVoidTarget(p)}
