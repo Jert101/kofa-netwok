@@ -156,4 +156,42 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/**
+ * The part of the storage client dropping an object needs.
+ *
+ * Structural rather than the real `SupabaseClient` because this module is imported by client components
+ * too -- a type-only import of the server client would drag it in, and a value import would not build.
+ */
+type PhotoStorage = {
+  storage: {
+    from(bucket: string): {
+      remove(paths: string[]): PromiseLike<{ error: { message: string } | null }>;
+    };
+  };
+};
+
+/**
+ * Delete the object behind a photograph URL, once nothing points at it any more.
+ *
+ * Needed because clearing a photo and *removing the picture* are different acts, and only one of them
+ * used to do both. Uploading a replacement removed the old object, so Replace left nothing behind --
+ * which is exactly why Remove was quietly worse: it nulled the column and left the file sitting in a
+ * public bucket, still fetchable by anyone holding the URL. For a photograph of the priest that is a
+ * picture of an identifiable person the parish has asked to take down, and it outlives the click.
+ *
+ * A URL that is not one of ours yields `removed: false` rather than an error. It is not ours to delete,
+ * and refusing to do nothing would only make the clear operation look broken.
+ */
+export async function discardPhotoObject(
+  sb: PhotoStorage,
+  previousUrl: string | null | undefined,
+  supabaseUrl: string | undefined | null,
+): Promise<{ ok: true; removed: boolean } | { ok: false; message: string }> {
+  const key = keyFromPhotoUrl(previousUrl, supabaseUrl);
+  if (!key) return { ok: true, removed: false };
+  const { error } = await sb.storage.from(PHOTO_BUCKET).remove([key]);
+  if (error) return { ok: false, message: error.message };
+  return { ok: true, removed: true };
+}
+
 export { EXTENSION as PHOTO_EXTENSION, TYPE_LABEL as PHOTO_TYPE_LABEL };

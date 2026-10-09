@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/api/guard";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { badRequest, jsonOk } from "@/lib/api/response";
 import { logAudit } from "@/lib/audit/log-audit";
+import { isUndeployedSchemaError, migrationMessage } from "@/lib/supabase/migration-error";
 
 /**
  * Adding somebody to the council.
@@ -51,7 +52,11 @@ export async function POST(req: NextRequest) {
   // missing table -- which is how a deployment step turns into a puzzle nobody can solve from the screen.
   if (lastErr) {
     return NextResponse.json(
-      { error: `The council table is not available: ${lastErr.message}` },
+      {
+        error: isUndeployedSchemaError(lastErr)
+          ? migrationMessage("038_church_ministry.sql")
+          : `The council table could not be read: ${lastErr.message}`,
+      },
       { status: 500 },
     );
   }
@@ -67,7 +72,16 @@ export async function POST(req: NextRequest) {
     .select("id, name, office, bio, sort_order, is_active")
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    return NextResponse.json(
+      {
+        error: isUndeployedSchemaError(error)
+          ? migrationMessage("038_church_ministry.sql")
+          : error.message,
+      },
+      { status: 500 },
+    );
+  }
 
   await logAudit({
     actor: { role: g.session.role, memberId: g.session.actor?.id ?? null, name: g.session.actor?.name ?? null },

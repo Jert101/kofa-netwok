@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   MAX_PHOTO_BYTES,
   buildPhotoKey,
+  discardPhotoObject,
   formatBytes,
   keyFromPhotoUrl,
   publicPhotoUrl,
@@ -188,5 +189,73 @@ describe("formatBytes", () => {
     expect(formatBytes(512)).toBe("512 B");
     expect(formatBytes(2048)).toBe("2 KB");
     expect(formatBytes(1_500_000)).toBe("1.4 MB");
+  });
+});
+
+describe("discardPhotoObject", () => {
+  /** Records what it was asked to delete instead of deleting anything. */
+  function stubStorage(error: { message: string } | null = null) {
+    const removed: string[][] = [];
+    return {
+      removed,
+      sb: {
+        storage: {
+          from: () => ({
+            remove: async (paths: string[]) => {
+              removed.push(paths);
+              return { error };
+            },
+          }),
+        },
+      },
+    };
+  }
+
+  const uuid = "11111111-2222-3333-4444-555555555555";
+
+  it("deletes the object behind a URL of ours", async () => {
+    const s = stubStorage();
+    const url = `${SUPA}/storage/v1/object/public/church-photos/priest/${uuid}.jpg`;
+    const result = await discardPhotoObject(s.sb, url, SUPA);
+    expect(result).toEqual({ ok: true, removed: true });
+    expect(s.removed).toEqual([[`priest/${uuid}.jpg`]]);
+  });
+
+  it("deletes nothing when there is no photograph", async () => {
+    // The common case by far: most council members have no picture, so every clear of a name or a bio
+    // must not reach for storage at all.
+    const s = stubStorage();
+    expect(await discardPhotoObject(s.sb, null, SUPA)).toEqual({ ok: true, removed: false });
+    expect(await discardPhotoObject(s.sb, undefined, SUPA)).toEqual({ ok: true, removed: false });
+    expect(s.removed).toEqual([]);
+  });
+
+  it("does not delete something that is not ours", async () => {
+    // This URL came out of a column that anyone with the table could have written. Refusing is the whole
+    // point of `keyFromPhotoUrl`, and reporting it as a success keeps the removal from looking broken.
+    const s = stubStorage();
+    const elsewhere = "https://someone-else.example.com/church-photos/priest/x.jpg";
+    expect(await discardPhotoObject(s.sb, elsewhere, SUPA)).toEqual({ ok: true, removed: false });
+    expect(s.removed).toEqual([]);
+  });
+
+  it("reports a failed delete rather than swallowing it", async () => {
+    // The row has already been cleared by this point, so the photograph is off the page but still being
+    // served. A silent success here would claim a removal that did not fully happen.
+    const s = stubStorage({ message: "bucket not found" });
+    const url = `${SUPA}/storage/v1/object/public/church-photos/council/${uuid}.png`;
+    expect(await discardPhotoObject(s.sb, url, SUPA)).toEqual({
+      ok: false,
+      message: "bucket not found",
+    });
+  });
+
+  it("does nothing when the deployment has no storage URL to compare against", async () => {
+    const s = stubStorage();
+    expect(await discardPhotoObject(s.sb, `${SUPA}/storage/v1/object/public/church-photos/priest/${uuid}.jpg`, undefined)).toEqual({
+      ok: true,
+      removed: false,
+    });
+    expect(s.removed).toEqual([]);
   });
 });

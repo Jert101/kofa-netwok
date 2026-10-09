@@ -11,12 +11,12 @@ import { isSessionValidForRole } from "@/lib/auth/session-valid";
 import { tryGetSetting } from "@/lib/settings/store";
 import { ParishPhoto } from "@/components/church/ParishPhoto";
 import {
-  fetchChurchProfile,
   hasAbout,
   hasCouncil,
   hasLeadership,
   paragraphsOf,
 } from "@/lib/church/profile";
+import { readPublicChurchProfile } from "@/lib/church/profile-server";
 
 /**
  * The landing page.
@@ -84,13 +84,22 @@ export default async function LandingPage() {
   }
 
   // The parish's own content: who leads it, what the ministry is, who is on the council. Read from the
-  // API rather than straight from the database so the route that decides what may be published to a
-  // stranger is the only one, and this page cannot drift from it.
+  // database by the same function `/api/church` uses, rather than by fetching that route.
   //
-  // Failure is not fatal. Every section below is conditional on having content, so a profile that has
-  // not been filled in yet renders the app sections alone -- which is exactly what this page looked like
-  // before the feature existed, and a working front door rather than a 500.
-  const church = await fetchChurchProfile();
+  // It used to fetch the route, building an absolute URL out of `NEXT_PUBLIC_APP_URL` / `VERCEL_URL` /
+  // `localhost`, and that call failed on every request in production -- so this page rendered, correctly
+  // and completely, without one word of the parish profile the super admin had already written. Reading
+  // it here is not only faster; it is the first thing that can work at all when there is no configured
+  // base URL to fetch from.
+  //
+  // Failure is still not fatal. A stranger gets the app sections alone rather than a 500 on the front
+  // door, but the reason is logged instead of being turned into nothing: silence here is what made the
+  // bug invisible for a whole day.
+  const churchResult = await readPublicChurchProfile();
+  if (!churchResult.ok) {
+    console.error("[landing] the parish profile could not be read:", churchResult.reason);
+  }
+  const church = churchResult.ok ? churchResult.profile : null;
 
   const parish = church?.parish_name ?? (await tryGetSetting("church_name"))?.trim() ?? "Knights of the Altar";
   const year = new Date().getFullYear();

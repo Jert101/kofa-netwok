@@ -64,8 +64,16 @@ export function ChurchEditor() {
   const load = useCallback(async () => {
     try {
       const res = await fetch("/api/church", { credentials: "same-origin", cache: "no-store" });
-      if (!res.ok) throw new Error();
-      const body = (await res.json()) as {
+      const raw = (await res.json().catch(() => ({}))) as unknown;
+      if (!res.ok) {
+        // The server's words, always. This screen used to say "Could not load the parish profile" and
+        // discard the reason -- which is the same mistake the council handlers were making, and it hid
+        // the one thing worth knowing: a database that has not had its migration applied yet.
+        setError(errorMessageFrom(raw) ?? "Could not load the parish profile.");
+        setCouncil([]);
+        return;
+      }
+      const body = raw as {
         data?: {
           priest_name: string | null;
           headline: string | null;
@@ -83,7 +91,9 @@ export function ChurchEditor() {
       // now". Vacating somebody removes them here; the row survives in the database for the seat.
       setCouncil(d?.council ?? []);
     } catch {
-      setError("Could not load the parish profile.");
+      // No response at all, so there is no server message to read. Say which half failed rather than
+      // repeating the general failure the server branch already covers in detail.
+      setError("Could not reach the server.");
     } finally {
       setLoading(false);
     }

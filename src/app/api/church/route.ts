@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/api/guard";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { getSetting } from "@/lib/settings/store";
 import { jsonOk, internalError } from "@/lib/api/response";
 import { logAudit } from "@/lib/audit/log-audit";
+import { discardPhotoObject } from "@/lib/church/photos";
+import { readPublicChurchProfile } from "@/lib/church/profile-server";
 
 /**
  * The seeded `church_profile` row. A fixed id so the write path can address the one row without first
@@ -26,33 +27,13 @@ const PROFILE_ID = "00000000-0000-0000-0000-000000000001";
  * because a route that answers "who is this parish" answering completely is easier to keep complete.
  */
 export async function GET() {
-  const sb = getSupabaseAdmin();
+  // The read lives in `profile-server` so the landing page and this route cannot drift apart. It used to
+  // be here alone, and the page called this route over HTTP to get it -- see that file for why that
+  // quietly showed the front door without any parish content on every single request.
+  const result = await readPublicChurchProfile();
+  if (!result.ok) return internalError(result.reason);
 
-  const [{ data: profile, error: pErr }, { data: members, error: mErr }, churchName] = await Promise.all([
-    sb.from("church_profile").select("priest_name, headline, about, photo_url, updated_at").limit(1).maybeSingle(),
-    sb
-      .from("council_members")
-      .select("id, name, office, bio, photo_url, sort_order")
-      .eq("is_active", true)
-      .order("sort_order", { ascending: true })
-      .order("name", { ascending: true }),
-    // A bad or missing setting must not take the front door down with it; the registry default is a
-    // perfectly good parish name and this is the page a stranger lands on.
-    getSetting("church_name").catch(() => "Knights of the Altar"),
-  ]);
-
-  if (pErr) return internalError(pErr.message);
-  if (mErr) return internalError(mErr.message);
-
-  return jsonOk({
-    parish_name: churchName,
-    priest_name: profile?.priest_name ?? null,
-    headline: profile?.headline ?? null,
-    about: profile?.about ?? null,
-    photo_url: profile?.photo_url ?? null,
-    updated_at: profile?.updated_at ?? null,
-    council: members ?? [],
-  });
+  return jsonOk(result.profile);
 }
 
 const profileSchema = z.object({
@@ -105,8 +86,21 @@ export async function PUT(req: NextRequest) {
   };
   // Only written when it was sent. A client that has never heard of photographs sends nothing here, and
   // must not be read as asking to remove the one that is there.
+  const clearingPhoto = parsed.data.photo_url !== undefined && blank(parsed.data.photo_url) === null;
   if (parsed.data.photo_url !== undefined) {
     values.photo_url = blank(parsed.data.photo_url);
+  }
+
+  // Read before the write below, because after it the column is empty and there is nothing left to say
+  // which file to delete.
+  let previousPhoto: string | null = null;
+  if (clearingPhoto) {
+    const { data: prior } = await sb
+      .from("church_profile")
+      .select("photo_url")
+      .eq("id", PROFILE_ID)
+      .maybeSingle();
+    previousPhoto = (prior?.photo_url as string | null) ?? null;
   }
 
   // The seeded row id, so this updates the one row rather than fighting the singleton index. A database
@@ -143,6 +137,30 @@ export async function PUT(req: NextRequest) {
     },
     ip: req.headers.get("x-forwarded-for"),
   });
+
+  // Clearing the photograph deletes the file as well as the reference. Replacing one did this already --
+  // which is what made the gap easy to miss: Replace cleaned up after itself and Remove did not, so a
+  // photograph of the priest that the parish took down kept being served from the public bucket to
+  // anyone already holding its URL.
+  if (clearingPhoto) {
+    const discarded = await discardPhotoObject(sb, previousPhoto, process.env.NEXT_PUBLIC_SUPABASE_URL);
+    if (!discarded.ok) {
+      await logAudit({
+        actor: { role: g.session.role, memberId: g.session.actor?.id ?? null, name: g.session.actor?.name ?? null },
+        action: "church_profile_updated",
+        entityType: "church_profile",
+        entityId: PROFILE_ID,
+        meta: { changed: ["photo_url"], storage_cleanup_failed: discarded.message },
+        ip: req.headers.get("x-forwarded-for"),
+      });
+      return NextResponse.json(
+        {
+          error: `The photograph is off the page but the file could not be deleted from storage: ${discarded.message}`,
+        },
+        { status: 500 },
+      );
+    }
+  }
 
   return jsonOk({ profile });
 }

@@ -4,6 +4,10 @@
  * Pure and server-and-client safe, so the landing page and the super admin's editor agree by
  * construction about what counts as a person -- initials, paragraph splitting, whether a profile is
  * worth rendering at all.
+ *
+ * The database read that fills a `ChurchProfile` is *not* here: it needs the Supabase admin client, and
+ * this module is imported by client components. It is `profile-server`, shared by `/api/church` and the
+ * landing page so neither can drift from the other.
  */
 
 export type CouncilMember = {
@@ -89,32 +93,4 @@ export function hasAbout(church: ChurchProfile | null): boolean {
 
 export function hasCouncil(church: ChurchProfile | null): boolean {
   return (church?.council ?? []).length > 0;
-}
-
-/**
- * Read the public profile. Returns null rather than throwing.
- *
- * A server component calling `fetch` on its own route has no request to hand it, so the absolute URL is
- * derived from the deployment environment. Two fallbacks exist because a missing env var is not a
- * reason for the front door to 500: `VERCEL_URL` when deployed, and localhost when running locally. If
- * all three fail it returns null, and the page renders without the ministry sections -- which is a
- * degraded landing page, not a broken site.
- */
-export async function fetchChurchProfile(): Promise<ChurchProfile | null> {
-  try {
-    const base = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "")
-      ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
-      ?? "http://localhost:3000";
-    const res = await fetch(`${base}/api/church`, {
-      headers: { accept: "application/json" },
-      // Not cached: a priest's appointment or a council change should be live on the next visit, and
-      // this is one small query.
-      cache: "no-store",
-    });
-    if (!res.ok) return null;
-    const body = (await res.json()) as { data?: ChurchProfile };
-    return body.data ?? null;
-  } catch {
-    return null;
-  }
 }
