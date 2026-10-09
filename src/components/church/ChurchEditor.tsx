@@ -49,6 +49,18 @@ export function ChurchEditor() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  /**
+   * The new-member form.
+   *
+   * It asks for the name *before* the row exists, because the API refuses a nameless member and this
+   * used to create one anyway: "Add a member" posted `name: ""`, was answered with 400, and the refusal
+   * was reported as a blanket "Could not add a council member". A blank row was never a state worth
+   * reaching -- it is unpublishable, so it can only ever be a mistake -- and now it cannot be created.
+   */
+  const [addingNew, setAddingNew] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newOffice, setNewOffice] = useState("");
+
   const load = useCallback(async () => {
     try {
       const res = await fetch("/api/church", { credentials: "same-origin", cache: "no-store" });
@@ -149,7 +161,7 @@ export function ChurchEditor() {
     }
   };
 
-  const addMember = async () => {
+  const addMember = async (name: string, office: string) => {
     setRowBusy("new");
     setError(null);
     setNotice(null);
@@ -158,19 +170,22 @@ export function ChurchEditor() {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "", office: "", bio: "" }),
+        body: JSON.stringify({ name, office, bio: "" }),
       });
-      const body = (await res.json().catch(() => ({}))) as { data?: { member: CouncilMember } };
-      if (!res.ok || !body.data) {
-        setError("Could not add a council member.");
-        return;
+      const body = (await res.json().catch(() => ({}))) as unknown;
+      const member = (body as { data?: { member?: CouncilMember } } | undefined)?.data?.member;
+      if (!res.ok || !member) {
+        // The server's own words. This used to say "Could not add a council member" and nothing else,
+        // which is the one answer that helps nobody: a refused name and a database that has not had
+        // its migration applied look identical from here.
+        setError(errorMessageFrom(body) ?? "Could not add a council member.");
+        return false;
       }
-      // Added blank so it can be typed into, rather than refused for want of a name. The row is saved
-      // the moment it has a name; until then it is only in the browser.
-      setCouncil((prev) => [...prev, body.data!.member]);
-      setNotice("Added a row. Give it a name to save it.");
+      setCouncil((prev) => [...prev, member]);
+      return true;
     } catch {
       setError("Could not reach the server.");
+      return false;
     } finally {
       setRowBusy(null);
     }
@@ -192,8 +207,9 @@ export function ChurchEditor() {
         body: JSON.stringify(patch),
       });
       if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as unknown;
         setCouncil(before);
-        setError("Could not save that change.");
+        setError(errorMessageFrom(body) ?? "Could not save that change.");
         return;
       }
     } catch {
@@ -217,7 +233,8 @@ export function ChurchEditor() {
         credentials: "same-origin",
       });
       if (!res.ok) {
-        setError("Could not remove that council member.");
+        const body = (await res.json().catch(() => null)) as unknown;
+        setError(errorMessageFrom(body) ?? "Could not remove that council member.");
         return;
       }
       setCouncil((prev) => prev.filter((m) => m.id !== id));
@@ -325,11 +342,65 @@ export function ChurchEditor() {
               Each row saves as you leave it. Names are published to anyone who opens the landing page.
             </p>
           </div>
-          <Button size="sm" variant="outline" onClick={() => void addMember()} disabled={rowBusy === "new"}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setAddingNew(true);
+              setNewName("");
+              setNewOffice("");
+            }}
+            disabled={addingNew}
+          >
             <Plus aria-hidden />
             Add a member
           </Button>
         </div>
+
+        {addingNew ? (
+          <div className="mt-3 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3">
+            <div className="grid gap-2 sm:grid-cols-2">
+              <input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="Name (required)"
+                aria-label="Name of the new council member"
+                // The whole point of the form: without a name there is nothing to save.
+                autoFocus
+                className="min-h-11 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-base"
+              />
+              <input
+                value={newOffice}
+                onChange={(e) => setNewOffice(e.target.value)}
+                placeholder="Office, e.g. Council President (optional)"
+                aria-label="Office of the new council member"
+                className="min-h-11 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-sm"
+              />
+            </div>
+            <div className="mt-2 flex gap-2">
+              <Button
+                size="sm"
+                disabled={newName.trim().length === 0 || rowBusy === "new"}
+                onClick={() => {
+                  void addMember(newName.trim(), newOffice.trim()).then((ok) => {
+                    // Kept open on failure so the name is not lost and retyped; closed on success.
+                    if (ok) setAddingNew(false);
+                  });
+                }}
+              >
+                {rowBusy === "new" ? "Adding…" : "Add to the council"}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setAddingNew(false)}
+                disabled={rowBusy === "new"}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : null}
 
         {council.length === 0 ? (
           <p className="mt-3 text-sm text-[var(--text-muted)]">

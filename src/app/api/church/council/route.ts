@@ -39,12 +39,22 @@ export async function POST(req: NextRequest) {
 
   // Land the new member after the last one rather than at the top, so adding somebody does not silently
   // reorder everybody else's seat. The officer edits the order afterwards.
-  const { data: last } = await sb
+  const { data: last, error: lastErr } = await sb
     .from("council_members")
     .select("sort_order")
     .order("sort_order", { ascending: false })
     .limit(1)
     .maybeSingle();
+
+  // Checked, because this used to be ignored. On a database where migration 038 has not been applied the
+  // read fails, the error is dropped, and the insert then fails with a *different* message about the same
+  // missing table -- which is how a deployment step turns into a puzzle nobody can solve from the screen.
+  if (lastErr) {
+    return NextResponse.json(
+      { error: `The council table is not available: ${lastErr.message}` },
+      { status: 500 },
+    );
+  }
 
   const { data, error } = await sb
     .from("council_members")
