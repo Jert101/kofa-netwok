@@ -1,6 +1,7 @@
 import { ROLE_REACH, type Role } from "@/lib/auth/roles";
 import {
   CalendarDays,
+  Church,
   FileText,
   Home,
   Inbox,
@@ -31,7 +32,8 @@ export type NavIconName =
   | "layers"
   | "scrollText"
   | "templates"
-  | "assign";
+  | "assign"
+  | "church";
 
 /** Resolved inside client components only. Server code imports the types with `import type`. */
 export const NAV_ICONS: Record<NavIconName, LucideIcon> = {
@@ -49,6 +51,7 @@ export const NAV_ICONS: Record<NavIconName, LucideIcon> = {
   scrollText: ScrollText,
   templates: LayoutTemplate,
   assign: UserCheck,
+  church: Church,
 };
 
 export type NavItem = {
@@ -128,6 +131,9 @@ export const NAV_BY_ROLE: Record<Role, readonly NavItem[]> = {
   super_admin: [
     { href: "/super-admin", label: "Dashboard", icon: "dashboard", exact: true },
     { href: "/super-admin/reports", label: "Reports", icon: "fileText" },
+    // The public face of the parish: the priest, the ministry's background, and the council. Named
+    // people, published to signed-out visitors, so it belongs to the role that owns the record.
+    { href: "/super-admin/church", label: "Parish", icon: "church" },
     // The super admin was a recipient of notifications since before this module and had nowhere to
     // read them, which is the exact gap P2 describes.
     { href: "/super-admin/inbox", label: "Inbox", icon: "inbox", badgeKey: "notifications" },

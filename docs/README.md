@@ -486,6 +486,9 @@ liturgy_template_slots(id, template_id→templates CASCADE,
 ### Community & comms
 
 ```txt
+church_profile(id, priest_name?, headline?, about?, updated_at)   -- 038, at most one row
+council_members(id, name, office?, bio?, sort_order, is_active)  -- 038, published to the landing page
+
 announcements(id, title, body, created_by ∈{admin,secretary,officer,system},
               delete_at?, dedupe_key?, pinned, updated_at?,
               liturgy_session_date?, liturgy_mass_id?, created_at)
@@ -652,6 +655,30 @@ assignment or takes its notice down, **without touching who is serving** — edi
 plan editor's job, and redrawing from a template on the way past would undo a hand-made correction.
 `DELETE` removes one Mass's roster along with its session sheet and its announcement, and refuses a
 date in the past so a Sunday that already happened cannot be edited out of the record.
+
+### Public parish profile
+
+| Method | Path | Roles |
+|---|---|---|
+| GET | `/api/church` | **public** — the landing page is what a signed-out visitor sees |
+| PUT | `/api/church` | super_admin |
+| POST | `/api/church/council` | super_admin |
+| PATCH/DELETE | `/api/church/council/[id]` | super_admin |
+
+`GET /api/church` is the only route in the app that hands parish content to a stranger, so it returns
+exactly the fields the landing page renders — no addresses, no contact details, and no inactive council
+members. It is super-admin-writable rather than admin because it names real people and is published:
+an admin overseeing the sacristy has no business rewriting who the parish says its priest is.
+
+`church_profile` is a singleton enforced by a unique index on a constant (`ON church_profile ((true))`),
+because a `CHECK` cannot see other rows and "at most one" is not otherwise expressible. It holds the
+priest, the headline and the ministry's background. **The parish name is deliberately not in it** —
+`church_name` in settings already prints on every report and PDF, and a second copy would be a second
+answer that drifts the first time one is changed and not the other. `priest_name` is free text rather
+than a `members` reference because the parish priest is often not a user of this system.
+
+A council seat is **vacated** (`is_active: false`) rather than deleted; removing the row entirely is a
+separate, deliberate act for a name that should not be in the table at all.
 
 ### Announcements / notifications / payments / settings
 

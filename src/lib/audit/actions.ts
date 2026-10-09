@@ -58,6 +58,12 @@ export const AUDIT_ACTIONS = [
   "announcement_created",
   "announcement_updated",
   "announcement_deleted",
+  // The parish's public face. Names real people and is shown to signed-out visitors, so who changed it
+  // is recorded rather than inferred from a settings diff.
+  "church_profile_updated",
+  "council_member_added",
+  "council_member_updated",
+  "council_member_removed",
   // Module 08: a device subscribing is not free. It is a person asking to be interrupted, and
   // without a row in the audit log there is no way to answer "why is this phone getting these".
   "push_subscription_created",
@@ -120,6 +126,10 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   announcement_created: "Announcement created",
   announcement_updated: "Announcement updated",
   announcement_deleted: "Announcement deleted",
+  church_profile_updated: "Parish profile updated",
+  council_member_added: "Council member added",
+  council_member_updated: "Council member updated",
+  council_member_removed: "Council member removed",
   push_subscription_created: "Push device subscribed",
   structure_created: "Payment structure created",
   structure_updated: "Payment structure updated",

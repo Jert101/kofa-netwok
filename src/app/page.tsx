@@ -9,6 +9,14 @@ import { verifySessionTokenEdge } from "@/lib/auth/jwt-edge";
 import { ROLE_PATH } from "@/lib/auth/roles";
 import { isSessionValidForRole } from "@/lib/auth/session-valid";
 import { tryGetSetting } from "@/lib/settings/store";
+import {
+  fetchChurchProfile,
+  hasAbout,
+  hasCouncil,
+  hasLeadership,
+  initialsOf,
+  paragraphsOf,
+} from "@/lib/church/profile";
 
 /**
  * The landing page.
@@ -75,7 +83,16 @@ export default async function LandingPage() {
     redirect(ROLE_PATH[session.role]);
   }
 
-  const parish = (await tryGetSetting("church_name"))?.trim() || "Knights of the Altar";
+  // The parish's own content: who leads it, what the ministry is, who is on the council. Read from the
+  // API rather than straight from the database so the route that decides what may be published to a
+  // stranger is the only one, and this page cannot drift from it.
+  //
+  // Failure is not fatal. Every section below is conditional on having content, so a profile that has
+  // not been filled in yet renders the app sections alone -- which is exactly what this page looked like
+  // before the feature existed, and a working front door rather than a 500.
+  const church = await fetchChurchProfile();
+
+  const parish = church?.parish_name ?? (await tryGetSetting("church_name"))?.trim() ?? "Knights of the Altar";
   const year = new Date().getFullYear();
 
   return (
@@ -92,14 +109,24 @@ export default async function LandingPage() {
 
       <main className="mx-auto max-w-4xl px-5 pb-16">
         <section className="py-10 sm:py-14">
+          {/* The parish's own headline when the super admin has written one, and the app's line when
+              they have not. A page that says nothing about itself is worse than one that falls back,
+              so this is the only place the two are blended. */}
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-            The parish&apos;s altar-server records, in one place.
+            {church?.headline?.trim() || "The parish's altar-server records, in one place."}
           </h1>
           <p className="mt-3 max-w-2xl text-base text-[var(--text-muted)]">
-            Attendance used to live on a paper sheet per Mass, then in a spreadsheet somebody typed up
-            each month, then in a printed grid sent to the parish office. This replaces all three: the
-            roster is marked on the day, everyone sees their own record, and the monthly report builds
-            itself.
+            {hasAbout(church) ? (
+              <>
+                {paragraphsOf(church?.about)[0]}{" "}
+                Attendance used to live on a paper sheet per Mass, then in a spreadsheet somebody typed
+                up each month, then in a printed grid sent to the parish office. This replaces all three:
+                the roster is marked on the day, everyone sees their own record, and the monthly report
+                builds itself.
+              </>
+            ) : (
+              "Attendance used to live on a paper sheet per Mass, then in a spreadsheet somebody typed up each month, then in a printed grid sent to the parish office. This replaces all three: the roster is marked on the day, everyone sees their own record, and the monthly report builds itself."
+            )}
           </p>
 
           <div className="mt-6 flex flex-wrap gap-3">
@@ -118,6 +145,75 @@ export default async function LandingPage() {
             </Link>
           </p>
         </section>
+
+        {hasLeadership(church) ? (
+          <section aria-labelledby="our-priest" className="border-t border-[var(--border)] py-10">
+            <h2 id="our-priest" className="text-lg font-semibold">
+              Our Priest
+            </h2>
+            <div className="mt-4 flex items-center gap-4">
+              <span
+                aria-hidden
+                className="grid size-14 shrink-0 place-items-center rounded-full bg-[var(--brand-soft)] text-lg font-semibold text-[var(--brand-text)]"
+              >
+                {initialsOf(church?.priest_name ?? "")}
+              </span>
+              <p className="text-base font-medium text-[var(--text)]">
+                {church?.priest_name?.trim()}
+              </p>
+            </div>
+          </section>
+        ) : null}
+
+        {hasAbout(church) ? (
+          <section aria-labelledby="about-us" className="border-t border-[var(--border)] py-10">
+            <h2 id="about-us" className="text-lg font-semibold">
+              About the Ministry
+            </h2>
+            <div className="mt-4 max-w-2xl space-y-3">
+              {paragraphsOf(church?.about).map((p, i) => (
+                <p key={i} className="text-base text-[var(--text-muted)]">
+                  {p}
+                </p>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {hasCouncil(church) ? (
+          <section aria-labelledby="council" className="border-t border-[var(--border)] py-10">
+            <h2 id="council" className="text-lg font-semibold">
+              Council Members
+            </h2>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">
+              The officers who govern the ministry alongside the parish.
+            </p>
+            <ul className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {church?.council.map((m) => (
+                <li
+                  key={m.id}
+                  className="flex items-start gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4"
+                >
+                  <span
+                    aria-hidden
+                    className="grid size-10 shrink-0 place-items-center rounded-full bg-[var(--brand-soft)] text-sm font-semibold text-[var(--brand-text)]"
+                  >
+                    {initialsOf(m.name)}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-[var(--text)]">{m.name}</p>
+                    {m.office ? (
+                      <p className="text-xs text-[var(--brand-text)]">{m.office}</p>
+                    ) : null}
+                    {m.bio ? (
+                      <p className="mt-1 text-sm text-[var(--text-muted)]">{m.bio}</p>
+                    ) : null}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
 
         <section aria-labelledby="what-it-does" className="border-t border-[var(--border)] py-10">
           <h2 id="what-it-does" className="text-lg font-semibold">
