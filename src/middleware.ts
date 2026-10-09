@@ -3,11 +3,13 @@ import type { NextRequest } from "next/server";
 import { SESSION_COOKIE } from "@/lib/auth/constants";
 import { verifySessionTokenEdge } from "@/lib/auth/jwt-edge";
 import type { Role } from "@/lib/auth/roles";
-import { ROLE_PATH, ROLE_SECTIONS, canReach } from "@/lib/auth/roles";
+import { ROLE_SECTIONS, canReach } from "@/lib/auth/roles";
 
 /** Everything a signed-out visitor may open. Each is matched on a segment boundary so `/register`
- *  cannot accidentally imply `/register/status`. */
-const PUBLIC_PATHS = ["/login", "/register", "/register/status"] as const;
+ *  cannot accidentally imply `/register/status`. `/` is the landing page; the page itself sends a
+ *  signed-in visitor on to their own dashboard, which it can do properly because it reads the cookie
+ *  rather than only its signature. */
+const PUBLIC_PATHS = ["/", "/login", "/register", "/register/status"] as const;
 
 function loginUrl(req: NextRequest) {
   const u = req.nextUrl.clone();
@@ -43,14 +45,11 @@ export async function middleware(req: NextRequest) {
   const secret = process.env.JWT_SECRET ?? "";
   const session = token ? await verifySessionTokenEdge(token, secret) : null;
 
-  if (pathname === "/") {
-    if (!session?.role) {
-      return NextResponse.redirect(loginUrl(req));
-    }
-    const u = req.nextUrl.clone();
-    u.pathname = ROLE_PATH[session.role as Role];
-    return NextResponse.redirect(u);
-  }
+  // No `/` case below, deliberately. It used to redirect a signed-in visitor to their role's home from
+  // here, on the strength of `session.role` alone -- and that comes from a signature check, which a PIN
+  // change or "sign out all devices" leaves intact. The holder was sent to a dashboard that refused
+  // them, then to `/login`, then back here: a loop. The landing page forwards instead, after
+  // `isSessionValidForRole`, which is the same answer every role layout gives.
 
   const need = (prefix: string) => pathname === prefix || pathname.startsWith(`${prefix}/`);
 
