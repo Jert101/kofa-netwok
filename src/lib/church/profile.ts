@@ -11,6 +11,8 @@ export type CouncilMember = {
   name: string;
   office: string | null;
   bio: string | null;
+  /** Public URL of a photograph, or null for initials. Added by migration 039. */
+  photo_url?: string | null;
   sort_order: number;
   is_active?: boolean;
 };
@@ -20,6 +22,7 @@ export type ChurchProfile = {
   priest_name: string | null;
   headline: string | null;
   about: string | null;
+  photo_url?: string | null;
   updated_at: string | null;
   council: CouncilMember[];
 };

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { PhotoField } from "@/components/church/PhotoField";
 import { initialsOf, type CouncilMember } from "@/lib/church/profile";
 
 /**
@@ -40,6 +41,7 @@ export function ChurchEditor() {
   const [priest, setPriest] = useState("");
   const [headline, setHeadline] = useState("");
   const [about, setAbout] = useState("");
+  const [priestPhoto, setPriestPhoto] = useState<string | null>(null);
   const [council, setCouncil] = useState<CouncilMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [profileBusy, setProfileBusy] = useState(false);
@@ -52,12 +54,19 @@ export function ChurchEditor() {
       const res = await fetch("/api/church", { credentials: "same-origin", cache: "no-store" });
       if (!res.ok) throw new Error();
       const body = (await res.json()) as {
-        data?: { priest_name: string | null; headline: string | null; about: string | null; council: CouncilMember[] };
+        data?: {
+          priest_name: string | null;
+          headline: string | null;
+          about: string | null;
+          photo_url?: string | null;
+          council: CouncilMember[];
+        };
       };
       const d = body.data;
       setPriest(d?.priest_name ?? "");
       setHeadline(d?.headline ?? "");
       setAbout(d?.about ?? "");
+      setPriestPhoto(d?.photo_url ?? null);
       // Inactive members are filtered out of the public read, so this list is "who is on the council
       // now". Vacating somebody removes them here; the row survives in the database for the seat.
       setCouncil(d?.council ?? []);
@@ -85,6 +94,7 @@ export function ChurchEditor() {
           priest_name: priest,
           headline: headline,
           about: about,
+          photo_url: priestPhoto,
         }),
       });
       const body = (await res.json().catch(() => ({}))) as unknown;
@@ -97,6 +107,45 @@ export function ChurchEditor() {
       setError("Could not reach the server.");
     } finally {
       setProfileBusy(false);
+    }
+  };
+
+  /**
+   * Clear the priest's photograph.
+   *
+   * A separate PUT rather than folded into the profile Save, so removing a picture is one click instead of
+   * "clear the field, then remember to press Save" -- and the landing page stops showing it immediately
+   * rather than after the next visit that happens to hit Save.
+   */
+  const patchPriestPhoto = async (next: string | null) => {
+    // Captured before anything changes, because it is what a refusal has to put back.
+    const previous = priestPhoto;
+    setPriestPhoto(next);
+    setRowBusy("priest-photo");
+    setError(null);
+    try {
+      const res = await fetch("/api/church", {
+        method: "PUT",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          priest_name: priest,
+          headline: headline,
+          about: about,
+          photo_url: next,
+        }),
+      });
+      if (!res.ok) {
+        setPriestPhoto(previous);
+        setError("Could not remove the photograph.");
+        return;
+      }
+      setNotice("Photograph removed.");
+    } catch {
+      setPriestPhoto(previous);
+      setError("Could not reach the server.");
+    } finally {
+      setRowBusy(null);
     }
   };
 
@@ -217,19 +266,35 @@ export function ChurchEditor() {
             </span>
           </label>
 
-          <label className="block">
+          <div>
             <span className="text-sm font-medium">Parish priest</span>
             <input
               value={priest}
               onChange={(e) => setPriest(e.target.value)}
               maxLength={160}
               placeholder="e.g. Fr. John Santos"
+              aria-label="Parish priest"
               className="mt-1 min-h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-base"
             />
             <span className="mt-1 block text-xs text-[var(--text-muted)]">
               Free text — the parish priest does not need an account here. Clear it if the post is vacant.
             </span>
-          </label>
+            {/* Uploads as soon as it is chosen rather than waiting for the Save below, so a photograph
+                is never lost because the name was not filled in. */}
+            <div className="mt-3">
+              <PhotoField
+                photoUrl={priestPhoto}
+                personName={priest}
+                scope="priest"
+                size="lg"
+                onUploaded={(url) => {
+                  setPriestPhoto(url);
+                  setNotice("Photograph uploaded.");
+                }}
+                onRemoved={() => void patchPriestPhoto(null)}
+              />
+            </div>
+          </div>
 
           <label className="block">
             <span className="text-sm font-medium">About the ministry</span>
@@ -308,7 +373,21 @@ export function ChurchEditor() {
                   </Button>
                 </div>
 
-                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                <div className="flex items-center gap-3">
+              <PhotoField
+                photoUrl={m.photo_url ?? null}
+                personName={m.name}
+                scope="council"
+                memberId={m.id}
+                onUploaded={(url) => {
+                  setCouncil((prev) => prev.map((x) => (x.id === m.id ? { ...x, photo_url: url } : x)));
+                  setNotice("Photograph uploaded.");
+                }}
+                onRemoved={() => void patchMember(m.id, { photo_url: "" })}
+              />
+            </div>
+
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
                   <input
                     value={m.office ?? ""}
                     onChange={(e) =>

@@ -29,10 +29,10 @@ export async function GET() {
   const sb = getSupabaseAdmin();
 
   const [{ data: profile, error: pErr }, { data: members, error: mErr }, churchName] = await Promise.all([
-    sb.from("church_profile").select("priest_name, headline, about, updated_at").limit(1).maybeSingle(),
+    sb.from("church_profile").select("priest_name, headline, about, photo_url, updated_at").limit(1).maybeSingle(),
     sb
       .from("council_members")
-      .select("id, name, office, bio, sort_order")
+      .select("id, name, office, bio, photo_url, sort_order")
       .eq("is_active", true)
       .order("sort_order", { ascending: true })
       .order("name", { ascending: true }),
@@ -49,6 +49,7 @@ export async function GET() {
     priest_name: profile?.priest_name ?? null,
     headline: profile?.headline ?? null,
     about: profile?.about ?? null,
+    photo_url: profile?.photo_url ?? null,
     updated_at: profile?.updated_at ?? null,
     council: members ?? [],
   });
@@ -58,6 +59,14 @@ const profileSchema = z.object({
   priest_name: z.string().trim().max(160).nullable(),
   headline: z.string().trim().max(200).nullable(),
   about: z.string().trim().max(4000).nullable(),
+  /**
+   * Set by the photo route, and clearable here.
+   *
+   * A blank string means "remove the photograph", which is why this exists alongside the upload route
+   * rather than being done there: clearing is not an upload, and a DELETE that sometimes works and
+   * sometimes leaves a row pointing at a deleted object is worse than a field that says null.
+   */
+  photo_url: z.string().trim().max(600).nullable().optional(),
 });
 
 /**
@@ -89,11 +98,16 @@ export async function PUT(req: NextRequest) {
 
   const sb = getSupabaseAdmin();
   const blank = (v: string | null | undefined) => (v ?? "").trim() || null;
-  const values = {
+  const values: Record<string, string | null> = {
     priest_name: blank(parsed.data.priest_name),
     headline: blank(parsed.data.headline),
     about: blank(parsed.data.about),
   };
+  // Only written when it was sent. A client that has never heard of photographs sends nothing here, and
+  // must not be read as asking to remove the one that is there.
+  if (parsed.data.photo_url !== undefined) {
+    values.photo_url = blank(parsed.data.photo_url);
+  }
 
   // The seeded row id, so this updates the one row rather than fighting the singleton index. A database
   // created before this migration's seed ran has no row, and the insert below covers that.
@@ -101,7 +115,7 @@ export async function PUT(req: NextRequest) {
     .from("church_profile")
     .update({ ...values, updated_at: new Date().toISOString() })
     .eq("id", PROFILE_ID)
-    .select("priest_name, headline, about, updated_at")
+    .select("priest_name, headline, about, photo_url, updated_at")
     .maybeSingle();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -111,7 +125,7 @@ export async function PUT(req: NextRequest) {
     const { data: inserted, error: insErr } = await sb
       .from("church_profile")
       .insert({ id: PROFILE_ID, ...values })
-      .select("priest_name, headline, about, updated_at")
+      .select("priest_name, headline, about, photo_url, updated_at")
       .maybeSingle();
     if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
     profile = inserted;

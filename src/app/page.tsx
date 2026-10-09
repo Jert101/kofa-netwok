@@ -9,12 +9,12 @@ import { verifySessionTokenEdge } from "@/lib/auth/jwt-edge";
 import { ROLE_PATH } from "@/lib/auth/roles";
 import { isSessionValidForRole } from "@/lib/auth/session-valid";
 import { tryGetSetting } from "@/lib/settings/store";
+import { ParishPhoto } from "@/components/church/ParishPhoto";
 import {
   fetchChurchProfile,
   hasAbout,
   hasCouncil,
   hasLeadership,
-  initialsOf,
   paragraphsOf,
 } from "@/lib/church/profile";
 
@@ -154,9 +154,9 @@ export default async function LandingPage() {
             <div className="mt-4 flex items-center gap-4">
               <span
                 aria-hidden
-                className="grid size-14 shrink-0 place-items-center rounded-full bg-[var(--brand-soft)] text-lg font-semibold text-[var(--brand-text)]"
+                className="grid size-20 shrink-0 place-items-center overflow-hidden rounded-full bg-[var(--brand-soft)] text-xl font-semibold text-[var(--brand-text)]"
               >
-                {initialsOf(church?.priest_name ?? "")}
+                <ParishPhoto url={church?.photo_url ?? null} name={church?.priest_name ?? ""} />
               </span>
               <p className="text-base font-medium text-[var(--text)]">
                 {church?.priest_name?.trim()}
@@ -196,9 +196,9 @@ export default async function LandingPage() {
                 >
                   <span
                     aria-hidden
-                    className="grid size-10 shrink-0 place-items-center rounded-full bg-[var(--brand-soft)] text-sm font-semibold text-[var(--brand-text)]"
+                    className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-full bg-[var(--brand-soft)] text-sm font-semibold text-[var(--brand-text)]"
                   >
-                    {initialsOf(m.name)}
+                    <ParishPhoto url={m.photo_url ?? null} name={m.name} />
                   </span>
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-[var(--text)]">{m.name}</p>

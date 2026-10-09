@@ -486,8 +486,9 @@ liturgy_template_slots(id, template_id→templates CASCADE,
 ### Community & comms
 
 ```txt
-church_profile(id, priest_name?, headline?, about?, updated_at)   -- 038, at most one row
-council_members(id, name, office?, bio?, sort_order, is_active)  -- 038, published to the landing page
+church_profile(id, priest_name?, headline?, about?, photo_url?, updated_at)  -- 038/039, one row
+council_members(id, name, office?, bio?, photo_url?, sort_order, is_active) -- 038/039, published
+-- 039 also creates the public `church-photos` storage bucket, 2 MB file limit
 
 announcements(id, title, body, created_by ∈{admin,secretary,officer,system},
               delete_at?, dedupe_key?, pinned, updated_at?,
@@ -662,8 +663,36 @@ date in the past so a Sunday that already happened cannot be edited out of the r
 |---|---|---|
 | GET | `/api/church` | **public** — the landing page is what a signed-out visitor sees |
 | PUT | `/api/church` | super_admin |
+| POST | `/api/church/photo` | super_admin |
 | POST | `/api/church/council` | super_admin |
 | PATCH/DELETE | `/api/church/council/[id]` | super_admin |
+
+### Photographs
+
+`POST /api/church/photo` takes a multipart `file`, a `scope` of `priest` or `council`, and a `member_id`
+for the latter. It stores the object **and** writes the row in one request — two would leave an orphan in
+a public bucket every time the second failed.
+
+These live in their own **public** `church-photos` bucket rather than the private `reports` one, because
+they are pictures on a page anyone can open; a private bucket would need an API route per image and a
+signed URL per render, for content that is public anyway. The service role bypasses RLS, so no storage
+policies are needed — the API route is the only door.
+
+Two checks, and the second is the one that matters:
+
+- **Magic bytes, never the declared type.** `file.type` is whatever the browser reported, and this route
+  is where a renamed script arrives before being published to the public. JPEG, PNG and WebP are
+  recognised by their signatures; SVG is excluded on purpose, being both a script-carrying document and
+  not a photograph. WebP is checked as `RIFF` + the `WEBP` form type at byte 8, because the container tag
+  alone is also what a WAV starts with.
+- **2 MB**, matching the bucket's own `file_size_limit`. The browser checks both first so a 6 MB phone
+  photo is refused before it is uploaded, and the browser's copy is never the guard.
+
+Keys are `priest/<uuid>.<ext>` and `council/<uuid>.<ext>` — a uuid, never the person's name, because a
+filename in a public bucket is a directory listing away from the parish's other uploads and a name that
+outlives the office. `upsert: false`, so a collision cannot leave two rows pointing at one object.
+Replacing a photograph deletes the old one *after* the row points at the new one, because a missing
+photograph costs the parish its priest's picture and a leftover object costs only storage.
 
 `GET /api/church` is the only route in the app that hands parish content to a stranger, so it returns
 exactly the fields the landing page renders — no addresses, no contact details, and no inactive council
