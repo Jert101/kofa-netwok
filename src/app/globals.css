@@ -273,7 +273,35 @@ body {
   --card: rgba(255, 255, 255, 0.75);
   --glow: rgba(230, 184, 74, 0.28);
 
-  --landing-font: var(--font-sans);
+  /* The reference sets `16px/1.7` on the body. Tailwind's default leading is 1.5, and at a 15px reading
+     size the difference is roughly one extra line every four — which is most of why a paragraph set at
+     1.5 looks cramped beside the reference's. Only the landing page opts in. */
+  --landing-leading: 1.7;
+}
+
+/* Notches and home indicators.
+   The reference pads the document by the safe-area insets, and so does this: without it the sticky nav
+   sits under the status bar on a notched phone and the footer's last line sits under the home indicator.
+   The nav's own `top` then offsets by the same inset, so the bar clears the clock. */
+.landing {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Smooth anchor scrolling, offset by the height of the sticky nav.
+   Without the offset a click on "Council" scrolls the section's heading *under* the bar -- the reader
+   arrives at a page whose first visible line is a paragraph with no heading above it. The reference
+   spends `scroll-padding-top` on exactly this and it is the one rule here that is a correctness fix
+   rather than a flourish. */
+@media (prefers-reduced-motion: no-preference) {
+  .landing {
+    scroll-behavior: smooth;
+  }
+}
+
+.landing [id] {
+  /* 64px of nav plus the safe-area inset it is offset by. */
+  scroll-margin-top: calc(64px + env(safe-area-inset-top, 0px) + 12px);
 }
 
 /* Dark, as a class rather than only as a media query, for the same reason as `.dark` above: somebody

@@ -5,7 +5,10 @@ import { AppProviders } from "@/components/layout/AppProviders";
 import { Toaster } from "@/components/ui/sonner";
 
 export const metadata: Metadata = {
-  title: "KofA Attendance",
+  // The parish's own name, as the supplied reference titles the site. It used to read "KofA
+  // Attendance", which is the abbreviation used inside the app and not what a visitor in a browser tab
+  // should see about a church.
+  title: "Knights of the Altar · Attendance Monitoring System",
   description: "Knights of the Altar Attendance Monitoring",
   manifest: "/manifest.json",
   icons: {

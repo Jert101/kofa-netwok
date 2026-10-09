@@ -40,12 +40,14 @@ const OPTIONS = [
  *
  * ## `variant`
  *
- * `sidebar` for the account menu; `plain` for the sign-in and registration pages, which have no sidebar.
- * The same control in two shapes, rather than two controls that drift -- module 01's QA list asks for the
+ * `sidebar` for the account menu; `plain` for the sign-in and registration pages, which have no sidebar;
+ * `pill` for the landing page's nav, which draws the chip shape the supplied reference uses.
+ * One control in three shapes, rather than three controls that drift -- module 01's QA list asks for the
  * switch to work on `/login` as well as inside the shell, and a person who picks dark before signing in
- * should not be flashed white afterwards.
+ * should not be flashed white afterwards. A shape is all that changes: the menu, the three options and
+ * System are identical everywhere.
  */
-export function ThemeSwitch({ variant = "sidebar" }: { variant?: "sidebar" | "plain" }) {
+export function ThemeSwitch({ variant = "sidebar" }: { variant?: "sidebar" | "plain" | "pill" }) {
   const { theme, setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
@@ -67,6 +69,19 @@ export function ThemeSwitch({ variant = "sidebar" }: { variant?: "sidebar" | "pl
       {isDark ? <Moon aria-hidden /> : <Sun aria-hidden />}
       <span>{label}</span>
     </SidebarMenuButton>
+  ) : variant === "pill" ? (
+    // The pill the supplied reference draws: a fully rounded chip on the card colour, with no min-height
+    // because it sits in a 64px nav rather than in a form. `pill` is a shape, not a behaviour -- the menu,
+    // the three options and System are the same control as everywhere else, and two switches on one
+    // screen are free to disagree about which theme is active.
+    <button
+      type="button"
+      className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--card)] px-3.5 py-[7px] text-[13px] font-medium text-[var(--foreground)]"
+      disabled={!mounted}
+    >
+      {isDark ? <Moon aria-hidden className="size-4" /> : <Sun aria-hidden className="size-4" />}
+      <span>{label}</span>
+    </button>
   ) : (
     <button
       type="button"

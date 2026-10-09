@@ -84,7 +84,10 @@ export default async function LandingPage() {
   const year = new Date().getFullYear();
 
   return (
-    <div className="landing min-h-svh bg-[var(--background)] text-[var(--foreground)]">
+    // `leading-[var(--landing-leading)]` is set once here rather than per paragraph. The reference puts
+    // `16px/1.7` on the body, and the only reason it can be one declaration is that nothing on this page
+    // needs a tighter leading.
+    <div className="landing min-h-svh bg-[var(--background)] text-[var(--foreground)] leading-[var(--landing-leading)]">
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-xl focus:bg-[var(--brand)] focus:px-4 focus:py-2 focus:text-[var(--on-brand)]"
@@ -128,10 +131,11 @@ export default async function LandingPage() {
                 </li>
               ))}
             </ul>
-            {/* The reference toggles light and dark from one button. This is the app's switch instead,
-                because it also offers System and because the landing page and the roster have to agree
-                about which theme is active — two toggles would be free to disagree. */}
-            <ThemeSwitch variant="plain" />
+            {/* The app's switch, in the chip shape the reference draws. Not the reference's own toggle
+                button: that one flips between two values and forgets which, while this offers System
+                and is the same control the rest of the app uses. Two switches on one screen would be
+                free to disagree about which theme is active. */}
+            <ThemeSwitch variant="pill" />
           </div>
         </nav>
       </header>
@@ -261,9 +265,12 @@ export default async function LandingPage() {
                     delay={i * 60}
                     className="rounded-[20px] border border-[var(--border)] bg-[var(--card)] p-[26px] transition-all hover:-translate-y-1 hover:border-[var(--a1)]"
                   >
+                    {/* The glyph is gold on a gold wash, as the reference has it. Inheriting the
+                        foreground colour here made the symbol the darkest thing on the card, which is
+                        the opposite of the intent. */}
                     <span
                       aria-hidden
-                      className="mb-4 grid size-[42px] place-items-center rounded-xl bg-[var(--brand-soft)] text-xl leading-none"
+                      className="mb-4 grid size-[42px] place-items-center rounded-xl bg-[var(--brand-soft)] text-xl leading-none text-[var(--a1)]"
                     >
                       {glyphFor(role.icon)}
                     </span>
