@@ -183,11 +183,11 @@ export function AttendanceAppealsReview({
       ) : null}
 
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-sm font-semibold text-[var(--brand)]">Attendance appeals</h2>
+        <h2 className="text-sm font-semibold text-[var(--brand-text)]">Attendance appeals</h2>
         {sessionLinkHref ? (
           <Link
             href={sessionLinkHref}
-            className="text-xs font-medium text-[var(--brand)] underline underline-offset-2"
+            className="text-xs font-medium text-[var(--brand-text)] underline underline-offset-2"
           >
             View this Mass
           </Link>
@@ -303,7 +303,7 @@ export function AttendanceAppealsReview({
                           type="button"
                           onClick={() => setRejectTarget(a)}
                           disabled={busyId === a.id || approveBusy}
-                          className="min-h-10 rounded-lg border border-[var(--danger)] px-3 text-sm font-medium text-[var(--danger)] disabled:opacity-40"
+                          className="min-h-10 rounded-lg border border-[var(--danger)] px-3 text-sm font-medium text-[var(--danger-text)] disabled:opacity-40"
                         >
                           Reject…
                         </button>

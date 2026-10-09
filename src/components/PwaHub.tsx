@@ -79,7 +79,7 @@ export function PwaHub() {
         </SidebarMenuButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="center" className="w-[min(92vw,20rem)] rounded-2xl p-4">
-        <p className="text-xs font-semibold text-[var(--brand)]">Install app</p>
+        <p className="text-xs font-semibold text-[var(--brand-text)]">Install app</p>
 
         {showInstallUi ? (
           <div className="mt-2 space-y-2 border-t border-[var(--border)] pt-3">

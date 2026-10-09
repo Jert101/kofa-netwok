@@ -60,7 +60,7 @@ export function InactiveMembersCard() {
               Period: <span className="font-medium text-[var(--text)]">{data.period.start}</span> –{" "}
               <span className="font-medium text-[var(--text)]">{data.period.end}</span>
               &nbsp;·&nbsp;
-              <span className="font-semibold text-[var(--brand)]">{data.count}</span> member{data.count !== 1 ? "s" : ""}
+              <span className="font-semibold text-[var(--brand-text)]">{data.count}</span> member{data.count !== 1 ? "s" : ""}
             </p>
 
             <div className="overflow-x-auto">
@@ -86,7 +86,7 @@ export function InactiveMembersCard() {
               <button
                 type="button"
                 onClick={() => setExpanded(!expanded)}
-                className="mt-3 text-sm font-medium text-[var(--brand)] hover:underline"
+                className="mt-3 text-sm font-medium text-[var(--brand-text)] hover:underline"
               >
                 {expanded ? "Show less" : `Show all ${list.length} members`}
               </button>

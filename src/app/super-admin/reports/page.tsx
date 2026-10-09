@@ -198,7 +198,7 @@ export default function SuperAdminReportsPage() {
                 <button
                   type="button"
                   disabled={busy === r.id}
-                  className="min-h-11 rounded-xl bg-[var(--success)] px-4 text-sm font-semibold text-white disabled:opacity-40 dark:text-[var(--surface)]"
+                  className="min-h-11 rounded-xl bg-[var(--success)] px-4 text-sm font-semibold text-white disabled:opacity-40"
                   onClick={() => void handleAction(r.id, "approve")}
                 >
                   {busy === r.id ? "Approving…" : "Approve"}
@@ -358,7 +358,7 @@ export default function SuperAdminReportsPage() {
                     onClick={async () => {
                       if (await handleAction(preview.id, "approve")) setPreview(null);
                     }}
-                    className="min-h-12 flex-1 rounded-xl bg-[var(--success)] px-4 text-sm font-semibold text-white disabled:opacity-50 dark:text-[var(--surface)]"
+                    className="min-h-12 flex-1 rounded-xl bg-[var(--success)] px-4 text-sm font-semibold text-white disabled:opacity-50"
                   >
                     {busy !== null ? "Working…" : "Approve this report"}
                   </button>

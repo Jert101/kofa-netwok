@@ -4,8 +4,8 @@
   "description": "Attendance monitoring for Knights of the Altar",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#fff8ef",
-  "theme_color": "#aa1f2a",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
   "orientation": "portrait-primary",
   "icons": [
     {

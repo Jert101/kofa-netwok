@@ -119,7 +119,7 @@ export function AssignedServersSection({
 
   return (
     <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
-      <h2 className="text-sm font-semibold text-[var(--brand)]">{title}</h2>
+      <h2 className="text-sm font-semibold text-[var(--brand-text)]">{title}</h2>
 
       {days === null ? (
         <p className="mt-3 text-sm text-[var(--text-muted)]">Loading…</p>
@@ -132,7 +132,7 @@ export function AssignedServersSection({
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <Link
                   href={`${memberBasePath}/${d.date}`}
-                  className="text-sm font-semibold text-[var(--brand)] hover:underline"
+                  className="text-sm font-semibold text-[var(--brand-text)] hover:underline"
                 >
                   {formatDayHeading(d.date)}
                 </Link>
@@ -145,7 +145,7 @@ export function AssignedServersSection({
                       {officerEditable && singleDate ? (
                         <button
                           type="button"
-                          className="text-sm font-medium text-[var(--brand)]"
+                          className="text-sm font-medium text-[var(--brand-text)]"
                           onClick={() => setEditingMassId((id) => (id === m.mass_id ? null : m.mass_id))}
                         >
                           {editingMassId === m.mass_id ? "Close edit" : "Edit"}

@@ -61,7 +61,7 @@ export function AnnouncementsFeed() {
   if (rows === null) {
     return (
       <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
-        <h2 className="text-sm font-semibold text-[var(--brand)]">Announcements</h2>
+        <h2 className="text-sm font-semibold text-[var(--brand-text)]">Announcements</h2>
         <p className="mt-2 text-sm text-[var(--text-muted)]">Loading announcements...</p>
       </section>
     );
@@ -71,9 +71,9 @@ export function AnnouncementsFeed() {
 
   return (
     <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
-      <h2 className="text-sm font-semibold text-[var(--brand)]">Announcements</h2>
+      <h2 className="text-sm font-semibold text-[var(--brand-text)]">Announcements</h2>
 
-      {error ? <p className="mt-2 text-sm text-[var(--danger)]">{error}</p> : null}
+      {error ? <p className="mt-2 text-sm text-[var(--danger-text)]">{error}</p> : null}
 
       {rows.length === 0 ? (
         <p className="mt-2 text-sm text-[var(--text-muted)]">No announcements yet.</p>

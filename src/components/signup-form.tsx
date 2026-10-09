@@ -168,8 +168,8 @@ export function SignupForm({ ...props }: React.ComponentProps<typeof Card>) {
             className="rounded-full"
             priority
           />
-          <CheckCircle2 className="size-10 text-[var(--brand)]" aria-hidden />
-          <CardTitle as="h1" className="text-xl text-[var(--brand)]">
+          <CheckCircle2 className="size-10 text-[var(--brand-text)]" aria-hidden />
+          <CardTitle as="h1" className="text-xl text-[var(--brand-text)]">
             Application received
           </CardTitle>
           <CardDescription className="text-[var(--text-muted)]">
@@ -230,7 +230,7 @@ export function SignupForm({ ...props }: React.ComponentProps<typeof Card>) {
           />
         </div>
         <div className="space-y-1.5 text-center">
-          <CardTitle as="h1" className="text-xl text-[var(--brand)]">
+          <CardTitle as="h1" className="text-xl text-[var(--brand-text)]">
             Membership application
           </CardTitle>
           <CardDescription className="text-[var(--text-muted)]">
@@ -373,7 +373,7 @@ export function SignupForm({ ...props }: React.ComponentProps<typeof Card>) {
             </Field>
 
             {formError ? (
-              <p role="alert" aria-live="polite" className="text-sm text-[var(--danger)]">
+              <p role="alert" aria-live="polite" className="text-sm text-[var(--danger-text)]">
                 {formError}
               </p>
             ) : null}
@@ -397,7 +397,7 @@ export function SignupForm({ ...props }: React.ComponentProps<typeof Card>) {
               Already applied?{" "}
               <Link
                 href="/login"
-                className="font-medium text-[var(--brand)] underline underline-offset-4"
+                className="font-medium text-[var(--brand-text)] underline underline-offset-4"
               >
                 Sign in
               </Link>

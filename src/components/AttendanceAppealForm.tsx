@@ -170,7 +170,7 @@ export function AttendanceAppealForm({
             document.body
           )
         : null}
-      <h2 className="text-sm font-semibold text-[var(--brand)]">Attendance appeal</h2>
+      <h2 className="text-sm font-semibold text-[var(--brand-text)]">Attendance appeal</h2>
       <p className="mt-1 text-xs text-[var(--text-muted)]">
         If a server is missing in this attendance, add one or more names and submit for review. You cannot appeal
         for someone already on the list or who already has a pending appeal for this Mass. Approved names appear in
@@ -250,7 +250,7 @@ export function AttendanceAppealForm({
             {name}
             <button
               type="button"
-              className="ml-1 font-bold text-[var(--danger)]"
+              className="ml-1 font-bold text-[var(--danger-text)]"
               onClick={() =>
                 setSelected((prev) => {
                   const n = new Map(prev);

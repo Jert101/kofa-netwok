@@ -298,7 +298,7 @@ export default function ReceiptModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-sm rounded-2xl bg-[var(--surface)] p-6 shadow-xl">
-        <h2 className="text-lg font-semibold text-[var(--brand)]">Payment Receipt</h2>
+        <h2 className="text-lg font-semibold text-[var(--brand-text)]">Payment Receipt</h2>
         <div className="mt-4">
           <canvas
             ref={canvasRef}
@@ -318,7 +318,7 @@ export default function ReceiptModal({
             <button
               type="button"
               onClick={() => void sharePng()}
-              className="min-h-11 flex-1 rounded-xl border border-[var(--brand)] text-sm font-semibold text-[var(--brand)]"
+              className="min-h-11 flex-1 rounded-xl border border-[var(--brand)] text-sm font-semibold text-[var(--brand-text)]"
             >
               Share / send
             </button>

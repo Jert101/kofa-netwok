@@ -147,7 +147,7 @@ export function LoginForm({
             />
           </div>
           <div className="space-y-1.5 text-center">
-            <CardTitle as="h1" className="text-xl text-[var(--brand)]">Sign in</CardTitle>
+            <CardTitle as="h1" className="text-xl text-[var(--brand-text)]">Sign in</CardTitle>
             <CardDescription className="text-[var(--text-muted)]">
               Knights of the Altar
             </CardDescription>
@@ -187,7 +187,7 @@ export function LoginForm({
                     disabled={pending}
                     aria-label={shown ? "Hide PIN" : "Show PIN"}
                     aria-pressed={shown}
-                    className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-[var(--text-muted)] transition-colors hover:text-[var(--brand)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--brand)]/40 disabled:opacity-50"
+                    className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-[var(--text-muted)] transition-colors hover:text-[var(--brand-text)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--brand)]/40 disabled:opacity-50"
                   >
                     {shown ? (
                       <EyeOff className="size-5" aria-hidden />
@@ -220,7 +220,7 @@ export function LoginForm({
                   Not yet a member?{" "}
                   <Link
                     href="/register"
-                    className="font-medium text-[var(--brand)] underline underline-offset-4"
+                    className="font-medium text-[var(--brand-text)] underline underline-offset-4"
                   >
                     Register here
                   </Link>

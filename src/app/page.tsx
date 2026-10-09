@@ -113,7 +113,7 @@ export default async function LandingPage() {
 
           <p className="mt-3 text-sm text-[var(--text-muted)]">
             Applied already?{" "}
-            <Link href="/register/status" className="font-medium text-[var(--brand)] hover:underline">
+            <Link href="/register/status" className="font-medium text-[var(--brand-text)] hover:underline">
               Check your status
             </Link>
           </p>
@@ -126,7 +126,7 @@ export default async function LandingPage() {
           <ul className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {CAPABILITIES.map((c) => (
               <li key={c.title} className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
-                <h3 className="text-sm font-semibold text-[var(--brand)]">{c.title}</h3>
+                <h3 className="text-sm font-semibold text-[var(--brand-text)]">{c.title}</h3>
                 <p className="mt-1.5 text-sm text-[var(--text-muted)]">{c.body}</p>
               </li>
             ))}

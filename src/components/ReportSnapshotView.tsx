@@ -129,7 +129,7 @@ export function ReportSnapshotView({
                       title={`${CELL_LABEL[mark]} · ${columns[i]?.massName ?? ""}`}
                       className={
                         mark === "S"
-                          ? "font-semibold text-[var(--success)]"
+                          ? "font-semibold text-[var(--success-text)]"
                           : "text-[var(--text-muted)]"
                       }
                     >

@@ -12,34 +12,62 @@
      keeps working verbatim.
   2. shadcn layer — @theme mappings from shadcn's names onto the app tokens,
      so shadcn components (which use named utilities like `bg-primary`) are
-     themed from the same source of truth.
+     themed from the same source.
   The app never uses named color utilities, so the two layers cannot collide.
+
+  ## Why the accents come in pairs
+
+  `--brand`, `--danger` and `--success` are each used two ways: as a *fill* carrying white text
+  (`bg-[var(--brand)] text-white` -- 19 + 4 + 1 sites) and as *text* sitting on a page or card
+  (`text-[var(--brand)]` -- 26 + 7 + 3 sites).
+
+  On a white page one colour does both jobs: the parish red is dark enough to carry white text and
+  light enough to read as text on white. On a **black** page it cannot -- a fill has to be dark for
+  white text to sit on it, while text has to be light to be legible on black. So each accent is split:
+
+  - `--brand` / `--danger` / `--success` — the fill. Dark in both modes, always carrying `--on-brand`.
+  - `--brand-text` / `--danger-text` / `--success-text` — the same hue as text on a background. Light
+    in dark mode.
+
+  Splitting them is what keeps a red button readable *and* a red heading readable. In light mode the
+  pair holds the same value, so nothing changes there.
 */
 
 :root {
   color-scheme: light dark;
 
-  --background: #fff8ef;
-  --foreground: #2b120f;
+  /* White, as asked. Cards are white too, so their edges come from `--border` rather than from a tint
+     -- which is what `--surface-2` is for, and why anything nested uses it. */
+  --background: #ffffff;
+  --foreground: #18181b;
   --surface: #ffffff;
-  --surface-2: #fff2dc;
-  --border: #e7c98d;
-  --text-muted: #7a5c3d;
+  --surface-2: #f5f5f5;
+  --border: #e4e4e7;
+  --text-muted: #57534e;
+
+  /* The parish red, kept: white text on it at 8.6:1, and text on white at the same. */
   --brand: #aa1f2a;
-  --brand-soft: #ffe4b8;
+  --brand-text: #aa1f2a;
+  --brand-soft: #fee2e2;
+  --on-brand: #ffffff;
+
   --danger: #8f0f1f;
+  --danger-text: #8f0f1f;
+
   --success: #1a7f4b;
-  --success-soft: #d9f2e4;
+  --success-text: #1a7f4b;
+  --success-soft: #dcfce7;
+
   --ring: #aa1f2a;
   --text: var(--foreground);
-  --primary-foreground: #ffffff;
+  --primary-foreground: var(--on-brand);
   --radius: 0.75rem;
   --sidebar: var(--surface);
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--brand);
   --sidebar-primary-foreground: var(--primary-foreground);
   --sidebar-accent: var(--brand-soft);
-  --sidebar-accent-foreground: var(--brand);
+  --sidebar-accent-foreground: var(--brand-text);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
 }
@@ -66,12 +94,15 @@
   --color-muted-foreground: var(--text-muted);
 
   --color-accent: var(--surface-2);
-  --color-accent-foreground: var(--brand);
+  --color-accent-foreground: var(--brand-text);
 
   --color-destructive: var(--danger);
   --color-destructive-foreground: var(--primary-foreground);
 
+  /* The `-text` halves, because these three are used as *text* by shadcn components: `text-muted-
+     foreground` sits on a background, not on a fill. `--color-primary` stays the fill. */
   --color-success: var(--success);
+  --color-success-foreground: var(--success-text);
   --color-success-soft: var(--success-soft);
   --color-accent-soft: var(--brand-soft);
 
@@ -102,26 +133,40 @@
   "same as the media query" there would be no way to choose, which is the whole point of the toggle.
 */
 .dark {
-  --background: #2b0d0f;
-  --foreground: #fff4dd;
-  --surface: #3b1216;
-  --surface-2: #55201f;
-  --border: #9f6a27;
-  --text-muted: #f3cf98;
-  --brand: #f0bc62;
-  --brand-soft: #7a281f;
-  --danger: #ff8a8a;
-  --success: #5fd39a;
-  --success-soft: #14382a;
-  --ring: #f0bc62;
+  /* Black, as asked. `--surface` sits one step off black rather than on it: a card exactly the same
+     colour as the page has no edge, and a card whose edge is a hair lighter is what stops a list of
+     them reading as one long block of nothing. */
+  --background: #000000;
+  --surface: #0a0a0a;
+  --surface-2: #171717;
+  --border: #2e2e2e;
+  --foreground: #fafafa;
+  --text-muted: #a1a1aa;
+
+  /* Fills: dark, carrying white text. Brand is red-600 (white on it 4.8:1, and 4.3:1 against the
+     black page, which is the 3:1 a control needs). */
+  --brand: #dc2626;
+  --danger: #b91c1c;
+  --success: #15803d;
+  --on-brand: #ffffff;
+
+  /* The same hues as text. A dark red on black is 3.6:1 -- invisible in a heading and worse in a
+     link -- so these are the light ends of the same hues instead. */
+  --brand-text: #fca5a5;
+  --danger-text: #fca5a5;
+  --success-text: #4ade80;
+  --brand-soft: #2a0f0f;
+  --success-soft: #052e16;
+
+  --ring: #fca5a5;
   --text: var(--foreground);
-  --primary-foreground: #2b0d0f;
+  --primary-foreground: var(--on-brand);
   --sidebar: var(--surface);
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--brand);
   --sidebar-primary-foreground: var(--primary-foreground);
   --sidebar-accent: var(--brand-soft);
-  --sidebar-accent-foreground: var(--brand);
+  --sidebar-accent-foreground: var(--brand-text);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
 }
@@ -134,26 +179,30 @@
 */
 @media (prefers-color-scheme: dark) {
   :root:not(.light) {
-    --background: #2b0d0f;
-    --foreground: #fff4dd;
-    --surface: #3b1216;
-    --surface-2: #55201f;
-    --border: #9f6a27;
-    --text-muted: #f3cf98;
-    --brand: #f0bc62;
-    --brand-soft: #7a281f;
-    --danger: #ff8a8a;
-    --success: #5fd39a;
-    --success-soft: #14382a;
-    --ring: #f0bc62;
+    --background: #000000;
+    --surface: #0a0a0a;
+    --surface-2: #171717;
+    --border: #2e2e2e;
+    --foreground: #fafafa;
+    --text-muted: #a1a1aa;
+    --brand: #dc2626;
+    --danger: #b91c1c;
+    --success: #15803d;
+    --on-brand: #ffffff;
+    --brand-text: #fca5a5;
+    --danger-text: #fca5a5;
+    --success-text: #4ade80;
+    --brand-soft: #2a0f0f;
+    --success-soft: #052e16;
+    --ring: #fca5a5;
     --text: var(--foreground);
-    --primary-foreground: #2b0d0f;
+    --primary-foreground: var(--on-brand);
     --sidebar: var(--surface);
     --sidebar-foreground: var(--foreground);
     --sidebar-primary: var(--brand);
     --sidebar-primary-foreground: var(--primary-foreground);
     --sidebar-accent: var(--brand-soft);
-    --sidebar-accent-foreground: var(--brand);
+    --sidebar-accent-foreground: var(--brand-text);
     --sidebar-border: var(--border);
     --sidebar-ring: var(--ring);
   }

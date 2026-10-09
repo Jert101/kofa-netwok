@@ -49,7 +49,7 @@ export function TopServersCard() {
         {loading ? (
           <p className="py-6 text-center text-sm text-[var(--text-muted)]">Loading…</p>
         ) : loadError ? (
-          <p role="alert" className="py-6 text-center text-sm text-[var(--danger)]">{loadError}</p>
+          <p role="alert" className="py-6 text-center text-sm text-[var(--danger-text)]">{loadError}</p>
         ) : !servers || servers.length === 0 ? (
           <p className="rounded-xl border border-dashed border-[var(--border)] py-10 text-center text-sm text-[var(--text-muted)]">
             No attendance records yet.
@@ -69,7 +69,7 @@ export function TopServersCard() {
                   <tr key={s.member_id} className="border-b border-[var(--border)] last:border-0">
                     <td className="py-2.5 pr-2 text-[var(--text-muted)]">{idx + 1}</td>
                     <td className="py-2.5 pr-2 font-medium text-[var(--text)]">{s.full_name}</td>
-                    <td className="py-2.5 text-right font-semibold text-[var(--brand)]">
+                    <td className="py-2.5 text-right font-semibold text-[var(--brand-text)]">
                       {s.total_served}
                     </td>
                   </tr>

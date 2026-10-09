@@ -42,16 +42,16 @@ type Props = {
 };
 
 const TONE_CLASSES: Record<string, string> = {
-  ready: "bg-[var(--brand-soft)] text-[var(--brand)]",
+  ready: "bg-[var(--brand-soft)] text-[var(--brand-text)]",
   waiting: "bg-[var(--surface-2)] text-[var(--text-muted)]",
   blocked: "bg-[var(--surface-2)] text-[var(--text-muted)]",
-  neutral: "bg-[var(--success-soft)] text-[var(--success)]",
+  neutral: "bg-[var(--success-soft)] text-[var(--success-text)]",
 };
 
 const STATUS_CLASSES: Record<string, string> = {
-  approved: "bg-[var(--success-soft)] text-[var(--success)]",
-  pending: "bg-[var(--brand-soft)] text-[var(--brand)]",
-  rejected: "bg-[var(--danger)]/10 text-[var(--danger)]",
+  approved: "bg-[var(--success-soft)] text-[var(--success-text)]",
+  pending: "bg-[var(--brand-soft)] text-[var(--brand-text)]",
+  rejected: "bg-[var(--danger)]/10 text-[var(--danger-text)]",
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -191,11 +191,11 @@ export function ReportsHub({ isAdmin }: Props) {
         <div className="space-y-3 p-4">
           {loadError ? (
             <div role="alert">
-              <p className="text-sm text-[var(--danger)]">{loadError}</p>
+              <p className="text-sm text-[var(--danger-text)]">{loadError}</p>
               <button
                 type="button"
                 onClick={() => void load()}
-                className="mt-2 text-sm font-medium text-[var(--brand)] underline"
+                className="mt-2 text-sm font-medium text-[var(--brand-text)] underline"
               >
                 Try again
               </button>
