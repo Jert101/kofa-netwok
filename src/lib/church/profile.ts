@@ -36,6 +36,14 @@ export type { Milestone, Patron, Role } from "./ministry";
 export type ChurchProfile = {
   parish_name: string | null;
   priest_name: string | null;
+  /**
+   * What this person is to the parish — "Parish Priest", "Administrator".
+   *
+   * Added with migration 040 because the supplied design shows the line under the name and there was
+   * nowhere to put it. Free text rather than a lookup, because the offices are particular to this
+   * parish and a fixed list would be a guess about a church nobody here has seen.
+   */
+  priest_role?: string | null;
   headline: string | null;
   about: string | null;
   photo_url?: string | null;

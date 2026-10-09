@@ -486,19 +486,23 @@ liturgy_template_slots(id, template_id→templates CASCADE,
 ### Community & comms
 
 ```txt
-church_profile(id, priest_name?, headline?, about?, photo_url?, updated_at)  -- 038/039, one row
+church_profile(id, priest_name?, priest_role?, headline?, about?, photo_url?, updated_at)  -- 038/039/040
 council_members(id, name, office?, bio?, photo_url?, sort_order, is_active) -- 038/039, published
 -- 039 also creates the public `church-photos` storage bucket, 2 MB file limit
 
 -- The rest of the landing page, added with its redesign (040). Three lists, one shape each, all
 -- published and all edited by the super admin. The seed only runs when a table is empty, so re-applying
--- 040 to a filled database changes nothing.
+-- 040 to a filled database changes nothing. The seeded strings are the supplied reference's, verbatim.
 ministry_roles(id, name, description?, icon, sort_order, is_active)        -- 040
    -- `icon` is a key from a closed list (`ministry.ts` ROLE_ICONS), not an emoji: emoji render
    -- differently per platform and a stored icon name that has been renamed renders as nothing at all.
 history_milestones(id, year_label, body, sort_order, is_active)            -- 040
    -- `year_label` is text, not a date. "c. 251" and "1962–65" are both real and neither is a timestamp.
+   -- `body` is plain text; the page applies emphasis to two known document titles, because a rich-text
+   -- editor aimed at a public page is an XSS surface and two titles are not worth one.
 patron_saints(id, name, note?, sort_order, is_active)                      -- 040
+   -- `priest_role` (040, on church_profile) is free text for the same reason `priest_name` is: an
+   -- administrator, a monsignor and a parish priest are not the same words, and the parish knows which.
    -- All three are behind RLS with no policies, like every other table here: reachable only through a
    -- route that calls `requireRole`.
 

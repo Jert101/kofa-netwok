@@ -1,18 +1,35 @@
--- 040_ministry_content.sql
+-- 040_parish_content.sql
 --
--- The three remaining content sections of the public landing page: the roles servers are trained into,
--- the timeline of the ministry's history, and the saints who are its patrons.
+-- The rest of the parish's published content: the roles servers are trained into, the timeline of the
+-- ministry's history, the saints who are its patrons, and the priest's role in the parish.
 --
--- These arrived as part of a redesign of `/`. Before this they did not exist anywhere -- not as data and
--- not as markup -- and the question was whether they should be written into the page or made editable.
--- Editable, for the same reason the priest and the council are (see 038): a parish's roles, its
--- milestones and its patrons are facts about that parish, they change when the parish decides they
--- change, and none of them should need a deploy to say something different.
+-- This arrived as part of a redesign of `/` for which a reference page was supplied. Three of those
+-- sections did not exist anywhere before -- not as data and not as markup -- and the question was
+-- whether to write them into the page or make them editable. Editable, for the same reason the priest
+-- and the council are (see 038): a parish's roles, its milestones and its patrons are facts about that
+-- parish, they change when the parish decides they change, and none of them should need a deploy to say
+-- something different.
 --
--- Three tables rather than one, and not one `kind` column on a single table. The three lists have
--- genuinely different shapes -- a role has a description and an icon, a milestone has a year label and a
--- sentence, a patron has a name and an optional note -- and a single table would mean either three sets
--- of mostly-null columns or a `jsonb` blob that cannot be read in a `select` without knowing its shape.
+-- --------------------------------------------------------------------------------------
+-- The wording here is the reference's, verbatim
+-- --------------------------------------------------------------------------------------
+-- These strings were written by the parish, not by a developer, and they are seeded exactly as given.
+-- That includes the em-dash in "1962–65", the ampersand in "Thurifer & boat bearer", and the absence
+-- of an article in "carry candles in procession". A seed that tidies somebody else's prose is a seed
+-- that quietly makes the page say something the parish did not agree to.
+--
+-- The two document titles in the timeline are stored as plain text, not as markup: the column holds
+-- "Ministeria Quaedam establishes lector and acolyte as lay ministries." and the page applies the
+-- emphasis. A rich-text editor aimed at a public page is an XSS surface, and two titles are not worth
+-- one.
+--
+-- --------------------------------------------------------------------------------------
+-- Three tables rather than one, and not one `kind` column on a single table
+-- --------------------------------------------------------------------------------------
+-- The three lists have genuinely different shapes -- a role has a description and an icon, a milestone
+-- has a year label and a sentence, a patron has a name and an optional note -- and a single table would
+-- mean either three sets of mostly-null columns or a `jsonb` blob that cannot be read in a `select`
+-- without knowing its shape.
 --
 -- --------------------------------------------------------------------------------------
 -- Why these are not a lookup table
@@ -25,10 +42,32 @@
 -- --------------------------------------------------------------------------------------
 -- Seeding
 -- --------------------------------------------------------------------------------------
--- Seeded with real content rather than left empty, because an empty section on a public page reads as a
--- broken page. The seed runs only when the table is empty, so re-running this migration against a
--- database the super admin has already filled in changes nothing -- which is the whole reason it is
--- written this way rather than with plain INSERTs.
+-- Seeded rather than left empty, because an empty section on a public page reads as a broken page. The
+-- seed runs only when the table is empty, so re-running this migration against a database the super
+-- admin has already filled in changes nothing -- which is the whole reason it is written this way rather
+-- than with plain INSERTs.
+
+-- --------------------------------------------------------------------------------------
+-- The priest's role
+-- --------------------------------------------------------------------------------------
+-- The reference shows "Parish Priest" under the priest's name, and there was nowhere to put it: the
+-- editor had a name, a headline, a background and a photograph, and no field for what the person does.
+-- Left out it would have been the one piece of the supplied design quietly missing.
+--
+-- Free text, not a lookup, for the same reason `priest_name` is: the offices are particular to this
+-- parish and a fixed list would be a guess about a church nobody here has seen. A priest may also be a
+-- monsignor, an administrator, a vicar, or none of those words, and the parish knows which.
+ALTER TABLE church_profile
+  ADD COLUMN IF NOT EXISTS priest_role text;
+
+COMMENT ON COLUMN church_profile.priest_role IS
+  'What this person is to the parish -- "Parish Priest", "Administrator". Free text, not a lookup. Blank means the line is not shown.';
+
+UPDATE church_profile
+   SET priest_role = 'Parish Priest'
+ WHERE priest_name IS NOT NULL
+   AND btrim(priest_name) <> ''
+   AND priest_role IS NULL;
 
 -- --------------------------------------------------------------------------------------
 -- Roles at the altar
@@ -59,8 +98,8 @@ INSERT INTO ministry_roles (name, description, icon, sort_order)
 SELECT v.name, v.description, v.icon, v.sort_order
 FROM (VALUES
   ('Crucifer', 'Carries the processional cross and leads the entrance and exit procession.', 'cross', 1),
-  ('Candle bearers', 'Acolytes who carry the candles in procession and at the Gospel.', 'candle', 2),
-  ('Thurifer and boat bearer', 'Handle the incense: one swings the thurible, the other carries the boat.', 'censer', 3),
+  ('Candle bearers', 'Acolytes who carry candles in procession and at the Gospel.', 'candle', 2),
+  ('Thurifer & boat bearer', 'Handle the incense: one swings the thurible, the other carries the boat.', 'censer', 3),
   ('Bell ringer', 'Rings the bell at the moments of the Mass that call for it.', 'bell', 4)
 ) AS v(name, description, icon, sort_order)
 WHERE NOT EXISTS (SELECT 1 FROM ministry_roles);

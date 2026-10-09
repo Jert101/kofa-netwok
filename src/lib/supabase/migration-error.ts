@@ -11,7 +11,14 @@
  */
 
 const UNDEFINED_TABLE = "42P01";
-const UNDEFINED_COLUMN = "42703";
+/**
+ * Postgres `undefined_column`.
+ *
+ * Exported because it is a different kind of problem from a missing table: the table is there, the
+ * build is simply asking for a column a migration has not added yet. `profile-server` retries on this
+ * one code specifically, so an additive column cannot take down a whole read.
+ */
+export const UNDEFINED_COLUMN = "42703";
 const UNDEFINED_FUNCTION = "42883";
 
 /** Whether this error is a table that has not been created yet. */

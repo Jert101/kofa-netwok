@@ -46,6 +46,8 @@ function errorMessageFrom(body: unknown): string | null {
  */
 export function ChurchEditor() {
   const [priest, setPriest] = useState("");
+  /** The line under the priest's name on the landing page. Added with migration 040. */
+  const [priestRole, setPriestRole] = useState("");
   const [headline, setHeadline] = useState("");
   const [about, setAbout] = useState("");
   const [priestPhoto, setPriestPhoto] = useState<string | null>(null);
@@ -89,6 +91,7 @@ export function ChurchEditor() {
       const body = raw as {
         data?: {
           priest_name: string | null;
+          priest_role?: string | null;
           headline: string | null;
           about: string | null;
           photo_url?: string | null;
@@ -100,6 +103,7 @@ export function ChurchEditor() {
       };
       const d = body.data;
       setPriest(d?.priest_name ?? "");
+      setPriestRole(d?.priest_role ?? "");
       setHeadline(d?.headline ?? "");
       setAbout(d?.about ?? "");
       setPriestPhoto(d?.photo_url ?? null);
@@ -136,6 +140,7 @@ export function ChurchEditor() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           priest_name: priest,
+          priest_role: priestRole,
           headline: headline,
           about: about,
           photo_url: priestPhoto,
@@ -174,6 +179,7 @@ export function ChurchEditor() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           priest_name: priest,
+          priest_role: priestRole,
           headline: headline,
           about: about,
           photo_url: next,
@@ -327,6 +333,21 @@ export function ChurchEditor() {
             />
             <span className="mt-1 block text-xs text-[var(--text-muted)]">
               Free text — the parish priest does not need an account here. Clear it if the post is vacant.
+            </span>
+            {/* The line under the name on the landing page. Added with migration 040 because the
+                supplied design shows it and there was nowhere to put it. Optional: blank hides the
+                line rather than printing an empty one. */}
+            <input
+              value={priestRole}
+              onChange={(e) => setPriestRole(e.target.value)}
+              maxLength={120}
+              placeholder="e.g. Parish Priest"
+              aria-label="The priest's role in the parish"
+              className="mt-2 min-h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-base"
+            />
+            <span className="mt-1 block text-xs text-[var(--text-muted)]">
+              Shown under the name on the landing page. Free text — an administrator or a monsignor are
+              not the same words, and the parish knows which.
             </span>
             {/* Uploads as soon as it is chosen rather than waiting for the Save below, so a photograph
                 is never lost because the name was not filled in. */}

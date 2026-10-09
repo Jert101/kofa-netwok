@@ -262,6 +262,12 @@ body {
   --on-brand: #ffffff;
   --ring: #b8891a;
 
+  /* The buttons are near-black rather than gold. A gold button with white text fails contrast badly, and
+     a gold button with dark text is a very different object from the one the reference drew. The gold on
+     this page is for the heading, the eyebrow and the icon plates; the call to action is ink. */
+  --btn: #16150f;
+  --btn-fg: #ffffff;
+
   /* A card is not white on ivory -- it is ivory with a hairline, so a stack of them reads as a set of
      surfaces rather than as a grid of holes. */
   --card: rgba(255, 255, 255, 0.75);
@@ -290,6 +296,9 @@ body {
 
   --card: rgba(255, 255, 255, 0.04);
   --glow: rgba(230, 184, 74, 0.16);
+
+  --btn: #f4f2ea;
+  --btn-fg: #07070a;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -311,6 +320,9 @@ body {
 
     --card: rgba(255, 255, 255, 0.04);
     --glow: rgba(230, 184, 74, 0.16);
+
+    --btn: #f4f2ea;
+    --btn-fg: #07070a;
   }
 }
 

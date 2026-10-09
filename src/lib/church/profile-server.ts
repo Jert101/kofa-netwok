@@ -1,6 +1,6 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getSetting } from "@/lib/settings/store";
-import { isUndeployedSchemaError, migrationMessage } from "@/lib/supabase/migration-error";
+import { UNDEFINED_COLUMN, isUndeployedSchemaError, migrationMessage } from "@/lib/supabase/migration-error";
 import { MINISTRY_COLUMNS, MINISTRY_KINDS, MINISTRY_TABLE, type MinistryKind } from "./ministry";
 import type { ChurchProfile, Milestone, Patron, Role } from "./profile";
 
@@ -44,11 +44,7 @@ export async function readPublicChurchProfile(): Promise<PublicProfileResult> {
   const sb = getSupabaseAdmin();
 
   const [{ data: profile, error: pErr }, { data: members, error: mErr }, churchName] = await Promise.all([
-    sb
-      .from("church_profile")
-      .select("priest_name, headline, about, photo_url, updated_at")
-      .limit(1)
-      .maybeSingle(),
+    readProfileRow(sb),
     sb
       .from("council_members")
       .select("id, name, office, bio, photo_url, sort_order")
@@ -78,6 +74,7 @@ export async function readPublicChurchProfile(): Promise<PublicProfileResult> {
     profile: {
       parish_name: churchName,
       priest_name: profile?.priest_name ?? null,
+      priest_role: profile?.priest_role ?? null,
       headline: profile?.headline ?? null,
       about: profile?.about ?? null,
       photo_url: profile?.photo_url ?? null,
@@ -87,6 +84,75 @@ export async function readPublicChurchProfile(): Promise<PublicProfileResult> {
       milestones: rows.milestone as Milestone[],
       patrons: rows.patron as Patron[],
     },
+  };
+}
+
+/** With `priest_role`, which migration 040 adds. */
+const PROFILE_COLUMNS = "priest_name, priest_role, headline, about, photo_url, updated_at";
+
+/** Without it, for a database where 040 has not been applied. */
+const PROFILE_COLUMNS_LEGACY = "priest_name, headline, about, photo_url, updated_at";
+
+/**
+ * The one profile row, with `priest_role` when the database has it.
+ *
+ * ## Why this retries instead of failing
+ *
+ * `priest_role` was added to a table that already existed, and Postgres answers a select naming a column
+ * it does not have with `42703 undefined_column` — which takes the *whole read* down, not just the new
+ * field. The first version of this function did exactly that, and its effect was that not applying
+ * migration 040 blanked the parish's entire public page: priest, headline, history and council all gone
+ * because one optional line under a name was missing.
+ *
+ * That is the wrong shape of failure. An additive column should cost the field it adds and nothing
+ * else, so a `42703` is retried once without it. The retry is deliberately narrow: only that one code,
+ * and only that one known column list, rather than a general "try again with less".
+ *
+ * If the retry also fails the *first* error is returned, so a genuinely missing table is still reported
+ * as a missing table rather than as something vaguer.
+ */
+type ProfileRow = {
+  priest_name: string | null;
+  priest_role: string | null;
+  headline: string | null;
+  about: string | null;
+  photo_url: string | null;
+  updated_at: string | null;
+};
+
+async function readProfileRow(
+  sb: ReturnType<typeof getSupabaseAdmin>,
+): Promise<{ data: ProfileRow | null; error: { message: string; code?: string } | null }> {
+  const first = await sb
+    .from("church_profile")
+    .select(PROFILE_COLUMNS)
+    .limit(1)
+    .maybeSingle();
+  if (!first.error || first.error.code !== UNDEFINED_COLUMN) return first as never;
+
+  const retry = await sb
+    .from("church_profile")
+    .select(PROFILE_COLUMNS_LEGACY)
+    .limit(1)
+    .maybeSingle();
+  if (retry.error) return first as never;
+  console.warn(
+    "[church] `priest_role` is not in this database yet. Apply 040_parish_content.sql; the rest of " +
+      "the parish profile is unaffected.",
+  );
+  // The retry genuinely has no `priest_role`, and saying so is the point: the field is absent, not blank.
+  // Every field is listed rather than spread, because a missing key is not the same as a null one and
+  // the return type exists to make that difference visible at the call site.
+  return {
+    data: {
+      priest_name: retry.data?.priest_name ?? null,
+      priest_role: null,
+      headline: retry.data?.headline ?? null,
+      about: retry.data?.about ?? null,
+      photo_url: retry.data?.photo_url ?? null,
+      updated_at: retry.data?.updated_at ?? null,
+    },
+    error: null,
   };
 }
 

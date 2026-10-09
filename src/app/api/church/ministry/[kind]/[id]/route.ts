@@ -68,7 +68,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 
   if (error) {
     return NextResponse.json(
-      { error: isUndeployedSchemaError(error) ? migrationMessage("040_ministry_content.sql") : error.message },
+      { error: isUndeployedSchemaError(error) ? migrationMessage("040_parish_content.sql") : error.message },
       { status: 500 },
     );
   }
@@ -110,7 +110,7 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
     .maybeSingle();
   if (readErr) {
     return NextResponse.json(
-      { error: isUndeployedSchemaError(readErr) ? migrationMessage("040_ministry_content.sql") : readErr.message },
+      { error: isUndeployedSchemaError(readErr) ? migrationMessage("040_parish_content.sql") : readErr.message },
       { status: 500 },
     );
   }
@@ -119,7 +119,7 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
   const { error } = await sb.from(table).delete().eq("id", id);
   if (error) {
     return NextResponse.json(
-      { error: isUndeployedSchemaError(error) ? migrationMessage("040_ministry_content.sql") : error.message },
+      { error: isUndeployedSchemaError(error) ? migrationMessage("040_parish_content.sql") : error.message },
       { status: 500 },
     );
   }

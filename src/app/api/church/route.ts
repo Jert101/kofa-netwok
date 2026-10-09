@@ -38,6 +38,7 @@ export async function GET() {
 
 const profileSchema = z.object({
   priest_name: z.string().trim().max(160).nullable(),
+  priest_role: z.string().trim().max(120).nullable(),
   headline: z.string().trim().max(200).nullable(),
   about: z.string().trim().max(4000).nullable(),
   /**
@@ -81,6 +82,7 @@ export async function PUT(req: NextRequest) {
   const blank = (v: string | null | undefined) => (v ?? "").trim() || null;
   const values: Record<string, string | null> = {
     priest_name: blank(parsed.data.priest_name),
+    priest_role: blank(parsed.data.priest_role),
     headline: blank(parsed.data.headline),
     about: blank(parsed.data.about),
   };
@@ -109,7 +111,7 @@ export async function PUT(req: NextRequest) {
     .from("church_profile")
     .update({ ...values, updated_at: new Date().toISOString() })
     .eq("id", PROFILE_ID)
-    .select("priest_name, headline, about, photo_url, updated_at")
+    .select("priest_name, priest_role, headline, about, photo_url, updated_at")
     .maybeSingle();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -119,7 +121,7 @@ export async function PUT(req: NextRequest) {
     const { data: inserted, error: insErr } = await sb
       .from("church_profile")
       .insert({ id: PROFILE_ID, ...values })
-      .select("priest_name, headline, about, photo_url, updated_at")
+      .select("priest_name, priest_role, headline, about, photo_url, updated_at")
       .maybeSingle();
     if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
     profile = inserted;

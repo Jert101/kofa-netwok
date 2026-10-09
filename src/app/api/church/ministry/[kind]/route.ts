@@ -68,7 +68,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   const { data: existing, error: readErr } = await sb.from(table).select("sort_order");
   if (readErr) {
     return NextResponse.json(
-      { error: isUndeployedSchemaError(readErr) ? migrationMessage("040_ministry_content.sql") : readErr.message },
+      { error: isUndeployedSchemaError(readErr) ? migrationMessage("040_parish_content.sql") : readErr.message },
       { status: 500 },
     );
   }
@@ -84,7 +84,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
   if (error) {
     return NextResponse.json(
-      { error: isUndeployedSchemaError(error) ? migrationMessage("040_ministry_content.sql") : error.message },
+      { error: isUndeployedSchemaError(error) ? migrationMessage("040_parish_content.sql") : error.message },
       { status: 500 },
     );
   }
