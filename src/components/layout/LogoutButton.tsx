@@ -28,7 +28,14 @@ export function LogoutButton() {
         method: "POST",
         credentials: "same-origin",
       });
-      router.replace("/login");
+      // `/`, not `/login`. Signing out used to drop somebody onto the sign-in form with nothing to
+      // read and no way back, which reads as being told off. The landing page is public now, so it is
+      // where a signed-out visitor belongs -- and it carries the sign-in link, so this is one tap
+      // rather than two when they meant to switch accounts.
+      //
+      // The `refresh()` after it is not decoration: it drops the router cache, which would otherwise
+      // be free to serve a copy of `/` rendered while a session was still live.
+      router.replace("/");
       router.refresh();
     } catch {
       setLoading(false);
