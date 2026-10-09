@@ -1,7 +1,8 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getSetting } from "@/lib/settings/store";
 import { isUndeployedSchemaError, migrationMessage } from "@/lib/supabase/migration-error";
-import type { ChurchProfile } from "./profile";
+import { MINISTRY_COLUMNS, MINISTRY_KINDS, MINISTRY_TABLE, type MinistryKind } from "./ministry";
+import type { ChurchProfile, Milestone, Patron, Role } from "./profile";
 
 /**
  * Read the parish profile exactly as it may be published.
@@ -59,6 +60,8 @@ export async function readPublicChurchProfile(): Promise<PublicProfileResult> {
     getSetting("church_name").catch(() => "Knights of the Altar"),
   ]);
 
+  const rows = await readMinistryLists(sb);
+
   // A database where the migration has not been applied answers both reads with `relation ... does not
   // exist`. That is the single most likely thing to be wrong after a deploy, so it is named -- and the
   // landing page logs it rather than swallowing it, which is what made this take a day to find.
@@ -80,6 +83,41 @@ export async function readPublicChurchProfile(): Promise<PublicProfileResult> {
       photo_url: profile?.photo_url ?? null,
       updated_at: profile?.updated_at ?? null,
       council: members ?? [],
+      roles: rows.role as Role[],
+      milestones: rows.milestone as Milestone[],
+      patrons: rows.patron as Patron[],
     },
   };
+}
+
+/**
+ * The three editable lists, in one pass.
+ *
+ * Read together rather than in three awaited calls because they are three more round trips to the same
+ * database for content that always appears together on the page.
+ *
+ * A list that cannot be read yields an empty list rather than failing the whole profile. A parish whose
+ * timeline table has not been created yet should still get its priest's name and its council on the
+ * front door; the missing section is worth a log line, not a blank page.
+ */
+async function readMinistryLists(
+  sb: ReturnType<typeof getSupabaseAdmin>,
+): Promise<Record<MinistryKind, unknown[]>> {
+  const out = {} as Record<MinistryKind, unknown[]>;
+  await Promise.all(
+    MINISTRY_KINDS.map(async (kind) => {
+      const { data, error } = await sb
+        .from(MINISTRY_TABLE[kind])
+        .select(MINISTRY_COLUMNS[kind])
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true });
+      if (error) {
+        console.error(`[church] the "${kind}" list could not be read:`, error.message);
+        out[kind] = [];
+        return;
+      }
+      out[kind] = data ?? [];
+    }),
+  );
+  return out;
 }

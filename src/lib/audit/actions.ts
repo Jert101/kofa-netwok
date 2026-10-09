@@ -64,6 +64,18 @@ export const AUDIT_ACTIONS = [
   "council_member_added",
   "council_member_updated",
   "council_member_removed",
+  // The rest of the parish's published ministry content: the roles servers are trained into, the
+  // timeline, and the patrons. Same reasoning as the council -- it is on the front door, and "who added
+  // this claim about the parish's history" is not something to have to guess at later.
+  "ministry_role_added",
+  "ministry_role_updated",
+  "ministry_role_removed",
+  "history_milestone_added",
+  "history_milestone_updated",
+  "history_milestone_removed",
+  "patron_added",
+  "patron_updated",
+  "patron_removed",
   // Photographs of identifiable people, published to signed-out visitors. Who uploaded one is a
   // question worth being able to answer later, and the row alone does not record it.
   "church_photo_uploaded",
@@ -133,6 +145,15 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   council_member_added: "Council member added",
   council_member_updated: "Council member updated",
   council_member_removed: "Council member removed",
+  ministry_role_added: "Ministry role added",
+  ministry_role_updated: "Ministry role updated",
+  ministry_role_removed: "Ministry role removed",
+  history_milestone_added: "Timeline milestone added",
+  history_milestone_updated: "Timeline milestone updated",
+  history_milestone_removed: "Timeline milestone removed",
+  patron_added: "Patron added",
+  patron_updated: "Patron updated",
+  patron_removed: "Patron removed",
   church_photo_uploaded: "Parish photograph uploaded",
   push_subscription_created: "Push device subscribed",
   structure_created: "Payment structure created",

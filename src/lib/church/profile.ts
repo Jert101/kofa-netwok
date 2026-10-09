@@ -10,6 +10,8 @@
  * landing page so neither can drift from the other.
  */
 
+import type { Milestone, Patron, Role } from "./ministry";
+
 export type CouncilMember = {
   id: string;
   name: string;
@@ -21,6 +23,16 @@ export type CouncilMember = {
   is_active?: boolean;
 };
 
+/**
+ * The three landing-page lists.
+ *
+ * Re-exported from `ministry` rather than restated here, so the shapes the editor edits and the shapes
+ * the page renders are literally the same declaration. `ministry` holds the column names, the tables and
+ * the validation as well; this module stays pure so client components can import it without pulling in
+ * the server-only parts.
+ */
+export type { Milestone, Patron, Role } from "./ministry";
+
 export type ChurchProfile = {
   parish_name: string | null;
   priest_name: string | null;
@@ -29,6 +41,17 @@ export type ChurchProfile = {
   photo_url?: string | null;
   updated_at: string | null;
   council: CouncilMember[];
+  /**
+   * The three editable lists, added with the landing page redesign.
+   *
+   * Optional rather than required because a public read taken from a database where migration 040 has
+   * not been applied yet still has to typecheck against this shape, and because an absent list and an
+   * empty one mean the same thing to a page: that section does not appear. The page checks length, not
+   * presence, for exactly that reason.
+   */
+  roles?: Role[];
+  milestones?: Milestone[];
+  patrons?: Patron[];
 };
 
 /**
@@ -93,4 +116,57 @@ export function hasAbout(church: ChurchProfile | null): boolean {
 
 export function hasCouncil(church: ChurchProfile | null): boolean {
   return (church?.council ?? []).length > 0;
+}
+
+/**
+ * Whether each published list has anything to show.
+ *
+ * All three take the same shape for the same reason: an empty section on a public page reads as a broken
+ * page, so the section is left off entirely rather than rendered with a heading over nothing. That is
+ * also why the reader degrades an unreadable list to an empty one -- a database missing migration 040
+ * loses three sections rather than taking the front door down with it.
+ */
+export function hasRoles(church: ChurchProfile | null): boolean {
+  return (church?.roles ?? []).length > 0;
+}
+
+export function hasTimeline(church: ChurchProfile | null): boolean {
+  return (church?.milestones ?? []).length > 0;
+}
+
+export function hasPatrons(church: ChurchProfile | null): boolean {
+  return (church?.patrons ?? []).length > 0;
+}
+
+/**
+ * The anchor id for each optional section.
+ *
+ * Declared here rather than written into the markup twice, because the nav links to these ids and the
+ * sections declare them. Two hand-written copies of the same string disagree exactly once, and the
+ * result is a nav link that scrolls nowhere with nothing on the screen to say so.
+ */
+export const SECTION_IDS = {
+  about: "about",
+  roles: "roles",
+  timeline: "history",
+  council: "council",
+} as const;
+
+/**
+ * The nav items, given which sections exist.
+ *
+ * A link to a section that is not on the page scrolls to the top of the footer and looks broken, so the
+ * links are derived from the content rather than fixed. `patrons` is deliberately absent from the nav:
+ * it is a short section between the timeline and the council, and a fifth link to it is more header than
+ * a header needs.
+ */
+export function navSections(church: ChurchProfile | null): ReadonlyArray<{ href: string; label: string }> {
+  const out: Array<{ href: string; label: string }> = [];
+  if (hasAbout(church) || hasLeadership(church)) {
+    out.push({ href: `#${SECTION_IDS.about}`, label: "About" });
+  }
+  if (hasRoles(church)) out.push({ href: `#${SECTION_IDS.roles}`, label: "Roles" });
+  if (hasTimeline(church)) out.push({ href: `#${SECTION_IDS.timeline}`, label: "History" });
+  if (hasCouncil(church)) out.push({ href: `#${SECTION_IDS.council}`, label: "Council" });
+  return out;
 }

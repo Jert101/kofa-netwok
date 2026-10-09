@@ -490,6 +490,18 @@ church_profile(id, priest_name?, headline?, about?, photo_url?, updated_at)  -- 
 council_members(id, name, office?, bio?, photo_url?, sort_order, is_active) -- 038/039, published
 -- 039 also creates the public `church-photos` storage bucket, 2 MB file limit
 
+-- The rest of the landing page, added with its redesign (040). Three lists, one shape each, all
+-- published and all edited by the super admin. The seed only runs when a table is empty, so re-applying
+-- 040 to a filled database changes nothing.
+ministry_roles(id, name, description?, icon, sort_order, is_active)        -- 040
+   -- `icon` is a key from a closed list (`ministry.ts` ROLE_ICONS), not an emoji: emoji render
+   -- differently per platform and a stored icon name that has been renamed renders as nothing at all.
+history_milestones(id, year_label, body, sort_order, is_active)            -- 040
+   -- `year_label` is text, not a date. "c. 251" and "1962–65" are both real and neither is a timestamp.
+patron_saints(id, name, note?, sort_order, is_active)                      -- 040
+   -- All three are behind RLS with no policies, like every other table here: reachable only through a
+   -- route that calls `requireRole`.
+
 announcements(id, title, body, created_by ∈{admin,secretary,officer,system},
               delete_at?, dedupe_key?, pinned, updated_at?,
               liturgy_session_date?, liturgy_mass_id?, created_at)
@@ -666,6 +678,14 @@ date in the past so a Sunday that already happened cannot be edited out of the r
 | POST | `/api/church/photo` | super_admin |
 | POST | `/api/church/council` | super_admin |
 | PATCH/DELETE | `/api/church/council/[id]` | super_admin |
+| POST | `/api/church/ministry/[kind]` | super_admin — `kind` ∈ `role`, `milestone`, `patron` |
+| PATCH/DELETE | `/api/church/ministry/[kind]/[id]` | super_admin |
+
+The three ministry lists share one pair of routes rather than having six. They are the same three actions
+over three different column sets, so the kind, its table, its columns and its validation are declared
+together in `lib/church/ministry.ts` — which is what stops a column being validated by the API and
+unreachable from the editor, the bug that made `photo_url` unpatchable on the council. `[kind]` is
+checked against a closed list before it is concatenated into a table name, because it arrives in the URL.
 
 ### Photographs
 
@@ -707,7 +727,38 @@ answer that drifts the first time one is changed and not the other. `priest_name
 than a `members` reference because the parish priest is often not a user of this system.
 
 A council seat is **vacated** (`is_active: false`) rather than deleted; removing the row entirely is a
-separate, deliberate act for a name that should not be in the table at all.
+separate, deliberate act for a name that should not be in the table at all. The same is true of every
+ministry list.
+
+### The landing page at `/`
+
+Rebuilt against a supplied reference: warm ivory and gold, a sticky nav, a large centred hero, and
+sections that appear only when they have content.
+
+**The palette is scoped to `.landing`, not moved up into `:root`.** The app's accents are a liturgical
+red that every screen and every report already uses, and the brief for `/` was ivory and gold. Moving
+the tokens globally would restyle 400-odd call sites to change one page. The trade is real: there are now
+two palettes in the app, and a future change to the house colours will not reach `/`. That is the right
+way round for a public page redesigned on purpose. The tokens are the same *names* as the app's, so
+`Button` and `ThemeSwitch` render here with no branch.
+
+**The page reads the database directly.** It used to `fetch` this app's own `/api/church` over HTTP,
+reconstructing an absolute URL from `NEXT_PUBLIC_APP_URL` / `VERCEL_URL` / `localhost`. In production
+that call failed on *every* request, so the page rendered perfectly and silently with none of the parish
+content — indistinguishable, from the screen, from having saved nothing. Both callers now share
+`readPublicChurchProfile` (`lib/church/profile-server.ts`), which keeps the original property (one place
+decides what a stranger may see) more strictly than the loopback did: before, the page agreed with the
+route only if the route answered. A read failure is logged rather than swallowed — that silence is what
+made this take a day to find.
+
+**Sections are conditional on their content, and the nav links are derived from them.** A heading over an
+empty list reads as a broken page, and a nav link to a section that is not rendered scrolls nowhere.
+
+**`Reveal` adds its hidden state only after mount.** The alternative — a `.reveal` class in the markup —
+renders every section at `opacity: 0` on the server and waits for JavaScript, so a slow or blocked script
+gives the parish a front door of invisible text. As written, the server-rendered HTML is the finished
+page and nothing is eligible to animate until an observer is attached; `prefers-reduced-motion` and a
+browser without `IntersectionObserver` both get the finished page.
 
 ### Announcements / notifications / payments / settings
 

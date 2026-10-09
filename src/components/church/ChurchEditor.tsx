@@ -5,7 +5,14 @@ import { Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { PhotoField } from "@/components/church/PhotoField";
-import { initialsOf, type CouncilMember } from "@/lib/church/profile";
+import { MinistryRows } from "@/components/church/MinistryRows";
+import {
+  initialsOf,
+  type CouncilMember,
+  type Milestone,
+  type Patron,
+  type Role,
+} from "@/lib/church/profile";
 
 /**
  * Read an error out of a failed response.
@@ -61,6 +68,12 @@ export function ChurchEditor() {
   const [newName, setNewName] = useState("");
   const [newOffice, setNewOffice] = useState("");
 
+  // The three published ministry lists. Added with the landing page redesign so the roles, the timeline
+  // and the patrons are edited here rather than being written into the page.
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const [patrons, setPatrons] = useState<Patron[]>([]);
+
   const load = useCallback(async () => {
     try {
       const res = await fetch("/api/church", { credentials: "same-origin", cache: "no-store" });
@@ -80,6 +93,9 @@ export function ChurchEditor() {
           about: string | null;
           photo_url?: string | null;
           council: CouncilMember[];
+          roles?: Role[];
+          milestones?: Milestone[];
+          patrons?: Patron[];
         };
       };
       const d = body.data;
@@ -90,6 +106,12 @@ export function ChurchEditor() {
       // Inactive members are filtered out of the public read, so this list is "who is on the council
       // now". Vacating somebody removes them here; the row survives in the database for the seat.
       setCouncil(d?.council ?? []);
+      // Same for the three published lists. The reader degrades an unreadable list to an empty one so a
+      // missing migration 040 does not cost the priest and the council too, which means an empty list
+      // here can mean either "nothing written" or "table absent" -- the error above says which.
+      setRoles(d?.roles ?? []);
+      setMilestones(d?.milestones ?? []);
+      setPatrons(d?.patrons ?? []);
     } catch {
       // No response at all, so there is no server message to read. Say which half failed rather than
       // repeating the general failure the server branch already covers in detail.
@@ -501,6 +523,52 @@ export function ChurchEditor() {
           </ul>
         )}
       </section>
+
+      {/*
+        The other three published lists.
+
+        A section each, rather than one "Ministry content" block with three sub-lists: each is edited for
+        a different reason and at a different time, and a super admin looking for the timeline should not
+        have to read past the roles to find it. Each is left off the landing page entirely while empty,
+        which is why "nothing written" is a legitimate state here and not a fault to be warned about.
+      */}
+      {(
+        [
+          {
+            kind: "role",
+            rows: roles,
+            set: setRoles,
+            heading: "Roles at the altar",
+            hint: "What the parish trains its servers to do. Shown as cards on the landing page, in this order.",
+          },
+          {
+            kind: "milestone",
+            rows: milestones,
+            set: setMilestones,
+            heading: "Timeline",
+            hint: "Milestones in the ministry's history, oldest first. “c. 251” and “1962–65” are both accepted.",
+          },
+          {
+            kind: "patron",
+            rows: patrons,
+            set: setPatrons,
+            heading: "Patrons of servers",
+            hint: "Saints traditionally invoked by altar servers. A name alone is enough; the note is optional.",
+          },
+        ] as const
+      ).map(({ kind, rows, set, heading, hint }) => (
+        <section key={kind} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+          <h2 className="text-sm font-medium">{heading}</h2>
+          <p className="mt-1 text-xs text-[var(--text-muted)]">{hint}</p>
+          <MinistryRows
+            kind={kind}
+            rows={rows as Array<{ id: string } & Record<string, unknown>>}
+            onChange={(next) => set(next as never)}
+            onError={setError}
+            onNotice={setNotice}
+          />
+        </section>
+      ))}
     </div>
   );
 }

@@ -225,3 +225,130 @@ body {
   background: var(--brand-soft);
   color: var(--foreground);
 }
+
+/* ---------------------------------------------------------------------------
+   The landing page's own palette.
+   ---------------------------------------------------------------------------
+
+   Scoped to `.landing` rather than moved up into `:root`, deliberately. The app's accents are a
+   liturgical red that every screen and every report already uses, and the brief for `/` was warm
+   ivory and gold. Changing the tokens globally would restyle 400-odd call sites to fix one page;
+   scoping it means the front door can look like a parish's own front door while the roster and the
+   treasurer's screens stay exactly as they were.
+
+   The trade is real and worth stating: for one screen there are now two palettes in the app, and a
+   change to the house colours no longer reaches `/`. That is the right way round for a public page
+   that was redesigned on purpose.
+
+   The tokens are the *same names* as the app's, so a component written once works in both. `Button`
+   and `ThemeSwitch` need no branch to render here.
+*/
+.landing {
+  /* Warm ivory rather than white. A page about a church reads as printed matter rather than as a form,
+     and pure white under a gold heading is the combination that looks cheapest. */
+  --background: #fbfaf7;
+  --foreground: #16150f;
+  --surface: #ffffff;
+  --surface-2: #f3f1ea;
+  --border: rgba(22, 21, 15, 0.1);
+  --text-muted: #6a675c;
+
+  /* The gold, at two ends: a1 for a fill carrying dark text, a2 for the gradient's light end. */
+  --a1: #b8891a;
+  --a2: #e6b84a;
+  --brand: #16150f;
+  --brand-text: #8a6712;
+  --brand-soft: rgba(230, 184, 74, 0.16);
+  --on-brand: #ffffff;
+  --ring: #b8891a;
+
+  /* A card is not white on ivory -- it is ivory with a hairline, so a stack of them reads as a set of
+     surfaces rather than as a grid of holes. */
+  --card: rgba(255, 255, 255, 0.75);
+  --glow: rgba(230, 184, 74, 0.28);
+
+  --landing-font: var(--font-sans);
+}
+
+/* Dark, as a class rather than only as a media query, for the same reason as `.dark` above: somebody
+   whose OS is light but who chose dark needs dark, and the reverse has to be possible too. */
+.dark .landing {
+  --background: #07070a;
+  --foreground: #f4f2ea;
+  --surface: #0e0e13;
+  --surface-2: #131318;
+  --border: rgba(255, 255, 255, 0.09);
+  --text-muted: #9b988d;
+
+  --a1: #e6b84a;
+  --a2: #f6d98a;
+  --brand: #f4f2ea;
+  --brand-text: #e6b84a;
+  --brand-soft: rgba(230, 184, 74, 0.14);
+  --on-brand: #07070a;
+  --ring: #e6b84a;
+
+  --card: rgba(255, 255, 255, 0.04);
+  --glow: rgba(230, 184, 74, 0.16);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) .landing {
+    --background: #07070a;
+    --foreground: #f4f2ea;
+    --surface: #0e0e13;
+    --surface-2: #131318;
+    --border: rgba(255, 255, 255, 0.09);
+    --text-muted: #9b988d;
+
+    --a1: #e6b84a;
+    --a2: #f6d98a;
+    --brand: #f4f2ea;
+    --brand-text: #e6b84a;
+    --brand-soft: rgba(230, 184, 74, 0.14);
+    --on-brand: #07070a;
+    --ring: #e6b84a;
+
+    --card: rgba(255, 255, 255, 0.04);
+    --glow: rgba(230, 184, 74, 0.16);
+  }
+}
+
+/* The hero's radial wash, and the CTA box's. Both are a decoration that must never sit on top of text or
+   swallow a click, hence `pointer-events: none`. */
+.landing-glow {
+  position: absolute;
+  left: 50%;
+  top: -140px;
+  width: 900px;
+  max-width: 140%;
+  height: 560px;
+  transform: translateX(-50%);
+  background: radial-gradient(closest-side, var(--glow), transparent);
+  pointer-events: none;
+}
+
+/* A heading that fades up as it arrives, and stays up once it has.
+   Opt-in by class rather than applied globally: a page-wide animation on a list of forty rows is a
+   flash of empty space, not an effect. */
+.landing .reveal {
+  opacity: 0;
+  transform: translateY(22px);
+  transition: opacity 0.7s ease, transform 0.7s ease;
+}
+
+.landing .reveal.is-in {
+  opacity: 1;
+  transform: none;
+}
+
+/* Motion is decoration. Somebody who has asked their device for less of it gets the finished page
+   immediately, and the observer is never even attached -- so there is no flash of invisible content if
+   the script is slow. */
+@media (prefers-reduced-motion: reduce) {
+  .landing .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
