@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { selectSessionsResilient } from "@/lib/attendance/guard-session-write";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { monthBoundsFromStart } from "@/lib/reports/rules";
 
@@ -6,7 +7,12 @@ export type SessionRowForArchive = {
   id: string;
   session_date: string;
   notes: string | null;
-  mass_id: string;
+  /**
+   * Null for a gathering. The archive used to require this, which is why archiving a month containing
+   * a meeting would have failed the whole report on a row that is not even part of the report.
+   */
+  mass_id: string | null;
+  title?: string | null;
   masses: unknown;
 };
 
@@ -44,6 +50,10 @@ export async function moveLiveMonthAttendanceToArchive(
       session_date: s.session_date,
       mass_id: s.mass_id,
       mass_name: massNameFromJoin(s.masses),
+      // Omitted -- not nulled -- when the select did not return it, which is what happens on a
+      // database predating migration 041: its archive table has no `title` column, and an explicit
+      // null for a column that does not exist is still a 42703.
+      ...(s.title !== undefined ? { title: s.title } : {}),
       notes: s.notes,
       report_id: reportId,
     }));
@@ -126,14 +136,22 @@ export async function archiveLiveDataForReport(
   const monthStart = report.report_month as string;
   const { start, end } = monthBoundsFromStart(monthStart);
 
-  const { data: sessions, error: sErr } = await sb
-    .from("attendance_sessions")
-    .select("id, session_date, notes, mass_id, created_at, masses(name)")
-    .gte("session_date", start)
-    .lte("session_date", end);
+  // Resilient like the other session reads: on a pre-041 database `title` is absent and every session
+  // is a Mass, so the fallback loses nothing -- and without it closing any month would fail outright
+  // until the migration lands.
+  const { data: sessions, error: sErr } = await selectSessionsResilient<Record<string, unknown>[]>(
+    (columns) =>
+      sb
+        .from("attendance_sessions")
+        .select(columns)
+        .gte("session_date", start)
+        .lte("session_date", end),
+    "id, session_date, notes, mass_id, title, created_at, masses(name)",
+    "id, session_date, notes, mass_id, created_at, masses(name)",
+  );
 
   if (sErr) {
-    return { ok: false, message: sErr.message };
+    return { ok: false, message: sErr.message ?? "The month's sessions could not be read." };
   }
 
   const sessionList = (sessions ?? []) as unknown as SessionRowForArchive[];

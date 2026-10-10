@@ -67,6 +67,12 @@ async function resolveTarget(target: LiturgyTarget): Promise<ResolvedTarget> {
       .eq("id", target.sessionId)
       .maybeSingle();
     if (!session) return { ok: false, response: notFound("That session no longer exists.") };
+    // A gathering has no Mass, so there is nothing to plan servers for. Refused here rather than run
+    // with a null id, which the lookup below would report as "Mass not found" -- true in a sense that
+    // helps nobody, since the session exists and simply is not a Mass.
+    if (session.mass_id == null) {
+      return { ok: false, response: badRequest("A meeting has no servers to plan.") };
+    }
     sessionDate = String(session.session_date);
     massId = String(session.mass_id);
   }

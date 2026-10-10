@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
   // look like a successful copy that vanished on the next save.
   const target = asTarget(to);
   const destination = await describeTarget(sb, target);
+  if (destination === "gathering") return badRequest("A meeting has no servers to copy into.");
   if (!destination) return notFound("The plan you are copying into no longer exists.");
 
   const sourceRows = await readSource(sb, asTarget(from));
@@ -111,6 +112,11 @@ async function describeTarget(sb: ReturnType<typeof getSupabaseAdmin>, target: L
     .eq("id", target.sessionId)
     .maybeSingle();
   if (!session) return null;
+
+  // Copying servers into a meeting would give it a liturgy nobody can see on the session screen, which
+  // hides the editor for gatherings. Refused rather than half-done: mass_name "Mass" on a row with
+  // mass_id null is exactly the kind of almost-right data that surfaces in a report six weeks later.
+  if (session.mass_id == null) return "gathering";
 
   const { data: mass } = await sb
     .from("masses")

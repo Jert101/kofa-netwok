@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { selectSessionsResilient, sessionLabel } from "@/lib/attendance/guard-session-write";
 import { notify } from "@/lib/notify/notify";
 
 /**
@@ -12,15 +13,27 @@ import { notify } from "@/lib/notify/notify";
 export async function notifyAttendanceSessionUpdated(sessionId: string): Promise<void> {
   try {
     const sb = getSupabaseAdmin();
-    const { data: session, error } = await sb
-      .from("attendance_sessions")
-      .select("session_date, masses(name)")
-      .eq("id", sessionId)
-      .maybeSingle();
+    // Resilient like the other session reads: without it a pre-041 database would skip every
+    // notification, Masses included, because the `title` select fails.
+    const { data: session, error } = await selectSessionsResilient<Record<string, unknown>>(
+      (columns) => sb.from("attendance_sessions").select(columns).eq("id", sessionId).maybeSingle(),
+      "session_date, mass_id, title, masses(name)",
+      "session_date, mass_id, masses(name)",
+    );
     if (error || !session) return;
 
+    // A meeting's roster changing is not parish news. This push tells the parish "the roster for this
+    // Mass changed, if you are serving that day" -- and for a gathering there is no Mass to name and
+    // no serving audience to reach, only the secretary who just made the change and the people in the
+    // room. Skipped here rather than at seven call sites, so no future caller can get it wrong.
+    if (session.mass_id == null) return;
+
     const date = String(session.session_date);
-    const massName = (session.masses as { name?: string } | null)?.name ?? "Mass";
+    const massName = sessionLabel({
+      mass_id: session.mass_id as string | null,
+      title: session.title as string | null,
+      massName: (session.masses as { name?: string } | null)?.name,
+    });
 
     await notify("attendance_updated", {
       date,

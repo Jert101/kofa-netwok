@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/api/guard";
+import { selectSessionsResilient, sessionLabel } from "@/lib/attendance/guard-session-write";
 import {
   badRequest,
   internalError,
@@ -125,18 +126,30 @@ export async function GET(req: NextRequest) {
 
   const sb = getSupabaseAdmin();
 
-  const { data, error } = await sb
-    .from("attendance_appeal_items")
-    .select(
-      "id, member_id, status, resolution, reject_reason, reviewed_at, reviewed_by_role, created_at, " +
-        "attendance_appeals!inner(session_id, submitted_at, note, attendance_sessions!inner(session_date, masses!inner(name))), " +
-        "members!inner(full_name)",
-    )
-    // One `in` rather than two round trips, so the two tabs cannot disagree about what
-    // counts as resolved.
-    .in("status", status === "pending" ? ["pending"] : ["rejected", "expired"])
-    .order("created_at", { ascending: false })
-    .limit(limit * 4);
+  // `masses(name)` is a left join, not an inner one: a gathering has no Mass, and an inner join
+  // here would silently drop every appeal filed against a meeting from the queue -- the secretary
+  // would never know it existed, and the member would wait on an answer that cannot come.
+  //
+  // Resilient to a pre-041 database like the other session reads: without `title` every session is a
+  // Mass, so the fallback loses nothing.
+  const appealSelect = (sessionColumns: string) =>
+    "id, member_id, status, resolution, reject_reason, reviewed_at, reviewed_by_role, created_at, " +
+    `attendance_appeals!inner(session_id, submitted_at, note, attendance_sessions!inner(${sessionColumns})), ` +
+    "members!inner(full_name)";
+
+  const { data, error } = await selectSessionsResilient<Record<string, unknown>[]>(
+    (columns) =>
+      sb
+        .from("attendance_appeal_items")
+        .select(appealSelect(columns))
+        // One `in` rather than two round trips, so the two tabs cannot disagree about what
+        // counts as resolved.
+        .in("status", status === "pending" ? ["pending"] : ["rejected", "expired"])
+        .order("created_at", { ascending: false })
+        .limit(limit * 4),
+    "session_date, mass_id, title, masses(name)",
+    "session_date, mass_id, masses(name)",
+  );
 
   if (error) return internalError();
 
@@ -156,7 +169,12 @@ export async function GET(req: NextRequest) {
       note?: string | null;
       attendance_sessions?: unknown;
     } | null;
-    const session = first(parent?.attendance_sessions) as { session_date?: string; masses?: unknown } | null;
+    const session = first(parent?.attendance_sessions) as {
+      session_date?: string;
+      mass_id?: string | null;
+      title?: string | null;
+      masses?: unknown;
+    } | null;
     const mass = first(session?.masses) as { name?: string } | null;
     const member = first(row.members) as { full_name?: string } | null;
 
@@ -169,7 +187,11 @@ export async function GET(req: NextRequest) {
       grouped.set(sessionId, {
         session_id: sessionId,
         session_date: sessionDate,
-        mass_name: mass?.name?.trim() || "Mass",
+        mass_name: sessionLabel({
+          mass_id: session?.mass_id ?? null,
+          title: session?.title ?? null,
+          massName: mass?.name,
+        }),
         appeals: [],
       });
     }

@@ -64,9 +64,11 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => a.date.localeCompare(b.date));
 
     // A date with no planned rows at all but a session exists is a Mass nobody has started planning.
+    // Gatherings are excluded: a meeting has no Mass and no liturgy to plan, so it must never appear as
+    // something the officer has failed to roster.
     const plannedDates = new Set(plannedRows.map((r) => String(r.session_date)));
     const unplanned = (sessions.data ?? [])
-      .filter((s) => !plannedDates.has(String(s.session_date)))
+      .filter((s) => s.mass_id != null && !plannedDates.has(String(s.session_date)))
       .map((s) => ({
         date: String(s.session_date),
         mass_names: [

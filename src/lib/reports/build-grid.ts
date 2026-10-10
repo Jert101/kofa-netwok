@@ -56,11 +56,20 @@ export async function buildReportGrid(
     return { ok: false, message: "Select at least one Mass session to include in the report." };
   }
 
+  // `.not("mass_id", "is", null)` -- a meeting is a session with no Mass, and the monthly report is
+  // the parish's official record of who *served*, where served means served at Mass.
+  //
+  // Nothing else in this file filters it, and that is the point worth writing down: the report groups by
+  // `session_date` and uses the Mass only as a column label, so a gathering would not be blocked -- it
+  // would be printed as a column headed "Mass", counted in the number of sessions, and folded into the
+  // turnout median. All of it wrong, and none of it obviously wrong on the page. One filter here, and
+  // the invitation to add another is a deliberate act.
   const { data: sessions, error: sErr } = await sb
     .from("attendance_sessions")
     .select("id, session_date, notes, mass_id, created_at, masses(name)")
     .gte("session_date", start)
-    .lte("session_date", end);
+    .lte("session_date", end)
+    .not("mass_id", "is", null);
 
   if (sErr) return { ok: false, message: sErr.message };
 

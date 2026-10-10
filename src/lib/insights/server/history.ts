@@ -132,6 +132,10 @@ export async function loadDashboardHistory(
     const massIdBySession = new Map<string, string | null>();
 
     for (const s of liveSessions.data ?? []) {
+      // A meeting is recorded but it is not serving, so it stays out of every number built below --
+      // attendanceRate, sessionsHeld, turnout, marks. Otherwise attending a meeting would count as having
+      // served a Mass, and somebody's streak would be reachable from a committee room.
+      if (s.mass_id == null) continue;
       const id = String(s.id);
       dateBySession.set(id, String(s.session_date));
       massIdBySession.set(id, (s.mass_id as string | null) ?? null);
@@ -141,6 +145,7 @@ export async function loadDashboardHistory(
       );
     }
     for (const s of archivedSessions.data ?? []) {
+      if (s.mass_id == null) continue;
       const id = String(s.id);
       // The archived row's denormalised name wins: the Mass may have been deleted since.
       if (!dateBySession.has(id)) dateBySession.set(id, String(s.session_date));

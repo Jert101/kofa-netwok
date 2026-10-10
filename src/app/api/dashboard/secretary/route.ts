@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { requireRole } from "@/lib/api/guard";
+import { selectSessionsResilient, sessionLabel } from "@/lib/attendance/guard-session-write";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { internalError, jsonOk } from "@/lib/api/response";
 import { getSetting } from "@/lib/settings/store";
@@ -31,11 +32,17 @@ export async function GET(req: NextRequest) {
     const sb = getSupabaseAdmin();
 
     const [sessionsResult, appealsResult, reportsResult, windowDays] = await Promise.all([
-      sb
-        .from("attendance_sessions")
-        .select("id, session_date, masses(name)")
-        .gte("session_date", from)
-        .lte("session_date", asOf),
+      // Resilient to a pre-041 database (see guard-session-write): there every session is a Mass.
+      selectSessionsResilient<Record<string, unknown>[]>(
+        (columns) =>
+          sb
+            .from("attendance_sessions")
+            .select(columns)
+            .gte("session_date", from)
+            .lte("session_date", asOf),
+        "id, session_date, mass_id, title, masses(name)",
+        "id, session_date, mass_id, masses(name)",
+      ),
       sb.from("attendance_appeal_items").select("id, status").eq("status", "pending"),
       sb
         .from("reports")
@@ -61,11 +68,18 @@ export async function GET(req: NextRequest) {
     }
 
     const unrecorded = sessions
-      .filter((s) => !recordedIds.has(String(s.id)) && s.session_date < asOf)
+      .filter((s) => !recordedIds.has(String(s.id)) && String(s.session_date) < asOf)
       .map((s) => ({
         session_id: String(s.id),
         date: String(s.session_date),
-        mass_name: (s.masses as { name?: string } | null)?.name ?? "Mass",
+        // A meeting the secretary has not marked yet needs doing exactly as much as a Mass does --
+        // the nudge is "record this", not "record a Mass" -- but it must arrive wearing its own name,
+        // not the word "Mass".
+        mass_name: sessionLabel({
+          mass_id: s.mass_id as string | null,
+          title: s.title as string | null,
+          massName: (s.masses as { name?: string } | null)?.name,
+        }),
         days_ago: daysAgo(String(s.session_date), asOf),
         sunday: isSunday(String(s.session_date)),
       }))

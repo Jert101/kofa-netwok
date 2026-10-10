@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/api/guard";
 import { canEncodeSession } from "@/lib/attendance/future-session";
-import { guardSessionWrite } from "@/lib/attendance/guard-session-write";
+import { guardSessionWrite, selectSessionsResilient, sessionLabel } from "@/lib/attendance/guard-session-write";
 import { deleteLiturgyLinkedAnnouncement } from "@/lib/attendance/liturgy-announcement";
 import { monthBounds, monthLabel } from "@/lib/reports/report-lock";
 import { notifyAttendanceSessionUpdated } from "@/lib/push/attendance-notify";
@@ -21,11 +21,13 @@ export async function GET(req: NextRequest, ctx: Ctx) {
 
   const { id } = await ctx.params;
   const sb = getSupabaseAdmin();
-  const { data: session, error } = await sb
-    .from("attendance_sessions")
-    .select("id, session_date, mass_id, notes, masses(name)")
-    .eq("id", id)
-    .maybeSingle();
+  // Same 041 resilience as the day view: a database without `title` holds Masses only, so the
+  // fallback changes nothing about what the secretary sees.
+  const { data: session, error } = await selectSessionsResilient<Record<string, unknown>>(
+    (columns) => sb.from("attendance_sessions").select(columns).eq("id", id).maybeSingle(),
+    "id, session_date, mass_id, title, notes, masses(name)",
+    "id, session_date, mass_id, notes, masses(name)",
+  );
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -33,6 +35,11 @@ export async function GET(req: NextRequest, ctx: Ctx) {
   if (!session) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+
+  // `mass_id` null means a gathering: a meeting or a training day, with no Mass behind it. Every Mass-only
+  // step below is skipped rather than run with a null, because each of them builds a Mass id into a query
+  // and would otherwise match nothing and look like the ministry had assigned nobody.
+  const isGathering = session.mass_id == null;
 
   const { data: records, error: rErr } = await sb
     .from("attendance_records")
@@ -60,9 +67,14 @@ export async function GET(req: NextRequest, ctx: Ctx) {
   // rows along with `expected_version: null` and the concurrent-save notice could never fire on the
   // session screen. Now the same two values the editor gets are the ones `/api/liturgy/*` would
   // have answered, computed once instead of re-implemented.
-  const liturgyRead = await readLiturgyRows(sb, { kind: "session", sessionId: id });
+  //
+  // A gathering has no Mass, so it has no liturgy: no positions were assigned, none can be, and a
+  // secretary shown an empty server list with an editor in front of it would reasonably conclude the
+  // officer had not done their job. The screen hides the whole panel for a gathering on the strength of
+  // `has_liturgy: false`.
+  const liturgyRead = isGathering ? null : await readLiturgyRows(sb, { kind: "session", sessionId: id });
 
-  let liturgy_servers = liturgyRead.ok
+  let liturgy_servers = liturgyRead?.ok
     ? liturgyRead.rows.map((row) => ({
         id: `session-${row.sort_order}`,
         position_label: row.position_label,
@@ -75,9 +87,9 @@ export async function GET(req: NextRequest, ctx: Ctx) {
 
   // No rows of their own yet: the session sits on the planned lineup as a seed. The version that
   // matters is the session's own (empty here), because that is what the editor's save will replace.
-  const liturgy_version = liturgyRead.ok ? liturgyRead.version : null;
+  const liturgy_version = liturgyRead?.ok ? liturgyRead.version : null;
 
-  if (liturgy_servers.length === 0) {
+  if (liturgy_servers.length === 0 && !isGathering) {
     const { data: plannedRows, error: plErr } = await sb
       .from("liturgy_planned")
       .select("position_label, member_id, free_text, sort_order, members(full_name)")
@@ -123,8 +135,19 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     session: {
       id: session.id,
       session_date: session.session_date,
-      mass_id: session.mass_id as string,
-      mass_name: (session.masses as { name?: string } | null)?.name ?? "Mass",
+      // Null for a gathering. It was cast to `string` and sent as one, which is how a meeting would
+      // have arrived at the client as a Mass id of "null".
+      mass_id: session.mass_id as string | null,
+      title: (session.title as string | null) ?? null,
+      // One label, built once here rather than by each of the day view, the appeal queue and the
+      // notification -- three places that each got it wrong in a different way.
+      mass_name: sessionLabel({
+        mass_id: session.mass_id as string | null,
+        title: session.title as string | null,
+        massName: (session.masses as { name?: string } | null)?.name,
+      }),
+      // Whether the screen should offer a liturgy editor at all.
+      has_liturgy: !isGathering,
       notes: session.notes,
     },
     members,
@@ -344,7 +367,12 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
       );
     }
 
-    await deleteLiturgyLinkedAnnouncement(sb, String(sess.session_date), sess.mass_id as string);
+    // Only a Mass session can have a liturgy announcement, because the announcement's dedupe key is
+    // built from (date, mass). For a gathering `mass_id` is null, and casting that to a string here would
+    // have deleted whatever was keyed "null" on that date -- so the call is skipped, not coerced.
+    if (sess.mass_id) {
+      await deleteLiturgyLinkedAnnouncement(sb, String(sess.session_date), sess.mass_id as string);
+    }
 
     const { error } = await sb.from("attendance_sessions").delete().eq("id", id);
     if (error) {

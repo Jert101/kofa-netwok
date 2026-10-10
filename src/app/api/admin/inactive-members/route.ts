@@ -19,9 +19,22 @@ export async function GET(req: NextRequest) {
   const startStr = startDate.toISOString().slice(0, 10);
   const endStr = endDate.toISOString().slice(0, 10);
 
+  // Only Mass sessions count. A meeting is recorded but it is not serving, so someone whose only
+  // attendance in three months was a committee meeting is still inactive -- and telling the admin
+  // otherwise would keep a name off a list that exists to find exactly them.
   const [liveSessions, archiveSessions] = await Promise.all([
-    sb.from("attendance_sessions").select("id").gte("session_date", startStr).lte("session_date", endStr),
-    sb.from("attendance_sessions_archive").select("id").gte("session_date", startStr).lte("session_date", endStr),
+    sb
+      .from("attendance_sessions")
+      .select("id")
+      .gte("session_date", startStr)
+      .lte("session_date", endStr)
+      .not("mass_id", "is", null),
+    sb
+      .from("attendance_sessions_archive")
+      .select("id")
+      .gte("session_date", startStr)
+      .lte("session_date", endStr)
+      .not("mass_id", "is", null),
   ]);
 
   const liveIds = (liveSessions.data ?? []).map((s) => s.id as string);

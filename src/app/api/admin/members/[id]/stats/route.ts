@@ -107,18 +107,25 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     (masses.data ?? []).map((m) => [m.id as string, m.name as string]),
   );
 
-  const liveRows = (liveSessions.data ?? []).map((s) => ({
-    id: s.id as string,
-    sessionDate: s.session_date as string,
-    massName: massNameById.get(s.mass_id as string) ?? null,
-  }));
-  const archivedRows = (archivedSessions.data ?? []).map((s) => ({
-    id: s.id as string,
-    sessionDate: s.session_date as string,
-    // The archive keeps the mass name as text, so it survives a deleted mass.
-    massName: (s.mass_name as string | null) ?? massNameById.get(s.mass_id as string) ?? null,
-    archived: true as const,
-  }));
+  // A meeting is recorded but it is not serving, so it stays out of the member's record too:
+  // serving total, attendance rate, streak, recent sessions. The day view and the session screen still
+  // show it; the record that follows a member does not.
+  const liveRows = (liveSessions.data ?? [])
+    .filter((s) => s.mass_id != null)
+    .map((s) => ({
+      id: s.id as string,
+      sessionDate: s.session_date as string,
+      massName: massNameById.get(s.mass_id as string) ?? null,
+    }));
+  const archivedRows = (archivedSessions.data ?? [])
+    .filter((s) => s.mass_id != null)
+    .map((s) => ({
+      id: s.id as string,
+      sessionDate: s.session_date as string,
+      // The archive keeps the mass name as text, so it survives a deleted mass.
+      massName: (s.mass_name as string | null) ?? massNameById.get(s.mass_id as string) ?? null,
+      archived: true as const,
+    }));
   const sessions: AttendanceSession[] = [...liveRows, ...archivedRows];
 
   const memberSessionIds = [

@@ -39,6 +39,9 @@ export function AddSession({ sessionDate }: { sessionDate: string }) {
   const router = useRouter();
   const [masses, setMasses] = useState<Mass[]>([]);
   const [massId, setMassId] = useState("");
+  /** What this session is for. A gathering is a meeting or a training day -- it has no Mass. */
+  const [kind, setKind] = useState<"mass" | "gathering">("mass");
+  const [title, setTitle] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -66,7 +69,8 @@ export function AddSession({ sessionDate }: { sessionDate: string }) {
   }, []);
 
   async function submit() {
-    if (!massId) return;
+    if (kind === "mass" && !massId) return;
+    if (kind === "gathering" && !title.trim()) return;
     setError(null);
     setSaving(true);
 
@@ -75,7 +79,11 @@ export function AddSession({ sessionDate }: { sessionDate: string }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ session_date: sessionDate, mass_id: massId, member_ids: [] }),
+        body: JSON.stringify(
+          kind === "mass"
+            ? { session_date: sessionDate, mass_id: massId, member_ids: [] }
+            : { session_date: sessionDate, title: title.trim(), member_ids: [] },
+        ),
       });
 
       const env = await readEnvelope<{ id: string }>(res);
@@ -110,31 +118,78 @@ export function AddSession({ sessionDate }: { sessionDate: string }) {
 
   if (loading) return <p className="text-sm text-[var(--text-muted)]">Loading…</p>;
 
+  const canSubmit =
+    kind === "mass" ? Boolean(massId) && masses.length > 0 : title.trim().length > 0;
+
   return (
     <div className="space-y-4">
-      <div>
-        <label htmlFor="add-session-mass" className="text-sm font-medium text-[var(--text-muted)]">
-          Mass
-        </label>
-        <Select value={massId} onValueChange={setMassId} disabled={saving}>
-          <SelectTrigger id="add-session-mass" className="mt-2 min-h-12 w-full">
-            <SelectValue placeholder="Choose a Mass" />
-          </SelectTrigger>
-          <SelectContent>
-            {masses.map((mass) => (
-              <SelectItem key={mass.id} value={mass.id}>
-                {mass.name}
-                {mass.default_time ? ` — ${mass.default_time.slice(0, 5)}` : ""}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {masses.length === 0 ? (
-          <p className="mt-2 text-sm text-[var(--text-muted)]">
-            No active Masses. An admin needs to add one first.
-          </p>
-        ) : null}
+      <div role="group" aria-label="What this session is for" className="grid grid-cols-2 gap-2">
+        {(["mass", "gathering"] as const).map((option) => (
+          <button
+            key={option}
+            type="button"
+            aria-pressed={kind === option}
+            onClick={() => {
+              setKind(option);
+              setError(null);
+            }}
+            disabled={saving}
+            className={`min-h-12 rounded-xl border px-3 text-sm font-medium ${
+              kind === option
+                ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand-text)]"
+                : "border-[var(--border)] text-[var(--text-muted)]"
+            }`}
+          >
+            {option === "mass" ? "Mass" : "Meeting or training"}
+          </button>
+        ))}
       </div>
+
+      {kind === "mass" ? (
+        <div>
+          <label htmlFor="add-session-mass" className="text-sm font-medium text-[var(--text-muted)]">
+            Mass
+          </label>
+          <Select value={massId} onValueChange={setMassId} disabled={saving}>
+            <SelectTrigger id="add-session-mass" className="mt-2 min-h-12 w-full">
+              <SelectValue placeholder="Choose a Mass" />
+            </SelectTrigger>
+            <SelectContent>
+              {masses.map((mass) => (
+                <SelectItem key={mass.id} value={mass.id}>
+                  {mass.name}
+                  {mass.default_time ? ` — ${mass.default_time.slice(0, 5)}` : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {masses.length === 0 ? (
+            <p className="mt-2 text-sm text-[var(--text-muted)]">
+              No active Masses. An admin needs to add one first.
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <div>
+          <label htmlFor="add-session-title" className="text-sm font-medium text-[var(--text-muted)]">
+            What is being held?
+          </label>
+          <input
+            id="add-session-title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            maxLength={120}
+            placeholder="e.g. Monthly Meeting"
+            autoComplete="off"
+            disabled={saving}
+            className="mt-2 min-h-12 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-base"
+          />
+          <p className="mt-2 text-sm text-[var(--text-muted)]">
+            Recorded for this day only. A meeting does not count in the monthly report or in
+            anyone&apos;s serving record.
+          </p>
+        </div>
+      )}
 
       {error ? (
         <p role="alert" className="text-sm text-[var(--danger)]">
@@ -145,7 +200,7 @@ export function AddSession({ sessionDate }: { sessionDate: string }) {
       <Button
         type="button"
         onClick={() => void submit()}
-        disabled={saving || !massId || masses.length === 0}
+        disabled={saving || !canSubmit}
         className="min-h-14 w-full"
       >
         {saving ? "Creating…" : "Create session"}

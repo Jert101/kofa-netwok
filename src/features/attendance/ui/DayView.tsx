@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 type SessionRow = {
   id: string;
   mass_name: string;
+  /** True for a meeting or training day. Present so the row can say what it is. */
+  is_gathering?: boolean;
   present_count: number;
 };
 
@@ -101,7 +103,14 @@ export function DayView({
                 href={`${sessionBasePath}/${s.id}`}
                 className="flex min-h-14 items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 active:bg-[var(--surface-2)]"
               >
-                <span className="font-medium">{s.mass_name}</span>
+                <span className="font-medium">
+                  {s.mass_name}
+                  {s.is_gathering ? (
+                    <span className="ml-2 rounded-full bg-[var(--surface-2)] px-2 py-0.5 align-middle text-xs font-normal text-[var(--text-muted)]">
+                      Meeting
+                    </span>
+                  ) : null}
+                </span>
                 <span className="text-sm text-[var(--text-muted)]">
                   {s.present_count} present
                 </span>

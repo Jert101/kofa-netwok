@@ -36,8 +36,16 @@ type SessionPayload = {
   session: {
     id: string;
     session_date: string;
-    mass_id: string;
+    /**
+     * Null for a gathering. The server sends it through rather than coercing it, so the screen can
+     * decide what applies to a meeting -- and the liturgy editor is hidden for one on this basis rather
+     * than on an empty server list, which is also what a Mass with nobody assigned yet looks like.
+     */
+    mass_id: string | null;
+    title: string | null;
     mass_name: string;
+    /** False for a gathering: no Mass means no servers were assigned and none can be. */
+    has_liturgy: boolean;
     notes: string | null;
   };
   roster: RosterEntry[];
@@ -233,9 +241,10 @@ export function SessionScreen({ sessionId, role, backHref }: Props) {
         <AttendanceAppealsReview sessionId={sessionId} onAppealApproved={refresh} />
       ) : null}
 
-      {canEditLiturgy ? (
+      {data.session.has_liturgy && canEditLiturgy ? (
         // LIT-1's editor, shown even when nothing is assigned yet: an officer filling in who is
-        // free is the common case for a session that has no liturgy servers on it.
+        // free is the common case for a session that has no liturgy servers on it. Hidden entirely for
+        // a gathering -- there a blank server list would read as the ministry having assigned nobody.
         <section>
           <h2 className="mb-2 text-sm font-semibold text-[var(--text-muted)]">Liturgy servers</h2>
           <LiturgyPlanner
@@ -249,7 +258,7 @@ export function SessionScreen({ sessionId, role, backHref }: Props) {
         </section>
       ) : null}
 
-      {!canEditLiturgy && data.liturgy_servers.length ? (
+      {data.session.has_liturgy && !canEditLiturgy && data.liturgy_servers.length ? (
         <section>
           <h2 className="text-sm font-semibold text-[var(--text-muted)]">Liturgy servers</h2>
           <ul className="mt-2 divide-y divide-[var(--border)] overflow-hidden rounded-2xl border border-[var(--border)]">

@@ -39,7 +39,9 @@ export const BACKUP_TABLES: TableSpec[] = [
   {
     file: "sessions.csv",
     table: "attendance_sessions",
-    columns: ["id", "session_date", "mass_id", "notes", "created_at"],
+    // `title` alongside `mass_id`: without it a restored backup turns every meeting back into a Mass
+    // session with no name -- a row the shape constraint would then refuse to re-insert at all.
+    columns: ["id", "session_date", "mass_id", "title", "notes", "created_at"],
   },
   {
     file: "attendance_records.csv",
@@ -54,7 +56,7 @@ export const BACKUP_TABLES: TableSpec[] = [
   {
     file: "attendance_sessions_archive.csv",
     table: "attendance_sessions_archive",
-    columns: ["id", "session_date", "mass_id", "mass_name", "archived_at", "report_id"],
+    columns: ["id", "session_date", "mass_id", "mass_name", "title", "archived_at", "report_id"],
   },
   {
     file: "appeals.csv",

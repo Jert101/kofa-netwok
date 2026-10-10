@@ -221,6 +221,7 @@ Client redirects to ROLE_PATH[role]
 
 - **FR-A1 Mass catalog** — admin defines recurring Mass types (name, e.g. _"5:30 AM Anticipated"_, optional `default_sunday` flag). Soft-deactivate only.
 - **FR-A2 Sessions = one Mass on one date** — `attendance_sessions(session_date, mass_id)` unique per (date, mass). Created ad hoc by the secretary from the day view: pick date → pick mass → open roster.
+- **FR-A2b Gatherings = one meeting on one date** — a session with **no Mass** (`mass_id` NULL) and a `title` ("Monthly Meeting"). Same day view, same roster marking, same appeals — but recorded separately: it does not enter the monthly report, any member's serving total/rate/streak, the inactive-members list, or any push notification. One per date, enforced by a partial unique index (the `(date, mass)` index cannot police NULLs). No liturgy: the session screen hides the server panel and the liturgy APIs refuse a gathering id.
 - **FR-A3 Encoding attendance** — roster shows all active members with search; tap to mark present (insert `attendance_records`), tap again to remove. Free-text notes per session supported. Live counters: present count / total.
 - **FR-A4 Session locking** — any write path (encode, edit, appeal submit, appeal approve) calls `guardReportNotGenerated(session_date)`:
   - If a `reports` row exists for that month (status ≠ `rejected`), respond `409` with a clear message.
@@ -433,8 +434,12 @@ masses(id, name, default_sunday=false, is_active=true,
        sort_order int NOT NULL DEFAULT 0,      -- 027: catalog order = day-view order
        default_time time NULL)                -- 027: reminder only, no scheduling meaning
 
-attendance_sessions(id, session_date, mass_id+'masses, notes?,
-                    UNIQUE(session_date, mass_id))  -- 027 attendance_sessions_date_mass_key
+attendance_sessions(id, session_date, mass_id NULL+'masses, title NULL, notes?,
+                    UNIQUE(session_date, mass_id),              -- 027, Masses only: NULLs are distinct
+                    UNIQUE(session_date) WHERE mass_id IS NULL, -- 041: one gathering per date
+                    CHECK mass-or-gathering, never both/neither) -- 041
+   -- A gathering (mass_id NULL + title) is recorded but excluded from the monthly report, member
+   -- serving totals, the inactive-members list, and push notifications. The archive mirrors the shape.
 attendance_records(id, session_id+'sessions CASCADE, member_id+'members,
                    UNIQUE(session_id, member_id),
                    source text NOT NULL DEFAULT 'encoded',   -- 027: encoded|appeal|appeal_auto|import
@@ -594,6 +599,7 @@ Legend: 🔓 public · role list = `requireRole` allowlist.
 | Method | Path | Roles | Notes |
 |---|---|---|---|
 | GET | `/api/masses`, `/api/masses/[id]` | member, secretary, officer (read); admin, officer (write) | catalog. GET returns all rows incl. inactive, ordered by `sort_order` then name, with `default_time`/`is_active`. PATCH accepts `{direction:"up"\|"down"}` to swap a Mass with its neighbour in place. POST assigns the next `sort_order` so new Masses go to the end rather than sorting into the middle by name |
+| POST | `/api/attendance/session` | secretary (+admin reach) | `{session_date, mass_id?, title?, member_ids?}` — exactly one of `mass_id` (Mass session) or `title` (gathering: meeting/training, one per date, kept out of the report and all serving totals). 409 + existing id when already there |
 | POST | `/api/attendance/sessions/weekend` | admin, secretary | ATT-2 manual "create this weekend's sessions"; same code as the cron. Returns `sunday`, `created[]`, `skipped[]`, `reason` (locked month or no Sunday Masses are answers, not failures) |
 | GET/PATCH/DELETE | `/api/attendance/session/[id]` | mixed | GET returns roster, `locked`/`locked_reason`/`locked_message`, `is_future`/`future_message`, `month_label`/`month_start`/`month_end`. PATCH takes `notes` (notes-only path skips the future guard) or `member_ids` (replace roster, lock + future enforced). DELETE is **admin only** and requires the session to be empty; answers 409 with counts when it is not |
 | POST | `/api/attendance/session/[id]/records/set` | admin, secretary | ATT-5 idempotent per-member changes plus bulk `mark_all`/`clear_all` (active members only). Idempotent so a retry cannot double-count |

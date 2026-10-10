@@ -97,6 +97,9 @@ async function recentServerCounts(
     .from("v_attendance_all")
     .select("member_id, session_date")
     .in("member_id", memberIds)
+    // Only Masses: "recent servers" means recent *serving*, and a meeting is not serving. Without this
+    // someone who attended a committee meeting would sort as if they had been at the altar.
+    .not("mass_id", "is", null)
     // gte, not eq: eq would match only the cutoff day itself and silently drop the
     // other seven weeks of the window.
     .gte("session_date", cutoff)

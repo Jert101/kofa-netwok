@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/api/guard";
+import { selectSessionsResilient, sessionLabel } from "@/lib/attendance/guard-session-write";
 import { internalError, jsonOk } from "@/lib/api/response";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -29,29 +30,52 @@ export async function GET(req: NextRequest) {
   const sb = getSupabaseAdmin();
 
   try {
-    const { data: sessions, error } = await sb
-      .from("attendance_sessions")
-      .select("id, session_date, mass_id, masses(name, sort_order)")
-      .eq("session_date", date)
-      .order("created_at", { ascending: true });
+    // Resilient to a database that predates migration 041's `title` column: on such a database every
+    // session is a Mass, so the fallback loses nothing.
+    const { data: sessions, error } = await selectSessionsResilient<Record<string, unknown>[]>(
+      (columns) =>
+        sb
+          .from("attendance_sessions")
+          .select(columns)
+          .eq("session_date", date)
+          .order("created_at", { ascending: true }),
+      "id, session_date, mass_id, title, masses(name, sort_order)",
+      "id, session_date, mass_id, masses(name, sort_order)",
+    );
 
     if (error) throw new Error(error.message);
 
     const ids = (sessions ?? []).map((s) => s.id as string);
     const present = await presentCounts(sb, ids);
 
+    // Gatherings appear here alongside the Masses, labelled by their title. The secretary opened this
+    // screen to mark who came, and a meeting they created an hour ago has to be on it -- the exclusion
+    // from the *report* and from member totals is not an exclusion from the day's own list.
     const list = (sessions ?? []).map((s) => ({
       id: s.id,
       session_date: s.session_date,
-      mass_id: s.mass_id as string,
-      mass_name: (s.masses as { name?: string } | null)?.name ?? "Mass",
+      mass_id: s.mass_id as string | null,
+      title: (s.title as string | null) ?? null,
+      is_gathering: s.mass_id == null,
+      mass_name: sessionLabel({
+        mass_id: s.mass_id as string | null,
+        title: s.title as string | null,
+        massName: (s.masses as { name?: string } | null)?.name,
+      }),
       mass_order: ((s.masses as { sort_order?: number } | null)?.sort_order ?? 0) as number,
       present_count: present.get(s.id as string) ?? 0,
     }));
 
     // Mass order, not creation order. Two Masses created on different days should still
-    // appear on the day view the way the parish runs them.
-    list.sort((a, b) => a.mass_order - b.mass_order || a.mass_name.localeCompare(b.mass_name));
+    // appear on the day view the way the parish runs them. A gathering has no Mass and so no
+    // order, and `mass_order` is 0 for it -- which would sort it ahead of a 5:30 AM Mass. Gatherings
+    // therefore go last, after everything the parish actually runs as liturgy.
+    list.sort(
+      (a, b) =>
+        Number(a.is_gathering) - Number(b.is_gathering) ||
+        a.mass_order - b.mass_order ||
+        a.mass_name.localeCompare(b.mass_name),
+    );
 
     return jsonOk({ sessions: list });
   } catch (e) {

@@ -37,8 +37,23 @@ const PAGE_SIZE = 1000;
 async function tableToCsv(spec: TableSpec): Promise<string> {
   const sb = getSupabaseAdmin();
   const excluded = new Set(spec.exclude ?? []);
-  const columns = spec.columns.filter((c) => !excluded.has(c));
+  let columns = spec.columns.filter((c) => !excluded.has(c));
   const lines: string[] = [csvRow(columns)];
+
+  // A column the database does not have yet -- `title` on a database predating migration 041 -- must
+  // not cost the whole table. The message names the column (`column attendance_sessions.title does not
+  // exist`), so drop exactly that one and retry once; anything else still throws. The header then lacks
+  // the column, which a restore onto a newer database may refuse for rows that needed it -- but a
+  // backup missing one column is recoverable, and a backup missing the table is not.
+  const dropMissingColumn = (message: string): boolean => {
+    const match = /column (?:\S+\.)?(\w+) does not exist/.exec(message);
+    const missing = match?.[1] ? match[1].toLowerCase() : null;
+    if (!missing || !columns.some((c) => c.toLowerCase() === missing)) return false;
+    console.warn(`[backup] ${spec.file}: column "${match![1]}" is not in this database; exporting without it.`);
+    columns = columns.filter((c) => c.toLowerCase() !== missing);
+    lines[0] = csvRow(columns);
+    return true;
+  };
 
   let offset = 0;
   for (;;) {
@@ -47,7 +62,10 @@ async function tableToCsv(spec: TableSpec): Promise<string> {
       .select(columns.join(","))
       .range(offset, offset + PAGE_SIZE - 1);
 
-    if (error) throw new Error(`${spec.file}: ${error.message}`);
+    if (error) {
+      if (offset === 0 && dropMissingColumn(error.message)) continue;
+      throw new Error(`${spec.file}: ${error.message}`);
+    }
     if (!data || data.length === 0) break;
 
     for (const row of data) {

@@ -20,12 +20,16 @@ export async function GET(req: NextRequest) {
 
   const { start, end } = monthBoundsFromStart(monthStart);
 
+  // Gatherings are invisible here. This list is what becomes the report's columns, and the report is
+  // the Mass record -- a meeting must not be selectable as one, or "N of M Masses included as columns"
+  // stops meaning what it says. The day view still shows it; the report never does.
   const sb = getSupabaseAdmin();
   const { data: sessions, error } = await sb
     .from("attendance_sessions")
     .select("id, session_date, created_at, masses(name)")
     .gte("session_date", start)
     .lte("session_date", end)
+    .not("mass_id", "is", null)
     .order("session_date", { ascending: true })
     .order("created_at", { ascending: true });
 

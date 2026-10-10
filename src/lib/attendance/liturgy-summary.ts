@@ -71,6 +71,9 @@ export async function buildLiturgySummaryForRange(
   const sessionByDateMass = new Map<string, string>();
   const sessionIds: string[] = [];
   for (const s of sessions ?? []) {
+    // A gathering has no Mass and no servers, so it can never match a planned row. Skipped rather than
+    // keyed under "null", which would only add a dead map entry and a pointless extra read below.
+    if (s.mass_id == null) continue;
     const d = String(s.session_date);
     const mid = s.mass_id as string;
     sessionByDateMass.set(`${d}\0${mid}`, s.id as string);
