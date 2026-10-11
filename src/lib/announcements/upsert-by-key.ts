@@ -17,14 +17,22 @@ export type DedupeResult = {
  * The generators that use this are crons: the birthday job and the report run, both of which get
  * retried by a scheduler and both of which would otherwise post the same message twice in front of
  * the parish.
+ *
+ * `updated_at` is stripped from both payloads, not just the update. It is the "Edited" signal the
+ * feed prints, and a generated post is never edited by a human -- system rows refuse PATCH entirely.
+ * The birthday job once sent it on insert, so every greeting was born carrying an "· Edited" marker
+ * no human had earned. Stripping it here as well as at the call sites means no future generator can
+ * repeat that by passing one more field.
  */
 export async function insertOnceByDedupeKey(
   sb: SupabaseClient,
   row: { dedupe_key: string } & Record<string, unknown>,
 ): Promise<DedupeResult> {
+  const withoutMarker: Record<string, unknown> = { ...row };
+  delete withoutMarker.updated_at;
   const { data, error } = await sb
     .from("announcements")
-    .insert({ ...row, dedupe_key: row.dedupe_key })
+    .insert({ ...withoutMarker, dedupe_key: row.dedupe_key })
     .select("id")
     .maybeSingle();
 
@@ -35,13 +43,12 @@ export async function insertOnceByDedupeKey(
     throw new Error(error.message);
   }
 
-  // `updated_at` is stripped rather than overwritten: it is the "Edited" signal the feed prints, and
-  // a generated rerun is not an edit. The value is deliberately absent from the update.
-  const rest: Record<string, unknown> = { ...row };
-  delete rest.updated_at;
+  // `updated_at` is already absent (see above), so unlike before there is no
+  // second strip here: the insert and the rerun write the same field set, and
+  // a rerun can never mark the row edited.
   const { data: updated, error: updErr } = await sb
     .from("announcements")
-    .update(rest)
+    .update(withoutMarker)
     .eq("dedupe_key", row.dedupe_key)
     .select("id")
     .maybeSingle();

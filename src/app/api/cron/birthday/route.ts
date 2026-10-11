@@ -91,7 +91,9 @@ async function run(req: NextRequest): Promise<NextResponse> {
       body,
       created_by: "system",
       delete_at: deleteAt,
-      updated_at: new Date().toISOString(),
+      // No `updated_at`: it is the "Edited" signal the feed prints, and a
+      // generated greeting is never edited. It was sent here once, so every
+      // greeting was born carrying a marker no human had earned.
     });
     announcementId = result.id;
     inserted = result.inserted;
