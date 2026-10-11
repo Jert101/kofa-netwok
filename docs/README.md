@@ -377,7 +377,7 @@ Client redirects to ROLE_PATH[role]
 | **Inactive members** | Admin home | Zero attendance records in the **last 2 complete months** (live ∪ archive), excluding never-active members |
 | **Top servers** | Admin home | Top 20 by lifetime count (live + archive), ties alphabetical |
 | **Birthdays today** | Member home + system announcement | `date_of_birth` MM-DD matches today in church TZ |
-| **Your attendance** | Member home | Sunday rate %, Sundays attended N of M, weekend streak, Masses served all time, last served date — all Sunday-only so they agree with the secretary's report |
+| **Your attendance** | Member home | Sunday Mass rate %, attended/held Sunday Mass counts, weekend streak, Masses served all time, last served date — all Sunday-only so they agree with the secretary's report |
 | **By month / Recent Sundays** | Member home | Per-month attended/held (newest 4) and the last 10 Sundays with Present/Missed. Misses are shown on purpose: a history of only presences lets a missed Sunday look like it never happened |
 | **Appeal indicators** | Secretary calendar | `month-indicators` returns `pending_appeals` per day, drawn as a red dot for secretary and admin only — members and officers cannot act on an appeal, so showing it to them is noise |
 | **Report status strip** | Reports panel | Ready / Outside schedule / Pending approval / Already exists — driven by `can-generate` payload incl. `super_admin_configured` |

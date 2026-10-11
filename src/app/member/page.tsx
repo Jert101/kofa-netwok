@@ -105,10 +105,10 @@ export default function MemberHomePage() {
           ) : (
             <dl className="mt-2 grid gap-3 text-sm sm:grid-cols-2">
               <div>
-                <dt className="text-[var(--text-muted)]">Sundays attended</dt>
+                <dt className="text-[var(--text-muted)]">Sunday Mass attendance</dt>
                 <dd className="text-lg font-semibold">{data.attendance_rate}%</dd>
                 <dd className="text-xs text-[var(--text-muted)]">
-                  {data.sundays_attended} of {data.sundays_held} Sundays
+                  {data.sundays_attended} of {data.sundays_held} Sunday Masses · last 12 weeks
                 </dd>
               </div>
               <div>
@@ -155,7 +155,7 @@ export default function MemberHomePage() {
                   <li key={m.month} className="flex items-baseline justify-between gap-3 py-2">
                     <span>{m.label}</span>
                     <span className="text-[var(--text-muted)]">
-                      {m.attended} of {m.held} Sundays
+                      {m.attended} of {m.held} Sunday Masses
                     </span>
                   </li>
                 ))}
@@ -166,7 +166,7 @@ export default function MemberHomePage() {
           {data.recent.length > 0 ? (
             <section aria-labelledby="my-recent" className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
               <h2 id="my-recent" className="text-sm font-semibold text-[var(--brand)]">
-                Recent Sundays
+                Recent Sunday Masses
               </h2>
               <ul className="mt-2 divide-y divide-[var(--border)] text-sm">
                 {data.recent.map((r) => (
