@@ -126,7 +126,12 @@ export const SETTING_DEFINITIONS: readonly SettingDefinition[] = [
     "How many months of audit history to keep before the sweep removes it.", "Sweep (AUTH-8)",
     { min: 1, max: 120 }),
   ...ROLES.map((role) =>
-    def(`require_actor_name_${role}`, "boolean", role === "member" ? "false" : "true", "security",
+    // Members default to required: the member PIN is shared by the whole roll,
+    // so a name is the only thing that tells one member's record from
+    // another's, and an unnamed member sees nothing personal anyway. Flipping
+    // this off is still possible per role, and the member layout gate honours
+    // the setting rather than hard-coding the requirement.
+    def(`require_actor_name_${role}`, "boolean", "true", "security",
       `Ask who is using the device before letting them in as ${role}.`,
       "Auth (AUTH-4)"),
   ),

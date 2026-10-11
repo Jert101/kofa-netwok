@@ -68,10 +68,11 @@ describe("the registry", () => {
     }
   });
 
-  it("defaults the super admin to requiring an actor name and a member to not", () => {
-    // Staff sign in on a shared device; a member signs in on their own phone.
+  it("defaults every role, members included, to requiring an actor name", () => {
+    // The member PIN is shared by the whole roll, so a name is the only thing
+    // standing between one member's record and another's.
     expect(SETTINGS_BY_KEY.get("require_actor_name_super_admin")?.default).toBe("true");
-    expect(SETTINGS_BY_KEY.get("require_actor_name_member")?.default).toBe("false");
+    expect(SETTINGS_BY_KEY.get("require_actor_name_member")?.default).toBe("true");
   });
 
   it("has a default timezone of Asia/Manila", () => {

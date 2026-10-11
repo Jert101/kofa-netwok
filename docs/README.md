@@ -149,6 +149,18 @@ POST /api/auth/login { pin }
 Client redirects to ROLE_PATH[role]
 ```
 
+- **Actor name (AUTH-4, "Who's using this device?").** The login response carries
+  `actorRequired`, read from the per-role `require_actor_name_*` setting (all roles
+  default to required). When true the sign-in form opens the name picker before
+  landing. The name is self-declared and is never a security boundary on its own.
+- **Members cannot proceed unnamed.** The member PIN is shared by the whole roll,
+  so a member session without a declared name has no record to show. For members
+  the picker is locked (no dismiss, no skip; signing out is the way out), and the
+  member layout renders the picker instead of the shell when the setting requires
+  it — the dialog alone could be bypassed by opening `/member` directly. The gate
+  only ever applies to the member's own role, never to an admin browsing member
+  pages, and flipping `require_actor_name_member` off lifts it everywhere at once.
+
 ### 4.3 Session & Middleware
 
 - Cookie name: `kofa_session`. Verified two ways:
@@ -365,6 +377,8 @@ Client redirects to ROLE_PATH[role]
 | **Inactive members** | Admin home | Zero attendance records in the **last 2 complete months** (live ∪ archive), excluding never-active members |
 | **Top servers** | Admin home | Top 20 by lifetime count (live + archive), ties alphabetical |
 | **Birthdays today** | Member home + system announcement | `date_of_birth` MM-DD matches today in church TZ |
+| **Your attendance** | Member home | Sunday rate %, Sundays attended N of M, weekend streak, Masses served all time, last served date — all Sunday-only so they agree with the secretary's report |
+| **By month / Recent Sundays** | Member home | Per-month attended/held (newest 4) and the last 10 Sundays with Present/Missed. Misses are shown on purpose: a history of only presences lets a missed Sunday look like it never happened |
 | **Appeal indicators** | Secretary calendar | `month-indicators` returns `pending_appeals` per day, drawn as a red dot for secretary and admin only — members and officers cannot act on an appeal, so showing it to them is noise |
 | **Report status strip** | Reports panel | Ready / Outside schedule / Pending approval / Already exists — driven by `can-generate` payload incl. `super_admin_configured` |
 | **Payments summary** | Treasurer home | Collected this month, outstanding per structure |

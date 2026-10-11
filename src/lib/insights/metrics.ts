@@ -185,6 +185,72 @@ export function totalAttendance(sessions: readonly Session[]): number {
   return sessionsHeld(sessions).reduce((n, s) => n + s.attendanceCount, 0);
 }
 
+/** One calendar month of Sunday attendance. */
+export type MonthlyBucket = {
+  /** `YYYY-MM` */
+  month: string;
+  attended: number;
+  held: number;
+};
+
+/**
+ * Sunday sessions grouped by calendar month, newest month first.
+ *
+ * Sundays only, like `attendanceRate` with `sundaysOnly`: the member's own
+ * numbers must agree with the secretary's report, and two different rates
+ * for one member is worse than one honest one. `limit` bounds the rows, not
+ * the window -- the caller decides how far back the history reaches.
+ */
+export function monthlySundayBuckets(
+  sessions: readonly Session[],
+  attendedSessionIds: ReadonlySet<string>,
+  limit = 4,
+): MonthlyBucket[] {
+  const byMonth = new Map<string, { attended: number; held: number }>();
+  for (const s of sessionsHeld(sessions)) {
+    if (!isSunday(s.date)) continue;
+    const month = s.date.slice(0, 7);
+    const bucket = byMonth.get(month) ?? { attended: 0, held: 0 };
+    bucket.held += 1;
+    if (attendedSessionIds.has(s.id)) bucket.attended += 1;
+    byMonth.set(month, bucket);
+  }
+  return [...byMonth.entries()]
+    .sort((a, b) => (a[0] < b[0] ? 1 : -1))
+    .slice(0, limit)
+    .map(([month, counts]) => ({ month, ...counts }));
+}
+
+/** One recent Sunday, with whether this member was there. */
+export type RecentSessionRow = {
+  /** `YYYY-MM-DD` */
+  date: string;
+  massName: string;
+  attended: boolean;
+};
+
+/**
+ * The most recent Sunday sessions, newest first, each marked attended or
+ * missed. Misses are included on purpose: a history of only presences lets a
+ * member believe a missed Sunday never happened, and the point of this list
+ * is checking themselves honestly.
+ */
+export function recentSundayRows(
+  sessions: readonly Session[],
+  attendedSessionIds: ReadonlySet<string>,
+  limit = 10,
+): RecentSessionRow[] {
+  return sessionsHeld(sessions)
+    .filter((s) => isSunday(s.date))
+    .sort((a, b) => (a.date < b.date ? 1 : -1))
+    .slice(0, limit)
+    .map((s) => ({
+      date: s.date,
+      massName: s.massName ?? "Mass",
+      attended: attendedSessionIds.has(s.id),
+    }));
+}
+
 function round1(value: number): number {
   return Math.round(value * 10) / 10;
 }

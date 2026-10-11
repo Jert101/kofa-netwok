@@ -14,6 +14,8 @@ import {
   isSessionHeld,
   isSunday,
   isWeekend,
+  monthlySundayBuckets,
+  recentSundayRows,
   recentWeekendKeys,
   sessionsHeld,
   totalAttendance,
@@ -552,5 +554,71 @@ describe("describeTurnout", () => {
     ]);
     expect(summary).toContain("5:30 AM");
     expect(summary).toContain("42");
+  });
+});
+
+// --------------------------------------------------------------------------------------
+// Member self-service: monthly buckets and recent rows
+// --------------------------------------------------------------------------------------
+
+describe("monthlySundayBuckets", () => {
+  // 2026-10-04 and 2026-09-27 are Sundays; 2026-10-03 is the Saturday before.
+  const sessions = [
+    session("a", "2026-10-04", 30),
+    session("b", "2026-10-11", 28),
+    session("c", "2026-09-27", 25),
+    session("sat", "2026-10-03", 20),
+    session("empty", "2026-10-18", 0),
+  ];
+
+  it("groups Sunday attendance by month, newest first", () => {
+    const buckets = monthlySundayBuckets(sessions, new Set(["a", "c"]));
+    expect(buckets).toEqual([
+      { month: "2026-10", attended: 1, held: 2 },
+      { month: "2026-09", attended: 1, held: 1 },
+    ]);
+  });
+
+  it("ignores Saturdays and unheld sessions, like the rate does", () => {
+    // The Saturday and the zero-attendance Sunday must not move any number,
+    // or the buckets would disagree with the headline rate on the same page.
+    const buckets = monthlySundayBuckets(sessions, new Set(["a", "b", "c", "sat", "empty"]));
+    expect(buckets).toEqual([
+      { month: "2026-10", attended: 2, held: 2 },
+      { month: "2026-09", attended: 1, held: 1 },
+    ]);
+  });
+
+  it("is empty when nothing was held", () => {
+    expect(monthlySundayBuckets([], new Set())).toEqual([]);
+  });
+});
+
+describe("recentSundayRows", () => {
+  const sessions = [
+    session("a", "2026-10-04", 30, "5:30 AM"),
+    session("b", "2026-10-11", 28, null),
+    session("c", "2026-09-27", 25, "7:00 AM"),
+  ];
+
+  it("lists the newest Sundays first with attended or missed", () => {
+    const rows = recentSundayRows(sessions, new Set(["a", "c"]));
+    expect(rows).toEqual([
+      { date: "2026-10-11", massName: "Mass", attended: false },
+      { date: "2026-10-04", massName: "5:30 AM", attended: true },
+      { date: "2026-09-27", massName: "7:00 AM", attended: true },
+    ]);
+  });
+
+  it("includes misses on purpose", () => {
+    // A history of only presences lets a member believe a missed Sunday never
+    // happened. The missed row is the point of the list.
+    const rows = recentSundayRows(sessions, new Set());
+    expect(rows.every((r) => !r.attended)).toBe(true);
+    expect(rows).toHaveLength(3);
+  });
+
+  it("respects the limit", () => {
+    expect(recentSundayRows(sessions, new Set(["a"]), 2)).toHaveLength(2);
   });
 });

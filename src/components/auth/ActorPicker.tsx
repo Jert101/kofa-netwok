@@ -22,8 +22,15 @@ type ActorDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   actor: ActorOption | null;
-  /** Members may skip; staff get "Not now" instead. */
+  /** Members may skip; staff get "Not now" instead. Ignored when `locked`. */
   skippable: boolean;
+  /**
+   * No way out except picking a name or signing out. For the member login
+   * gate: the member PIN is shared, so an unnamed session has no record to
+   * show and no attendance to appeal as. Dismissals (X, Escape, outside
+   * click) are swallowed; only a successful pick closes the dialog.
+   */
+  locked?: boolean;
   onSelected?: (actor: ActorOption | null) => void;
 };
 
@@ -36,11 +43,13 @@ export function ActorDialog({
   onOpenChange,
   actor,
   skippable,
+  locked = false,
   onSelected,
 }: ActorDialogProps) {
   const [query, setQuery] = useState("");
   const [options, setOptions] = useState<ActorOption[]>([]);
   const [saving, setSaving] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
@@ -90,13 +99,43 @@ export function ActorDialog({
     }
   }
 
+  // The way out of a locked dialog. Signing out is always allowed, because a
+  // gate with no exit turns a wrong turn -- a member who tapped the wrong PIN
+  // role, a name missing from the roll -- into a dead end. Lands on the public
+  // page, mirroring the sidebar's log-out button.
+  async function signOut() {
+    setSigningOut(true);
+    setError(null);
+    try {
+      await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
+      router.replace("/");
+      router.refresh();
+    } catch {
+      setError("Can't reach the server.");
+    } finally {
+      setSigningOut(false);
+    }
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+    // In locked mode user dismissals are swallowed: X, Escape and outside
+    // clicks call this with false and the dialog stays open. Only a
+    // successful pick calls the real `onOpenChange(false)` above.
+    <Dialog open={open} onOpenChange={locked ? () => {} : onOpenChange}>
+      <DialogContent
+        className="sm:max-w-md"
+        // Radix closes on Escape even when onOpenChange is swallowed, unless
+        // the event is stopped. Without this the gate is advisory.
+        onEscapeKeyDown={locked ? (e) => e.preventDefault() : undefined}
+        // Same for an outside click.
+        onPointerDownOutside={locked ? (e) => e.preventDefault() : undefined}
+      >
         <DialogHeader>
           <DialogTitle>Who&apos;s using this device?</DialogTitle>
           <DialogDescription>
-            This is only a note for the audit log. It does not sign you in as that person.
+            {locked
+              ? "Pick your name to continue. The member PIN is shared, so without a name there is no attendance record to show you."
+              : "This is only a note for the audit log. It does not sign you in as that person."}
           </DialogDescription>
         </DialogHeader>
 
@@ -136,9 +175,14 @@ export function ActorDialog({
         {/* Both branches need a way out. When the name is skippable the button submits "nobody"; when it
             is required it only steps aside, because the session is already valid and the caller has to
             decide where to send the user next. Leaving a dialog with no exit at all is what turned a
-            wrong PIN into a dead end. */}
+            wrong PIN into a dead end. A locked dialog instead offers sign-out: picking nobody is not
+            an option, but leaving is. */}
         <DialogFooter>
-          {skippable ? (
+          {locked ? (
+            <Button variant="ghost" disabled={saving || signingOut} onClick={() => void signOut()}>
+              {signingOut ? "Signing out…" : "Sign out"}
+            </Button>
+          ) : skippable ? (
             <Button variant="ghost" disabled={saving} onClick={() => void choose("")}>
               Skip
             </Button>

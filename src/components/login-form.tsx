@@ -97,8 +97,10 @@ export function LoginForm({
 
       const { role, actorRequired } = body.data
 
-      // Staff roles answer "who is using this device" first; members may skip,
-      // and skipping simply leaves the session anonymous as it is today.
+      // Everybody answers "who is using this device" first when the setting
+      // requires it. Members are locked in: the member PIN is shared by the
+      // whole roll, so an unnamed member session has no record to show and no
+      // attendance to appeal as. Staff keep the dismiss escape.
       if (actorRequired) {
         setActorStep({ role, required: true })
         return
@@ -118,6 +120,10 @@ export function LoginForm({
         open={actorStep !== null}
         onOpenChange={(open) => {
           if (open) return
+          // Locked members have no dismiss escape: closing without a name is
+          // ignored and the dialog stays up. Everyone else keeps the old
+          // behaviour below.
+          if (actorStep?.role === "member" && actorStep.required) return
           // Dismissing used to be refused outright when the actor name is required, which left anyone
           // who changed their mind with no way out of the dialog. The session is already valid at this
           // point, and the sidebar offers this same picker as skippable, so leaving is safe: send them on
@@ -128,6 +134,7 @@ export function LoginForm({
         }}
         actor={null}
         skippable={!actorStep?.required}
+        locked={actorStep?.role === "member" && actorStep.required}
         onSelected={() => {
           const role = actorStep?.role
           setActorStep(null)

@@ -24,14 +24,16 @@ export const REQUIRE_ACTOR_KEY: Record<Role, SettingKey> = {
   super_admin: "require_actor_name_super_admin",
 };
 
-/** Staff roles get the "Who's using this device?" step by default. */
+/** Every role gets the "Who's using this device?" step by default. Members most of all: the member
+ * PIN is shared by the whole roll, so without a name the session is anonymous and the home page has
+ * nothing personal to show. */
 export const ACTOR_REQUIRED_BY_DEFAULT: Record<Role, boolean> = {
   admin: true,
   secretary: true,
   officer: true,
   treasurer: true,
   super_admin: true,
-  member: false,
+  member: true,
 };
 
 function parseValidAfter(value: string | undefined): number | null {
@@ -78,4 +80,21 @@ export function isActorRequired(
   const raw = settings[REQUIRE_ACTOR_KEY[role]];
   if (raw === undefined) return ACTOR_REQUIRED_BY_DEFAULT[role];
   return raw === "true";
+}
+
+/**
+ * Whether a member session with no declared name must stop at the picker.
+ *
+ * Only the member's own role is ever gated: admins browsing member pages
+ * open every other role's sections by design, and an actorless admin is not
+ * a member who skipped naming themselves. The setting is honoured rather
+ * than hard-coded, so turning `require_actor_name_member` off lifts the gate
+ * everywhere at once -- login dialog and layout agree by construction.
+ */
+export function isMemberActorGateOpen(
+  sessionRole: Role,
+  actorId: string | null | undefined,
+  actorRequiredForMember: boolean,
+): boolean {
+  return sessionRole === "member" && actorRequiredForMember && !actorId;
 }

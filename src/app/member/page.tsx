@@ -11,6 +11,12 @@ type MemberDashboard = {
   identity_declared: boolean;
   full_name: string | null;
   attendance_rate: number | null;
+  sundays_attended: number;
+  sundays_held: number;
+  lifetime_served: number;
+  last_served_date: string | null;
+  monthly: Array<{ month: string; label: string; attended: number; held: number }>;
+  recent: Array<{ date: string; massName: string; attended: boolean }>;
   weekend_streak: number | null;
   birthdays: Array<{ memberId: string; fullName: string; date: string; isToday: boolean }>;
   empty_personal: boolean;
@@ -101,12 +107,23 @@ export default function MemberHomePage() {
               <div>
                 <dt className="text-[var(--text-muted)]">Sundays attended</dt>
                 <dd className="text-lg font-semibold">{data.attendance_rate}%</dd>
+                <dd className="text-xs text-[var(--text-muted)]">
+                  {data.sundays_attended} of {data.sundays_held} Sundays
+                </dd>
               </div>
               <div>
                 <dt className="text-[var(--text-muted)]">Weekend streak</dt>
                 <dd className="text-lg font-semibold">
                   {data.weekend_streak} {data.weekend_streak === 1 ? "weekend" : "weekends"}
                 </dd>
+              </div>
+              <div>
+                <dt className="text-[var(--text-muted)]">Masses served, all time</dt>
+                <dd className="text-lg font-semibold">{data.lifetime_served}</dd>
+              </div>
+              <div>
+                <dt className="text-[var(--text-muted)]">Last served</dt>
+                <dd className="text-lg font-semibold">{data.last_served_date ?? "—"}</dd>
               </div>
             </dl>
           )}
@@ -121,6 +138,58 @@ export default function MemberHomePage() {
 
       <AssignedServersSection memberBasePath="/member/day" />
       <AttendanceCalendar role="member" />
+
+      {/* The month-by-month and Mass-by-Mass view of the same record above.
+          Rendered only once the member has any attendance: an empty table with
+          zeros would read as an accusation, and the section above already
+          covers the new-member case. */}
+      {data?.identity_declared && !data.empty_personal && data.attendance_rate !== null ? (
+        <>
+          {data.monthly.length > 0 ? (
+            <section aria-labelledby="my-months" className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+              <h2 id="my-months" className="text-sm font-semibold text-[var(--brand)]">
+                By month
+              </h2>
+              <ul className="mt-2 divide-y divide-[var(--border)] text-sm">
+                {data.monthly.map((m) => (
+                  <li key={m.month} className="flex items-baseline justify-between gap-3 py-2">
+                    <span>{m.label}</span>
+                    <span className="text-[var(--text-muted)]">
+                      {m.attended} of {m.held} Sundays
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {data.recent.length > 0 ? (
+            <section aria-labelledby="my-recent" className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+              <h2 id="my-recent" className="text-sm font-semibold text-[var(--brand)]">
+                Recent Sundays
+              </h2>
+              <ul className="mt-2 divide-y divide-[var(--border)] text-sm">
+                {data.recent.map((r) => (
+                  <li key={`${r.date}-${r.massName}`} className="flex items-baseline justify-between gap-3 py-2">
+                    <span>
+                      {r.date} <span className="text-[var(--text-muted)]">· {r.massName}</span>
+                    </span>
+                    <span
+                      className={
+                        r.attended
+                          ? "font-medium text-[var(--success-text)]"
+                          : "text-[var(--text-muted)]"
+                      }
+                    >
+                      {r.attended ? "Present" : "Missed"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+        </>
+      ) : null}
     </div>
   );
 }

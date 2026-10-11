@@ -3,6 +3,7 @@ import {
   ACTOR_REQUIRED_BY_DEFAULT,
   CLOCK_SKEW_TOLERANCE_MS,
   isActorRequired,
+  isMemberActorGateOpen,
   isSessionValid,
   SESSIONS_VALID_AFTER_KEY,
 } from "./session-valid";
@@ -65,18 +66,43 @@ describe("session validity keys", () => {
 });
 
 describe("isActorRequired", () => {
-  it("defaults staff roles to required and members to optional", () => {
+  it("defaults every role, members included, to required", () => {
     expect(isActorRequired("admin", {})).toBe(true);
     expect(isActorRequired("secretary", {})).toBe(true);
     expect(isActorRequired("officer", {})).toBe(true);
     expect(isActorRequired("treasurer", {})).toBe(true);
     expect(isActorRequired("super_admin", {})).toBe(true);
-    expect(isActorRequired("member", {})).toBe(false);
-    expect(ACTOR_REQUIRED_BY_DEFAULT.member).toBe(false);
+    expect(isActorRequired("member", {})).toBe(true);
+    expect(ACTOR_REQUIRED_BY_DEFAULT.member).toBe(true);
   });
 
   it("lets an explicit setting override the default", () => {
     expect(isActorRequired("member", { require_actor_name_member: "true" })).toBe(true);
+    expect(isActorRequired("member", { require_actor_name_member: "false" })).toBe(false);
     expect(isActorRequired("admin", { require_actor_name_admin: "false" })).toBe(false);
+  });
+});
+
+describe("isMemberActorGateOpen", () => {
+  it("gates an unnamed member session when the setting requires it", () => {
+    expect(isMemberActorGateOpen("member", null, true)).toBe(true);
+    expect(isMemberActorGateOpen("member", undefined, true)).toBe(true);
+    expect(isMemberActorGateOpen("member", "", true)).toBe(true);
+  });
+
+  it("lets a named member through", () => {
+    expect(isMemberActorGateOpen("member", "some-id", true)).toBe(false);
+  });
+
+  it("never gates other roles, even actorless ones", () => {
+    // Admins open every other role's pages by design; an actorless admin
+    // browsing /member is not a member who skipped the picker.
+    for (const role of ["admin", "secretary", "officer", "treasurer", "super_admin"] as const) {
+      expect(isMemberActorGateOpen(role, null, true)).toBe(false);
+    }
+  });
+
+  it("lifts everywhere when the setting is off", () => {
+    expect(isMemberActorGateOpen("member", null, false)).toBe(false);
   });
 });
