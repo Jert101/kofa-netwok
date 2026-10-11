@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { ExternalLink, Landmark, Plus, Trash2, UserRound, Users } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { CommitInput } from "@/components/church/CommitInput";
+import { ParishPhoto } from "@/components/church/ParishPhoto";
 import { PhotoField } from "@/components/church/PhotoField";
 import { MinistryRows } from "@/components/church/MinistryRows";
 import {
-  initialsOf,
   type CouncilMember,
   type Milestone,
   type Patron,
@@ -299,14 +300,75 @@ export function ChurchEditor() {
         </p>
       ) : null}
 
-      <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
-        <h2 className="text-sm font-medium">The parish</h2>
-        <p className="mt-1 text-xs text-[var(--text-muted)]">
-          Shown at the top of the public landing page. Anything left blank simply does not appear — the
-          page never shows an empty heading.
-        </p>
+      <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
+        <div className="border-b border-[var(--border)] bg-[var(--surface-2)] px-4 py-3">
+          <h2 className="flex items-center gap-2 text-sm font-semibold">
+            <Landmark aria-hidden className="size-4 text-[var(--brand-text)]" />
+            The parish
+          </h2>
+          <p className="mt-1 text-xs text-[var(--text-muted)]">
+            Shown at the top of the public landing page. Anything left blank simply does not appear — the
+            page never shows an empty heading.
+          </p>
+        </div>
 
-        <div className="mt-4 space-y-3">
+        <div className="space-y-5 p-4">
+          <div>
+            <h3 className="flex items-center gap-2 text-sm font-medium">
+              <UserRound aria-hidden className="size-4 text-[var(--text-muted)]" />
+              Parish priest
+            </h3>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              Free text — the parish priest does not need an account here. Clear the name if the post is
+              vacant.
+            </p>
+            {/* Photograph beside the two fields it illustrates, rather than below them: name, position
+                and face are one decision, and the save below covers all three at once. */}
+            {/* Uploads as soon as it is chosen rather than waiting for the Save below, so a
+                photograph is never lost because the name was not filled in. */}
+            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-start">
+              <PhotoField
+                photoUrl={priestPhoto}
+                personName={priest}
+                scope="priest"
+                size="lg"
+                onUploaded={(url) => {
+                  setPriestPhoto(url);
+                  setNotice("Photograph uploaded.");
+                }}
+                onRemoved={() => void patchPriestPhoto(null)}
+              />
+              <div className="min-w-0 flex-1 space-y-3">
+                <label className="block">
+                  <span className="text-sm font-medium">Name</span>
+                  <input
+                    value={priest}
+                    onChange={(e) => setPriest(e.target.value)}
+                    maxLength={160}
+                    placeholder="e.g. Fr. John Santos"
+                    aria-label="Parish priest name"
+                    className="mt-1 min-h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-base"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-sm font-medium">Position</span>
+                  <input
+                    value={priestRole}
+                    onChange={(e) => setPriestRole(e.target.value)}
+                    maxLength={120}
+                    placeholder="e.g. Parish Priest"
+                    aria-label="The priest's position in the parish"
+                    className="mt-1 min-h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-base"
+                  />
+                  <span className="mt-1 block text-xs text-[var(--text-muted)]">
+                    Shown under the name on the landing page — administrator, monsignor and parish priest
+                    are not the same words, and the parish knows which.
+                  </span>
+                </label>
+              </div>
+            </div>
+          </div>
+
           <label className="block">
             <span className="text-sm font-medium">Headline</span>
             <input
@@ -320,51 +382,6 @@ export function ChurchEditor() {
               The big line. Leave blank to use the app&apos;s own description.
             </span>
           </label>
-
-          <div>
-            <span className="text-sm font-medium">Parish priest</span>
-            <input
-              value={priest}
-              onChange={(e) => setPriest(e.target.value)}
-              maxLength={160}
-              placeholder="e.g. Fr. John Santos"
-              aria-label="Parish priest"
-              className="mt-1 min-h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-base"
-            />
-            <span className="mt-1 block text-xs text-[var(--text-muted)]">
-              Free text — the parish priest does not need an account here. Clear it if the post is vacant.
-            </span>
-            {/* The line under the name on the landing page. Added with migration 040 because the
-                supplied design shows it and there was nowhere to put it. Optional: blank hides the
-                line rather than printing an empty one. */}
-            <input
-              value={priestRole}
-              onChange={(e) => setPriestRole(e.target.value)}
-              maxLength={120}
-              placeholder="e.g. Parish Priest"
-              aria-label="The priest's role in the parish"
-              className="mt-2 min-h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-base"
-            />
-            <span className="mt-1 block text-xs text-[var(--text-muted)]">
-              Shown under the name on the landing page. Free text — an administrator or a monsignor are
-              not the same words, and the parish knows which.
-            </span>
-            {/* Uploads as soon as it is chosen rather than waiting for the Save below, so a photograph
-                is never lost because the name was not filled in. */}
-            <div className="mt-3">
-              <PhotoField
-                photoUrl={priestPhoto}
-                personName={priest}
-                scope="priest"
-                size="lg"
-                onUploaded={(url) => {
-                  setPriestPhoto(url);
-                  setNotice("Photograph uploaded.");
-                }}
-                onRemoved={() => void patchPriestPhoto(null)}
-              />
-            </div>
-          </div>
 
           <label className="block">
             <span className="text-sm font-medium">About the ministry</span>
@@ -381,18 +398,37 @@ export function ChurchEditor() {
             </span>
           </label>
 
-          <Button onClick={() => void saveProfile()} disabled={profileBusy}>
-            {profileBusy ? "Saving…" : "Save the parish"}
-          </Button>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button onClick={() => void saveProfile()} disabled={profileBusy}>
+              {profileBusy ? "Saving…" : "Save the parish"}
+            </Button>
+            <a
+              href="/"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 text-sm font-medium text-[var(--brand-text)] hover:underline"
+            >
+              <ExternalLink aria-hidden className="size-4" />
+              View the landing page
+            </a>
+          </div>
         </div>
       </section>
 
-      <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+      <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] bg-[var(--surface-2)] px-4 py-3">
           <div>
-            <h2 className="text-sm font-medium">Council</h2>
+            <h2 className="flex items-center gap-2 text-sm font-semibold">
+              <Users aria-hidden className="size-4 text-[var(--brand-text)]" />
+              Council
+              {council.length > 0 ? (
+                <span className="rounded-full bg-[var(--brand-soft)] px-2 py-0.5 text-xs font-medium text-[var(--brand-text)]">
+                  {council.length}
+                </span>
+              ) : null}
+            </h2>
             <p className="mt-1 text-xs text-[var(--text-muted)]">
-              Each row saves as you leave it. Names are published to anyone who opens the landing page.
+              Each field saves when you leave it. Names are published to anyone who opens the landing page.
             </p>
           </div>
           <Button
@@ -409,6 +445,8 @@ export function ChurchEditor() {
             Add a member
           </Button>
         </div>
+
+        <div className="p-4">
 
         {addingNew ? (
           <div className="mt-3 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3">
@@ -462,29 +500,29 @@ export function ChurchEditor() {
         ) : (
           <ul className="mt-3 space-y-3">
             {council.map((m) => (
-              <li key={m.id} className="rounded-xl border border-[var(--border)] p-3">
+              <li key={m.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3">
                 <div className="flex items-center gap-3">
+                  {/* The face as the landing page will show it: photograph when there is one, initials
+                      otherwise. It used to be initials always, so a member with a photograph looked
+                      faceless here while smiling on the public page. */}
                   <span
                     aria-hidden
-                    className="grid size-9 shrink-0 place-items-center rounded-full bg-[var(--brand-soft)] text-xs font-semibold text-[var(--brand-text)]"
+                    className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-full bg-[var(--brand-soft)] text-sm font-semibold text-[var(--brand-text)]"
                   >
-                    {m.name.trim() ? initialsOf(m.name) : "?"}
+                    <ParishPhoto url={m.photo_url ?? null} name={m.name} />
                   </span>
-                  <input
+                  <CommitInput
                     value={m.name}
-                    onChange={(e) =>
-                      setCouncil((prev) => prev.map((x) => (x.id === m.id ? { ...x, name: e.target.value } : x)))
-                    }
-                    onBlur={(e) => {
-                      const next = e.target.value.trim();
-                      // Saving an empty name is refused by the API, so do not send it. An untouched
-                      // field must not fire a change either, or leaving the page nags.
-                      if (next === m.name.trim() || next.length === 0) return;
+                    normalize={(v) => v.trim()}
+                    onCommit={(next) => {
+                      // A blank name is refused by the API, so it is never sent. Untouched blurs never
+                      // reach here: the commit only fires on a real difference from the saved value.
+                      if (next.length === 0) return;
                       void patchMember(m.id, { name: next });
                     }}
                     placeholder="Name"
                     aria-label={`Name of ${m.name || "this council member"}`}
-                    className="min-h-11 min-w-0 flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-base"
+                    className="min-h-11 min-w-0 flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-base font-medium"
                   />
                   <Button
                     size="sm"
@@ -497,52 +535,49 @@ export function ChurchEditor() {
                   </Button>
                 </div>
 
-                <div className="flex items-center gap-3">
-              <PhotoField
-                photoUrl={m.photo_url ?? null}
-                personName={m.name}
-                scope="council"
-                memberId={m.id}
-                onUploaded={(url) => {
-                  setCouncil((prev) => prev.map((x) => (x.id === m.id ? { ...x, photo_url: url } : x)));
-                  setNotice("Photograph uploaded.");
-                }}
-                onRemoved={() => void patchMember(m.id, { photo_url: "" })}
-              />
-            </div>
+                <div className="mt-3">
+                  <PhotoField
+                    photoUrl={m.photo_url ?? null}
+                    personName={m.name}
+                    scope="council"
+                    memberId={m.id}
+                    onUploaded={(url) => {
+                      setCouncil((prev) => prev.map((x) => (x.id === m.id ? { ...x, photo_url: url } : x)));
+                      setNotice("Photograph uploaded.");
+                    }}
+                    onRemoved={() => void patchMember(m.id, { photo_url: "" })}
+                  />
+                </div>
 
-            <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                  <input
-                    value={m.office ?? ""}
-                    onChange={(e) =>
-                      setCouncil((prev) => prev.map((x) => (x.id === m.id ? { ...x, office: e.target.value } : x)))
-                    }
-                    onBlur={(e) => {
-                      if ((e.target.value ?? "") === (m.office ?? "")) return;
-                      void patchMember(m.id, { office: e.target.value });
-                    }}
-                    placeholder="Office, e.g. Council President"
-                    aria-label={`Office of ${m.name || "this council member"}`}
-                    className="min-h-11 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-sm"
-                  />
-                  <input
-                    value={m.bio ?? ""}
-                    onChange={(e) =>
-                      setCouncil((prev) => prev.map((x) => (x.id === m.id ? { ...x, bio: e.target.value } : x)))
-                    }
-                    onBlur={(e) => {
-                      if ((e.target.value ?? "") === (m.bio ?? "")) return;
-                      void patchMember(m.id, { bio: e.target.value });
-                    }}
-                    placeholder="One line about them (optional)"
-                    aria-label={`Note about ${m.name || "this council member"}`}
-                    className="min-h-11 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-sm"
-                  />
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="mb-1 block text-xs text-[var(--text-muted)]">Position</span>
+                    <CommitInput
+                      value={m.office ?? ""}
+                      normalize={(v) => v.trim()}
+                      onCommit={(next) => void patchMember(m.id, { office: next })}
+                      placeholder="Office, e.g. Council President"
+                      aria-label={`Position of ${m.name || "this council member"}`}
+                      className="min-h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-sm"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-xs text-[var(--text-muted)]">Note</span>
+                    <CommitInput
+                      value={m.bio ?? ""}
+                      normalize={(v) => v.trim()}
+                      onCommit={(next) => void patchMember(m.id, { bio: next })}
+                      placeholder="One line about them (optional)"
+                      aria-label={`Note about ${m.name || "this council member"}`}
+                      className="min-h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-sm"
+                    />
+                  </label>
                 </div>
               </li>
             ))}
           </ul>
         )}
+        </div>
       </section>
 
       {/*
@@ -578,16 +613,27 @@ export function ChurchEditor() {
           },
         ] as const
       ).map(({ kind, rows, set, heading, hint }) => (
-        <section key={kind} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
-          <h2 className="text-sm font-medium">{heading}</h2>
-          <p className="mt-1 text-xs text-[var(--text-muted)]">{hint}</p>
-          <MinistryRows
-            kind={kind}
-            rows={rows as Array<{ id: string } & Record<string, unknown>>}
-            onChange={(next) => set(next as never)}
-            onError={setError}
-            onNotice={setNotice}
-          />
+        <section key={kind} className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
+          <div className="border-b border-[var(--border)] bg-[var(--surface-2)] px-4 py-3">
+            <h2 className="text-sm font-semibold">
+              {heading}
+              {rows.length > 0 ? (
+                <span className="ml-2 rounded-full bg-[var(--brand-soft)] px-2 py-0.5 text-xs font-medium text-[var(--brand-text)]">
+                  {rows.length}
+                </span>
+              ) : null}
+            </h2>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">{hint}</p>
+          </div>
+          <div className="p-4 pt-3">
+            <MinistryRows
+              kind={kind}
+              rows={rows as Array<{ id: string } & Record<string, unknown>>}
+              onChange={(next) => set(next as never)}
+              onError={setError}
+              onNotice={setNotice}
+            />
+          </div>
         </section>
       ))}
     </div>

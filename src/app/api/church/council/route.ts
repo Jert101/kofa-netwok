@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
       bio: parsed.data.bio || null,
       sort_order: parsed.data.sort_order ?? ((last?.sort_order as number | undefined) ?? -1) + 1,
     })
-    .select("id, name, office, bio, sort_order, is_active")
+    .select("id, name, office, bio, photo_url, sort_order, is_active")
     .single();
 
   if (error) {

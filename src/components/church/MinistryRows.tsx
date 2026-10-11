@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { CommitInput } from "@/components/church/CommitInput";
 import {
   MINISTRY_EDITOR_FIELDS,
   MINISTRY_KINDS,
@@ -25,9 +26,12 @@ import {
  * do, and it is deliberate: a list of short rows with one Save button per row is a wall of buttons, and
  * a person who edits one name and clicks away has to hunt for which button belonged to it.
  *
- * The comparison is on the trimmed value, so a field that is refocused without being touched does not
- * send a request -- which matters because an unchanged blur would otherwise write the same value back
- * and bump `updated_at` for no reason.
+ * The comparison is against the last saved value, held inside `CommitInput` -- never against the row's
+ * live state, which every keystroke already updates. Comparing against live state is how the council
+ * editor silently dropped every edit for a whole release: the two sides were always equal at blur, so
+ * no save ever fired. The trim in the comparison means a field that is refocused without being touched
+ * does not send a request -- which matters because an unchanged blur would otherwise write the same
+ * value back and bump `updated_at` for no reason.
  *
  * ## The new-row form asks before creating
  *
@@ -56,10 +60,6 @@ export function MinistryRows({
 
   const fields = MINISTRY_EDITOR_FIELDS[kind];
   const singular = MINISTRY_LABEL[kind];
-
-  const setRowField = (id: string, column: string, value: unknown) => {
-    onChange(rows.map((r) => (r.id === id ? { ...r, [column]: value } : r)));
-  };
 
   const saveRow = async (id: string, patch: Record<string, unknown>) => {
     setBusy(id);
@@ -174,9 +174,12 @@ export function MinistryRows({
               spec.choices ? (
                 <label key={spec.column} className="block text-xs text-[var(--text-muted)]">
                   <span className="mb-1 block">{spec.label}</span>
+                  {/* A select commits on change: there is no blur to wait for, and the old code only
+                      wrote the choice into local state, so a picked icon was quietly lost on reload. */}
                   <select
                     value={String(row[spec.column] ?? spec.choices[0])}
-                    onChange={(e) => setRowField(row.id, spec.column, e.target.value)}
+                    onChange={(e) => void saveRow(row.id, { [spec.column]: e.target.value })}
+                    disabled={busy === row.id}
                     className="min-h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-sm capitalize"
                   >
                     {spec.choices.map((choice) => (
@@ -189,32 +192,19 @@ export function MinistryRows({
               ) : (
                 <label key={spec.column} className="block text-xs text-[var(--text-muted)]">
                   <span className="mb-1 block">{spec.label}</span>
-                  {spec.multiline ? (
-                    <textarea
-                      value={String(row[spec.column] ?? "")}
-                      onChange={(e) => setRowField(row.id, spec.column, e.target.value)}
-                      onBlur={(e) => {
-                        const next = e.target.value.trim();
-                        if (next === String(row[spec.column] ?? "").trim()) return;
-                        void saveRow(row.id, { [spec.column]: next });
-                      }}
-                      rows={2}
-                      placeholder={spec.placeholder}
-                      className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
-                    />
-                  ) : (
-                    <input
-                      value={String(row[spec.column] ?? "")}
-                      onChange={(e) => setRowField(row.id, spec.column, e.target.value)}
-                      onBlur={(e) => {
-                        const next = e.target.value.trim();
-                        if (next === String(row[spec.column] ?? "").trim()) return;
-                        void saveRow(row.id, { [spec.column]: next });
-                      }}
-                      placeholder={spec.placeholder}
-                      className="min-h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-sm"
-                    />
-                  )}
+                  <CommitInput
+                    value={String(row[spec.column] ?? "")}
+                    normalize={(v) => v.trim()}
+                    onCommit={(next) => void saveRow(row.id, { [spec.column]: next })}
+                    multiline={spec.multiline}
+                    rows={2}
+                    placeholder={spec.placeholder}
+                    className={
+                      spec.multiline
+                        ? "w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                        : "min-h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-sm"
+                    }
+                  />
                 </label>
               ),
             )}
