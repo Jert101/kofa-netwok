@@ -397,29 +397,32 @@ export default async function LandingPage() {
                 </p>
               </Reveal>
 
-              <ul className="grid grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-4">
+              {/* Centered cards, photo on top: with fifteen members a side-by-side row repeats the same
+                  shape fifteen times and nobody's office stands out. Centering matches the priest card
+                  above it, and the tighter minimum lets four across fit a desktop row. */}
+              <ul className="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-4">
                 {(church?.council ?? []).map((m, i) => (
                   <Reveal
                     as="li"
                     key={m.id}
-                    delay={i * 60}
-                    className="flex items-center gap-3.5 rounded-[20px] border border-[var(--border)] bg-[var(--card)] p-[26px] transition-all hover:-translate-y-1 hover:border-[var(--a1)]"
+                    delay={Math.min(i * 60, 420)}
+                    className="rounded-[20px] border border-[var(--border)] bg-[var(--card)] p-6 text-center transition-all hover:-translate-y-1 hover:border-[var(--a1)]"
                   >
                     <span
                       aria-hidden
-                      className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-full bg-[linear-gradient(135deg,var(--a1),var(--a2))] text-[17px] font-bold text-[#16150f]"
+                      className="mx-auto grid size-20 shrink-0 place-items-center overflow-hidden rounded-full bg-[linear-gradient(135deg,var(--a1),var(--a2))] text-xl font-bold text-[#16150f]"
                     >
                       <ParishPhoto url={m.photo_url ?? null} name={m.name} />
                     </span>
-                    <span className="min-w-0">
-                      <span className="block font-bold">{m.name}</span>
-                      {m.office ? (
-                        <span className="block text-sm text-[var(--text-muted)]">{m.office}</span>
-                      ) : null}
-                      {m.bio ? (
-                        <span className="mt-1 block text-[15px] text-[var(--text-muted)]">{m.bio}</span>
-                      ) : null}
-                    </span>
+                    <span className="mt-3 block font-bold tracking-tight">{m.name}</span>
+                    {m.office ? (
+                      <span className="mt-0.5 block text-[13px] font-semibold uppercase tracking-[0.08em] text-[var(--a1)]">
+                        {m.office}
+                      </span>
+                    ) : null}
+                    {m.bio ? (
+                      <span className="mt-1.5 block text-sm text-[var(--text-muted)]">{m.bio}</span>
+                    ) : null}
                   </Reveal>
                 ))}
               </ul>

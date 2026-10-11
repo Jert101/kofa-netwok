@@ -313,6 +313,8 @@ export function ChurchEditor() {
         </div>
 
         <div className="space-y-5 p-4">
+          {/* The priest first: it is the field the parish looks for, and burying
+              it under the headline is how it went unnoticed. */}
           <div>
             <h3 className="flex items-center gap-2 text-sm font-medium">
               <UserRound aria-hidden className="size-4 text-[var(--text-muted)]" />
