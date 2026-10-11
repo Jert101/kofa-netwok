@@ -57,20 +57,57 @@ export default function TreasurerPaymentsPage() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [structureRes, memberRes, paymentRes] = await Promise.all([
+      const [structureRes, paymentRes] = await Promise.all([
         fetch("/api/admin/payment-structures?all=1", { credentials: "same-origin", cache: "no-store" }),
-        fetch("/api/admin/members?status=active&page_size=100", { credentials: "same-origin", cache: "no-store" }),
         fetch("/api/admin/payments?include_voided=1", { credentials: "same-origin", cache: "no-store" }),
       ]);
 
-      if (!structureRes.ok || !memberRes.ok || !paymentRes.ok) {
+      if (!structureRes.ok || !paymentRes.ok) {
         setError("Could not load the payments pages.");
         return;
       }
 
-      const [structureJson, memberJson, paymentJson] = await Promise.all([
+      // The whole roll, not the first page of it. This used to ask for
+      // `status=active&page_size=100`, which had two stacked ceilings: anyone
+      // inactive was missing, and anyone past the first hundred active names
+      // was missing too. Both read as "that member is not in the system" from
+      // the search box. `status=all` is safe here -- redaction only nulls
+      // fields, never names -- and the loop follows `pageCount` because the
+      // route caps a page at 100 rows.
+      const roll: MemberOption[] = [];
+      let page = 1;
+      for (;;) {
+        const memberRes = await fetch(
+          `/api/admin/members?status=all&page=${page}&page_size=100`,
+          { credentials: "same-origin", cache: "no-store" },
+        );
+        if (!memberRes.ok) {
+          setError("Could not load the payments pages.");
+          return;
+        }
+        const memberJson = (await memberRes.json()) as {
+          data?: {
+            members?: Array<Record<string, unknown>>;
+            pageCount?: number;
+          };
+        };
+        const rows = memberJson.data?.members ?? [];
+        for (const m of rows) {
+          roll.push({
+            id: String(m.id),
+            full_name: String(m.full_name ?? ""),
+            batch: (m.batch as string | null) ?? null,
+            is_active: m.is_active !== false,
+            still_due: null,
+          });
+        }
+        const pageCount = memberJson.data?.pageCount ?? 1;
+        if (page >= pageCount || rows.length === 0) break;
+        page += 1;
+      }
+
+      const [structureJson, paymentJson] = await Promise.all([
         structureRes.json() as Promise<{ structures?: Array<Record<string, unknown>> }>,
-        memberRes.json() as Promise<{ data?: { members?: Array<Record<string, unknown>> } }>,
         paymentRes.json() as Promise<{ payments?: PaymentRow[]; can_void?: boolean }>,
       ]);
 
@@ -80,19 +117,10 @@ export default function TreasurerPaymentsPage() {
 
       setStructures((structureJson.structures ?? []) as unknown as StructureRow[]);
       // `/api/admin/members` answers with the standard envelope, so the rows live under `data`.
-      // This read the top-level `members`, which is always absent on that route, so the list handed
+      // This once read the top-level `members`, which is always absent on that route, so the list handed
       // to the record sheet was empty and there was nobody to search for -- the picker looked broken
-      // rather than empty. `status=active&page_size=100` is explicit because `?all=1` was never a
-      // parameter the route knew, so the call silently took the default page of 25.
-      setMembers(
-        (memberJson.data?.members ?? []).map((m) => ({
-          id: String(m.id),
-          full_name: String(m.full_name ?? ""),
-          batch: (m.batch as string | null) ?? null,
-          is_active: m.is_active !== false,
-          still_due: null,
-        })),
-      );
+      // rather than empty.
+      setMembers(roll);
       setPayments(paymentJson.payments ?? []);
 
       // The church's date, so the record sheet's date field does not open on the browser's idea of
