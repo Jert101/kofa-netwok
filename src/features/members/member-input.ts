@@ -2,9 +2,12 @@
  * The member write shapes shared by the form, the routes and the CSV importer
  * (module 03, conventions: one shared validator per feature).
  *
- * These are the wire/column names (snake_case) because that is what the sheet
- * collects, what the table stores and what the CSV template headers use. The
- * server service is handed the camelCase view through `toCreateMemberInput`.
+ * These are the wire names (snake_case) because that is what the sheet
+ * collects and what the CSV template headers use. They are not all columns:
+ * `members` stores one `full_name`, so callers must compose it from the parts
+ * (see `createMember` / `editMember`) and never send `first_name` et al. to
+ * the table -- PostgREST answers 400 PGRST204 for unknown columns, which is
+ * how "Could not find the 'first_name' column" reaches the screen.
  *
  * Client-safe on purpose: importing this from a component must not drag in the
  * Supabase admin client.

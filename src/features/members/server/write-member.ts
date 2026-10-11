@@ -52,22 +52,30 @@ export type EditArgs = {
   ip?: string | null;
 };
 
-export async function editMember({
-  id,
-  changes,
-  actor,
-  ip,
-}: EditArgs): Promise<MemberWriteResult> {
-  const existing = await loadMember(id);
-  if (!existing) return { ok: false, code: "missing", message: "That member no longer exists." };
+export type BuiltMemberUpdates =
+  | { ok: true; updates: Record<string, unknown> }
+  | { ok: false; message: string };
 
+/**
+ * Pure half of `editMember`: validated changes plus the stored name in,
+ * database-ready column updates out.
+ *
+ * Split out so the column mapping is testable without a database. That is
+ * where this went wrong before: the name parts rode along into the update
+ * and PostgREST answered 400 PGRST204, so every edit failed. The test pins
+ * the update keys to real `members` columns.
+ */
+export function buildMemberUpdates(
+  changes: Record<string, unknown>,
+  existingFullName: string,
+): BuiltMemberUpdates {
   const updates: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(changes)) {
     if (value === undefined) continue;
     updates[key] = value === "" ? null : value;
   }
   if (Object.keys(updates).length === 0) {
-    return { ok: false, code: "invalid", message: "Nothing to change." };
+    return { ok: false, message: "Nothing to change." };
   }
 
   // The stored name is one column, so a name edit has to be recomposed from the
@@ -78,7 +86,7 @@ export async function editMember({
     updates.middle_initial !== undefined;
 
   if (nameTouched) {
-    const parts = splitName(existing.full_name);
+    const parts = splitName(existingFullName);
     const first = (updates.first_name as string | undefined) ?? parts.firstName;
     const last = (updates.last_name as string | undefined) ?? parts.lastName;
     const middle =
@@ -87,37 +95,69 @@ export async function editMember({
         : (parts.middleInitial ?? null);
 
     if (!first || !last) {
-      return { ok: false, code: "invalid", message: "A first and last name are both needed." };
+      return { ok: false, message: "A first and last name are both needed." };
     }
 
     const nextName = composeFullName({ firstName: first, middleInitial: middle, lastName: last });
     if (!normalizeName(nextName)) {
-      return { ok: false, code: "invalid", message: "That name is not usable." };
-    }
-
-    // Renaming to a name another active member holds would create the duplicate
-    // the whole duplicate check exists to prevent.
-    if (normalizeName(nextName) !== normalizeName(existing.full_name) && existing.is_active) {
-      const { data: others } = await getSupabaseAdmin()
-        .from("members")
-        .select("id, full_name")
-        .eq("is_active", true)
-        .neq("id", id);
-
-      for (const other of others ?? []) {
-        if (normalizeName(other.full_name as string) === normalizeName(nextName)) {
-          return {
-            ok: false,
-            code: "conflict",
-            conflictName: other.full_name as string,
-            conflictId: other.id as string,
-            message: `An active member named ${other.full_name} already uses that name.`,
-          };
-        }
-      }
+      return { ok: false, message: "That name is not usable." };
     }
 
     updates.full_name = nextName;
+    // The parts are not columns. `members` stores one `full_name`, so letting
+    // these through makes PostgREST answer 400 PGRST204 ("Could not find the
+    // 'first_name' column of 'members' in the schema cache") and the whole
+    // edit fails. The sheet always submits all three, so without this every
+    // member edit fails, not just renames.
+    delete updates.first_name;
+    delete updates.last_name;
+    delete updates.middle_initial;
+  }
+
+  return { ok: true, updates };
+}
+
+export async function editMember({
+  id,
+  changes,
+  actor,
+  ip,
+}: EditArgs): Promise<MemberWriteResult> {
+  const existing = await loadMember(id);
+  if (!existing) return { ok: false, code: "missing", message: "That member no longer exists." };
+
+  const built = buildMemberUpdates(changes, existing.full_name);
+  if (!built.ok) {
+    return { ok: false, code: "invalid", message: built.message };
+  }
+  const updates = built.updates;
+
+  // Renaming to a name another active member holds would create the duplicate
+  // the whole duplicate check exists to prevent. Only when the composed name
+  // actually changed: `full_name` is set exactly when a name part was touched.
+  if (
+    typeof updates.full_name === "string" &&
+    normalizeName(updates.full_name) !== normalizeName(existing.full_name) &&
+    existing.is_active
+  ) {
+    const { data: others } = await getSupabaseAdmin()
+      .from("members")
+      .select("id, full_name")
+      .eq("is_active", true)
+      .neq("id", id);
+
+    const nextName = updates.full_name;
+    for (const other of others ?? []) {
+      if (normalizeName(other.full_name as string) === normalizeName(nextName)) {
+        return {
+          ok: false,
+          code: "conflict",
+          conflictName: other.full_name as string,
+          conflictId: other.id as string,
+          message: `An active member named ${other.full_name} already uses that name.`,
+        };
+      }
+    }
   }
 
   const { error } = await getSupabaseAdmin().from("members").update(updates).eq("id", id);
