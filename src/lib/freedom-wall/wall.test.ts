@@ -72,18 +72,27 @@ describe("canDelete", () => {
     expect(canDelete(post(), author(), JOSE)).toBe(true);
   });
 
-  it("stops anyone else, including the admin", () => {
+  it("stops anyone else", () => {
     expect(canDelete(post(), author(), MARIA)).toBe(false);
+  });
+
+  it("gives the admin no removal rights at all, not even on its own post", () => {
+    // The parish asked for this: the admin removes nothing from the wall.
+    const adminIsAuthor: AuthorRow = { ...author(), member_id: "m-admin", role: "admin" };
     expect(canDelete(post(), author(), ADMIN)).toBe(false);
+    expect(canDelete(post(), adminIsAuthor, ADMIN)).toBe(false);
+  });
+
+  it("stops every role without the author's own-post right when there is no author row", () => {
+    expect(canDelete(post(), undefined, JOSE)).toBe(false);
+    expect(canDelete(post(), undefined, ADMIN)).toBe(false);
+    // The moderator is the exception: they act on the wall, not on authorship.
+    expect(canDelete(post(), undefined, SUPER)).toBe(true);
   });
 
   it("lets the moderator remove anyone's post", () => {
     expect(canDelete(post(), author(), SUPER)).toBe(true);
-  });
-
-  it("refuses everyone when the post has no author row", () => {
-    expect(canDelete(post(), undefined, JOSE)).toBe(false);
-    expect(canDelete(post(), undefined, SUPER)).toBe(true);
+    expect(canDelete(post(), { ...author(), member_id: "m-admin" }, SUPER)).toBe(true);
   });
 
   it("refuses a session with no member behind it", () => {

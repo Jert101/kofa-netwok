@@ -81,11 +81,23 @@ export function isModerator(role: Role): boolean {
 }
 
 /**
+ * The two administrative roles.
+ *
+ * Listed because neither of them gets the *author's* privilege below. That is a
+ * decision the parish asked for: the admin removes nothing, so a post written
+ * from the parish's own administrative account cannot be taken back by that
+ * role -- not even by the person who wrote it. `super_admin` keeps the separate
+ * moderation right above, which is the one authority over the wall.
+ */
+const ADMIN_ROLES: readonly Role[] = ["admin", "super_admin"];
+
+/**
  * A member may take back what they wrote; the moderator may take down anything.
  * Nothing here tells a caller *whose* post it is beyond their own.
  */
 export function canDelete(post: PostRow, author: AuthorRow | undefined, viewer: Viewer): boolean {
   if (isModerator(viewer.role)) return true;
+  if (ADMIN_ROLES.includes(viewer.role)) return false;
   if (!viewer.memberId) return false;
   return author?.member_id === viewer.memberId;
 }

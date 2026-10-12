@@ -38,7 +38,8 @@ function when(iso: string): string {
  * with a function whose return type has nowhere to put one. Removing your own
  * post is offered because the button is driven by a boolean the server sent --
  * `can_delete`, true for your posts and the moderator's, which reveals nothing
- * about anybody else's.
+ * about anybody else's. The admin role is sent `false` throughout: it removes
+ * nothing from the wall.
  */
 export function FreedomWall() {
   const [feed, setFeed] = useState<Feed | null>(null);

@@ -479,6 +479,10 @@ views), and one thin page per role section.
   anybody else and nobody else's.
 - A member can take back their own post. The button is driven by a `can_delete`
   boolean the server sends, so it reveals nothing about anybody else's posts.
+  **The `admin` role removes nothing at all** — not another person's post, and
+  not its own (the author's own-post right deliberately skips both administrative
+  roles). Only `super_admin` has authority over the wall, and `canDelete` in
+  `wall.ts` is where that is decided, with tests for each case.
 - Hidden posts are filtered in SQL, not in the view: a post nobody can see must
   not be discoverable by its presence in a count. Nothing is destroyed by
   hiding, so a hiding done by mistake is one tap back; `DELETE` cascades the
@@ -493,10 +497,10 @@ views), and one thin page per role section.
 - _Apply `043_freedom_wall.sql`_ — the wall does not exist in the database until
   it is. Until then the page says so by name instead of failing on a missing
   relation. (040, 041 and 042 are still unapplied on the live database too.)
-- _Moderation policy_ — confirm that hiding and removing should be the super
-  admin alone. The parish may want the admin moderating as well; that is one
-  role list in `api/freedom-wall/[id]/route.ts` plus `isModerator` in
-  `wall.ts`, and both are covered by tests.
+- _Moderation policy_ — hiding and removing is the super admin alone, and the
+  admin has no removal rights at all. If the parish later wants the admin
+  moderating, that is one role list in `api/freedom-wall/[id]/route.ts` plus
+  `isModerator` in `wall.ts`, and both are covered by tests.
 - _The daily cap_ — 5 posts a day is a starting guess against a wall being used
   as a spam channel. One constant in `wall.ts`.
 - _Anonymity, honestly_ — a post carries a timestamp, so "who was at Mass at 9pm
