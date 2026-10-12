@@ -58,6 +58,13 @@ export const AUDIT_ACTIONS = [
   "announcement_created",
   "announcement_updated",
   "announcement_deleted",
+  // Freedom Wall. Posting is deliberately NOT here: an audit row names its
+  // actor, the audit page is admin-visible, and a row per post would publish
+  // the author's name to everyone the wall hides it from. Only the moderation
+  // acts are recorded -- those name the moderator, not the writer.
+  "freedom_wall_hidden",
+  "freedom_wall_restored",
+  "freedom_wall_deleted",
   // The parish's public face. Names real people and is shown to signed-out visitors, so who changed it
   // is recorded rather than inferred from a settings diff.
   "church_profile_updated",
@@ -141,6 +148,9 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   announcement_created: "Announcement created",
   announcement_updated: "Announcement updated",
   announcement_deleted: "Announcement deleted",
+  freedom_wall_hidden: "Freedom Wall post hidden",
+  freedom_wall_restored: "Freedom Wall post restored",
+  freedom_wall_deleted: "Freedom Wall post deleted",
   church_profile_updated: "Parish profile updated",
   council_member_added: "Council member added",
   council_member_updated: "Council member updated",

@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   LayoutTemplate,
   Megaphone,
+  MessageCircle,
   ScrollText,
   Settings,
   UserCheck,
@@ -33,7 +34,8 @@ export type NavIconName =
   | "scrollText"
   | "templates"
   | "assign"
-  | "church";
+  | "church"
+  | "messageCircle";
 
 /** Resolved inside client components only. Server code imports the types with `import type`. */
 export const NAV_ICONS: Record<NavIconName, LucideIcon> = {
@@ -52,6 +54,7 @@ export const NAV_ICONS: Record<NavIconName, LucideIcon> = {
   templates: LayoutTemplate,
   assign: UserCheck,
   church: Church,
+  messageCircle: MessageCircle,
 };
 
 export type NavItem = {
@@ -96,6 +99,7 @@ export const NAV_BY_ROLE: Record<Role, readonly NavItem[]> = {
   secretary: [
     { href: "/secretary", label: "Calendar", icon: "calendar", exact: true, also: ["/secretary/day", "/secretary/session"] },
     { href: "/secretary/appeals", label: "Appeals", icon: "scrollText" },
+    { href: "/secretary/freedom-wall", label: "Freedom Wall", icon: "messageCircle" },
     { href: "/secretary/inbox", label: "Inbox", icon: "inbox", badgeKey: "notifications" },
     { href: "/secretary/payments", label: "Payments", icon: "wallet" },
     { href: "/secretary/reports", label: "Reports", icon: "fileText" },
@@ -106,6 +110,7 @@ export const NAV_BY_ROLE: Record<Role, readonly NavItem[]> = {
     // catalog links straight to it and a link that lands on a page nobody can navigate back from is
     // a dead end with extra steps.
     { href: "/member/announcements", label: "Announcements", icon: "megaphone" },
+    { href: "/member/freedom-wall", label: "Freedom Wall", icon: "messageCircle" },
     { href: "/member/payments", label: "Payments", icon: "wallet" },
     { href: "/member/receipts", label: "Receipts", icon: "fileText" },
     { href: "/member/readings", label: "Daily Readings", icon: "scrollText" },
@@ -116,6 +121,7 @@ export const NAV_BY_ROLE: Record<Role, readonly NavItem[]> = {
     { href: "/officer/inbox", label: "Announcements", icon: "megaphone" },
     { href: "/officer/templates", label: "Templates", icon: "templates" },
     { href: "/officer/assign", label: "Assign", icon: "assign" },
+    { href: "/officer/freedom-wall", label: "Freedom Wall", icon: "messageCircle" },
     { href: "/officer/payments", label: "Payments", icon: "wallet" },
   ],
   treasurer: [
@@ -129,6 +135,7 @@ export const NAV_BY_ROLE: Record<Role, readonly NavItem[]> = {
     // hiding behind the payments list.
     { href: "/treasurer/overdue", label: "Overdue", icon: "scrollText" },
     { href: "/treasurer/payments", label: "Payments", icon: "wallet", also: ["/treasurer/payments/csv"] },
+    { href: "/treasurer/freedom-wall", label: "Freedom Wall", icon: "messageCircle" },
   ],
   super_admin: [
     { href: "/super-admin", label: "Dashboard", icon: "dashboard", exact: true },
@@ -139,6 +146,10 @@ export const NAV_BY_ROLE: Record<Role, readonly NavItem[]> = {
     // The super admin was a recipient of notifications since before this module and had nowhere to
     // read them, which is the exact gap P2 describes.
     { href: "/super-admin/inbox", label: "Inbox", icon: "inbox", badgeKey: "notifications" },
+    // The one place the Freedom Wall's anonymity has an exception. Moderation and
+    // the writer's name, both behind the super-admin namespace the reach table
+    // keeps closed to `admin`.
+    { href: "/super-admin/freedom-wall", label: "Freedom Wall", icon: "messageCircle" },
   ],
 };
 

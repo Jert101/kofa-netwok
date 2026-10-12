@@ -447,6 +447,63 @@ both the calendar and the citations before first paint).
   text is fetched, stored or displayed anywhere in this app. Re-check this
   paragraph before adding any Bible text source.
 
+| **Freedom Wall** | Member, officer, treasurer, secretary + super-admin | Anonymous posts for the whole ministry; the super admin alone sees who wrote one and can hide or remove it. Two tables on purpose — see below. |
+
+#### Freedom Wall (`/{member,officer,treasurer,secretary}/freedom-wall`, moderation at `/super-admin/freedom-wall`)
+
+Folders: `supabase/migrations/043_freedom_wall.sql`, `src/lib/freedom-wall/wall.ts`
++ `wall.test.ts` (the rules, pure), `src/app/api/freedom-wall/` (list, post,
+hide/restore, delete), `src/features/freedom-wall/ui/FreedomWall.tsx` (both
+views), and one thin page per role section.
+
+- **The anonymity is structural, not a promise.** `freedom_wall_posts` has no
+  author column at all; `freedom_wall_authors` holds the name, and only the
+  super-admin route ever reads it. RLS is enabled on both tables with **no**
+  policies, so the `anon` key that ships in the browser bundle cannot read the
+  author table by any path — the service role bypasses RLS, and the application
+  is the only door. A `member_id` column on the post row would have been the
+  obvious design and would have leaked: RLS is row-level, so hiding the field
+  in the UI is a promise, not a rule.
+- **Posting writes no audit row, deliberately.** Every other write in this app
+  does, and an audit row names its actor while `/admin/audit` is admin-visible —
+  so a row per post would be a de-anonymisation ledger in compliance clothing.
+  Only moderation acts are audited (`freedom_wall_hidden`, `_restored`,
+  `_deleted`), and those name the moderator, never the writer.
+- One Postgres function writes the post and its author row in a single
+  transaction, so a post the super admin cannot trace is not a reachable state.
+  It is `REVOKE`d from `PUBLIC`.
+- Who may post: every signed-in ministry role. The route admits `member`,
+  `officer`, `treasurer` and `secretary` (an officer cannot reach `/member`, so
+  the page is exposed in each section rather than once). Moderation and identity
+  are `super_admin` only, with `selfOnly` — `admin` can remove its own post like
+  anybody else and nobody else's.
+- A member can take back their own post. The button is driven by a `can_delete`
+  boolean the server sends, so it reveals nothing about anybody else's posts.
+- Hidden posts are filtered in SQL, not in the view: a post nobody can see must
+  not be discoverable by its presence in a count. Nothing is destroyed by
+  hiding, so a hiding done by mistake is one tap back; `DELETE` cascades the
+  author row away with it.
+- Guards: 1–1000 characters, 5 posts per member per rolling 24 hours (counted
+  from the author table, so it cannot be reset by clearing anything), 100 posts
+  in the feed.
+- No push notification on posting. A wall that interrupts a phone for every post
+  is a wall people stop reading.
+
+**Verify before trusting (owner checklist):**
+- _Apply `043_freedom_wall.sql`_ — the wall does not exist in the database until
+  it is. Until then the page says so by name instead of failing on a missing
+  relation. (040, 041 and 042 are still unapplied on the live database too.)
+- _Moderation policy_ — confirm that hiding and removing should be the super
+  admin alone. The parish may want the admin moderating as well; that is one
+  role list in `api/freedom-wall/[id]/route.ts` plus `isModerator` in
+  `wall.ts`, and both are covered by tests.
+- _The daily cap_ — 5 posts a day is a starting guess against a wall being used
+  as a spam channel. One constant in `wall.ts`.
+- _Anonymity, honestly_ — a post carries a timestamp, so "who was at Mass at 9pm
+  on the 12th" remains a possible inference in a parish this size. That is a
+  property of anonymous speech among a known group, not a bug to fix here, but
+  the parish should know it before the first complaint.
+
 ### 5.13 System Settings & PIN Management
 
 - Settings keys (single row per key): `church_name`, `church_address`, `report_title`, `report_timezone`, `attendance_auto_approve_appeals`, six `pin_*_hash` entries.
