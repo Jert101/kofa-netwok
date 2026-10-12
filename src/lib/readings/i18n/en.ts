@@ -1,4 +1,79 @@
-import type { Dictionary } from "./index";
+import type { LitColor, Rank, Season, Title } from "../calendar";
+
+/**
+ * Display strings for the Daily Readings page. Every user-facing word comes
+ * from here, so the page can be read end to end against one file.
+ *
+ * The page is English only. A Cebuano draft lived here until the parish
+ * decided it was not useful; it was removed rather than left half-wired, and
+ * its strings were never reviewed by a native speaker.
+ */
+
+export type SeasonKey = Season;
+export type ColorKey = LitColor;
+export type RankKey = Rank;
+
+export type Dictionary = {
+  /** "Daily Readings" */
+  pageTitle: string;
+  /** Button: back to church today. "Today" */
+  today: string;
+  /** Date picker label. "Choose a date" */
+  chooseDate: string;
+  /** Aria labels for the day-stepper. */
+  prevDay: string;
+  nextDay: string;
+  /** Section heading. "About today" */
+  aboutToday: string;
+  /** Field labels. */
+  seasonLabel: string;
+  weekLabel: string;
+  colorLabel: string;
+  rankLabel: string;
+  celebrationLabel: string;
+  cycleLabel: string;
+  /** "Week {n}" fallback when a season week has no special name. */
+  weekOf: (n: number) => string;
+  /** Seasons, colors, ranks. */
+  seasons: Record<SeasonKey, string>;
+  seasonMeanings: Record<SeasonKey, string>;
+  colors: Record<ColorKey, string>;
+  colorMeanings: Record<ColorKey, string>;
+  ranks: Record<RankKey, string>;
+  /** Sunday cycles. */
+  sundayCycle: (cycle: "A" | "B" | "C") => string;
+  weekdayCycle: (cycle: "I" | "II") => string;
+  /** Weekday names, Sunday-first. */
+  weekdays: [string, string, string, string, string, string, string];
+  /** Month names, January-first. */
+  months: [string, string, string, string, string, string, string, string, string, string, string, string];
+  /** "28th" / "2nd" style ordinals for Sunday numbers. */
+  ordinal: (n: number) => string;
+  /** Renders a structured celebration title. */
+  celebration: (t: Title) => string;
+  /** Fixed solemnity/feast names by key. */
+  named: Record<string, string>;
+  /** "or Saint …" companion lines under a celebration. */
+  orSaint: (name: string) => string;
+  /** Readings section. */
+  readingsTitle: string;
+  firstReading: string;
+  psalm: string;
+  secondReading: string;
+  acclamation: string;
+  gospel: string;
+  /** Shown when the day has no Second Reading (ferials). */
+  secondReadingNote: string;
+  /** Shown when a citation exists but its text could not be loaded. */
+  unavailableNote: string;
+  /** The USCCB button + the honesty note under it. */
+  usccbButton: string;
+  usccbNote: string;
+  /** Where the text came from, stated under the readings. */
+  webNote: string;
+  /** Print button. */
+  print: string;
+};
 
 /** English strings for the Daily Readings page. */
 export const en: Dictionary = {
@@ -133,12 +208,11 @@ export const en: Dictionary = {
   acclamation: "Gospel Acclamation",
   gospel: "Gospel",
   secondReadingNote: "The second reading is proclaimed on Sundays and solemnities.",
+  unavailableNote: "The text for this passage could not be loaded. Open the official readings below.",
   usccbButton: "Read the full texts on USCCB",
   usccbNote:
-    "Texts open on the US bishops' site. Only the citations live here — no lectionary text is stored.",
-  textSize: "Text size",
-  sizeSmall: "Small",
-  sizeMedium: "Medium",
-  sizeLarge: "Large",
+    "The official texts open on the US bishops' site. Citations come from the Catholic Readings API; no lectionary text is stored here.",
+  webNote:
+    "Bible text from the World English Bible (public domain). This is not the liturgical translation proclaimed at Mass.",
   print: "Print",
 };
