@@ -379,6 +379,7 @@ Client redirects to ROLE_PATH[role]
 | **Birthdays today** | Member home + system announcement | `date_of_birth` MM-DD matches today in church TZ |
 | **Your attendance** | Member home | Sunday Mass rate %, attended/held Sunday Mass counts, weekend streak, Masses served all time, last served date — all Sunday-only so they agree with the secretary's report |
 | **By month / Recent Sundays** | Member home | Per-month attended/held (newest 4) and the last 10 Sundays with Present/Missed. Misses are shown on purpose: a history of only presences lets a missed Sunday look like it never happened |
+| **Rosary Guide** | Member nav (`/member/rosary`) | Today's mystery set + season from the hosted Rosary API (`the-rosary-api.vercel.app`, MIT), full praying order with prayer texts. Nothing to install: the README's clone steps are local-dev only. Each endpoint validated and caught separately; unreachable `/v1/today` falls back to the fixed weekday tradition |
 | **Appeal indicators** | Secretary calendar | `month-indicators` returns `pending_appeals` per day, drawn as a red dot for secretary and admin only — members and officers cannot act on an appeal, so showing it to them is noise |
 | **Report status strip** | Reports panel | Ready / Outside schedule / Pending approval / Already exists — driven by `can-generate` payload incl. `super_admin_configured` |
 | **Payments summary** | Treasurer home | Collected this month, outstanding per structure |
