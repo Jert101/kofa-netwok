@@ -47,20 +47,11 @@ export function ReadingsView({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-lg font-semibold sm:text-xl">{en.pageTitle}</h1>
-        {/* Screen-only control. Print keeps the readings, not the chrome. */}
-        <button
-          type="button"
-          onClick={() => window.print()}
-          className="min-h-11 rounded-xl border border-[var(--border)] px-3 text-sm font-medium print:hidden"
-        >
-          {en.print}
-        </button>
-      </div>
+      <h1 className="text-lg font-semibold sm:text-xl">{en.pageTitle}</h1>
 
       {/* Day stepper. The Today link goes through the index route so "today"
-          is the church's date, not the browser's guess. */}
+          is the church's date, not the browser's guess. Kept out of the
+          printed page, so a browser print still shows the readings alone. */}
       <div className="flex flex-wrap items-center gap-2 print:hidden">
         <Link
           href={`/member/readings/${shiftDays(date, -1)}`}
@@ -188,7 +179,6 @@ export function ReadingsView({
           >
             {en.usccbButton} ↗
           </a>
-          <p className="mt-2 text-xs text-[var(--text-muted)]">{en.usccbNote}</p>
         </div>
       </section>
     </div>

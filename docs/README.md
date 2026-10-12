@@ -425,10 +425,11 @@ both the calendar and the citations before first paint).
   could never fill. The official texts have it.
 - Coverage: the citation source holds 2025–2026 only. A date outside it shows
   one notice and keeps its headings and the official-readings link.
-- Print keeps the page and hides the controls (`print:hidden`). Print and the
-  day stepper are the only controls: the earlier text-size and EN/CEB toggles
-  were removed as unused (the Cebuano strings were never reviewed by a native
-  speaker, so shipping them would have been worse than shipping none).
+- The day stepper is the only control: the text-size and EN/CEB toggles and the
+  print button were all removed as unused. The stepper still carries
+  `print:hidden`, so a browser's own print (Ctrl+P) shows the readings alone.
+  The Cebuano strings were never reviewed by a native speaker, so shipping them
+  would have been worse than shipping none.
 
 **Verify before trusting (owner checklist):**
 - _Philippine feasts_ — `saints.json` → `philippine` (Santo Niño 3rd Sunday

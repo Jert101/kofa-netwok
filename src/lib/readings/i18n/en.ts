@@ -66,11 +66,8 @@ export type Dictionary = {
   secondReadingNote: string;
   /** Shown when a citation could not be loaded. */
   citationUnavailable: string;
-  /** The USCCB button + the honesty note under it. */
+  /** The button out to the official texts. */
   usccbButton: string;
-  usccbNote: string;
-  /** Print button. */
-  print: string;
 };
 
 /** English strings for the Daily Readings page. */
@@ -207,7 +204,4 @@ export const en: Dictionary = {
   secondReadingNote: "Proclaimed on Sundays and solemnities only.",
   citationUnavailable: "Citation unavailable. Open the official readings below.",
   usccbButton: "Read the full texts on USCCB",
-  usccbNote:
-    "The readings themselves are on the US bishops' site — the Lectionary for Mass is a copyrighted publication, so no text is stored or reproduced here. Citations come from the Catholic Readings API (free, no key).",
-  print: "Print",
 };
