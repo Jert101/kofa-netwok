@@ -383,16 +383,16 @@ Client redirects to ROLE_PATH[role]
 | **Appeal indicators** | Secretary calendar | `month-indicators` returns `pending_appeals` per day, drawn as a red dot for secretary and admin only — members and officers cannot act on an appeal, so showing it to them is noise |
 | **Report status strip** | Reports panel | Ready / Outside schedule / Pending approval / Already exists — driven by `can-generate` payload incl. `super_admin_configured` |
 | **Payments summary** | Treasurer home | Collected this month, outstanding per structure |
-| **Daily Readings** | Member nav (`/member/readings`) | Pure-TS liturgical engine plus the day's Mass texts: season, week, color, rank, celebration, both cycles, and the passages themselves. English only. See below. |
+| **Daily Readings** | Member nav (`/member/readings`) | Pure-TS liturgical engine plus the day's Mass citations: season, week, color, rank, celebration, both cycles, and the references. English only. See below. |
 
 #### Daily Readings (`/member/readings`, members only)
 
 Folders: `src/lib/readings/calendar.ts` (engine) + `calendar.test.ts`,
 `saints.json` (fixed feasts + Philippine section), `i18n/en.ts` (every UI
-string), `src/lib/readings/text.ts` + `text.test.ts` (citations and verse
-text), `src/components/readings/ReadingsView.tsx`, `src/app/member/readings/`
+string), `src/lib/readings/citations.ts` + `citations.test.ts`,
+`src/components/readings/ReadingsView.tsx`, `src/app/member/readings/`
 (index redirects to Manila today; `[date]` is a server component that resolves
-both the calendar and the readings before first paint).
+both the calendar and the citations before first paint).
 
 - The engine computes Easter (Anonymous Gregorian algorithm), Advent I,
   Christ the King, the Triduum, Epiphany/Baptism/Holy Family (US rules),
@@ -405,61 +405,46 @@ both the calendar and the readings before first paint).
 - Sunday cycle is remainder **0 = A, 1 = B, 2 = C** on the Advent's civil
   year — not 1 = A as first written; Advent 2025 (2025 mod 3 = 0) opens Year
   A and Advent 2026 (mod 3 = 1) opens Year B, and the tests pin both.
-- **The texts come from two free sources, and neither is the lectionary.**
-  Citations ("Galatians 4:22-24, 26-27, 31–5:1") from the Catholic Readings
-  API (`cpbjr.github.io`, MIT, no key) — that API publishes citations only,
-  because the USCCB lectionary it extracted is copyrighted. The wording from
-  the World English Bible as served by `bolls.life`, which is public domain,
-  so it needs no permission and covers the deuterocanonical books. Nothing is
-  scraped, nothing copyrighted is stored, and the page names both sources
-  under the texts.
-- Degradation is per section, like the rosary page: citations unreachable →
-  one notice and the labels + USCCB link survive; one chapter unreachable →
-  only its own verses are missing; upstream `<b>` markup is stripped to plain
-  text and anything still looking like markup is refused.
-- Known approximations, all deliberate: a verse-letter subdivision
-  ("Isaiah 25:6-10a") shows the whole verse — those letters mark halves of a
-  verse in the *liturgical* translation and WEB does not carry them, so
-  "Psalm 113:1b-2" also shows 113:1a; a citation written across a chapter
-  ("Galatians 4:31–5:1") resolves to the cited verse plus the next chapter's
-  opening run, because the first chapter's length is unknowable from the
-  citation alone; the **Gospel Acclamation** has no citation in the free
-  source, so that row carries the "open the official readings" note.
-- The citation source's quirks are handled and pinned by tests: `"or"`
-  alternatives (take the longer form), `;` separators, uppercase subdivision
-  letters on solemnities ("Revelation 11:19A; 12:1-6A, 10AB" — the trailing
-  "10AB" belongs to the chapter the previous piece named), and misspelled book
-  names ("Phiippians", recovered by a unique two-edit near-match). A citation
-  whose book WEB cannot supply — "Esther C:12" on 2026-02-26, whose WEB
-  chapters are numbered differently — still shows the reference with no text
-  rather than disappearing. All 365 days of 2026 were audited for this.
-- Psalm superscriptions ("By David.", "For the Chief Musician…") are removed:
-  WEB wraps each one in `<b>` at the start of verse 1, and it is a heading, not
-  a line anyone sings.
-- **USCCB is link-only.** Their pages sit behind a JavaScript bot challenge
-  (a plain fetch and full browser headers both return the challenge page), so
-  reading them server-side was not an option we could make reliable. If
-  citations are ever supplied in-app, the reserved shape is
-  `reading_citations(date, first, psalm, second, gospel)` — ask before adding
-  any further text source.
-- Print keeps the readings and hides the controls (`print:hidden`). Print and
-  the day stepper are now the only controls: the earlier text-size and EN/CEB
-  toggles were removed as unused (the Cebuano strings were never reviewed by a
-  native speaker, so shipping them would have been worse than shipping none).
+- **Citations only, no text — a decision, not a shortcut.** The readings
+  themselves are the Lectionary for Mass (ICEL/NABRE), a copyrighted
+  publication, and a responsorial psalm's antiphon and refrain belong to that
+  publication rather than to any Bible. Every free source withholds the text
+  for that reason, including the Catholic Readings API (`cpbjr.github.io`,
+  MIT, no key), which publishes the citation and the `usccbLink` and nothing
+  else. So the page shows WHAT is read and sends members to the official texts
+  for the words. An in-page Bible text was tried and reverted: it was the wrong
+  wording ("Yahweh", "my shepherd") and no antiphon, which reads wrong to
+  anyone who knows the psalm they sing. All 365 days of 2026 were audited while
+  that experiment existed, and the citation quirks it surfaced are documented
+  in the git history of `text.ts`.
+- **USCCB is link-only.** Their pages sit behind a JavaScript bot challenge (a
+  plain fetch and full browser headers both return the challenge page), so
+  reading them server-side was never an option we could make reliable.
+- The **Gospel Acclamation** has no row: it is a short verse drawn from the
+  psalm or another song and no free citation source publishes one, so the row
+  could never fill. The official texts have it.
+- Coverage: the citation source holds 2025–2026 only. A date outside it shows
+  one notice and keeps its headings and the official-readings link.
+- Print keeps the page and hides the controls (`print:hidden`). Print and the
+  day stepper are the only controls: the earlier text-size and EN/CEB toggles
+  were removed as unused (the Cebuano strings were never reviewed by a native
+  speaker, so shipping them would have been worse than shipping none).
 
 **Verify before trusting (owner checklist):**
 - _Philippine feasts_ — `saints.json` → `philippine` (Santo Niño 3rd Sunday
   of January, Pedro Calungsod Apr 2, Lorenzo Ruiz Sep 28) and the Sunday
   transfers for Ascension/Corpus Christi: confirm rank, dates and Sunday
-  observance against the CBCP calendar. Guadalupe is kept optional pending
+  observance against the CBCP calendar. The citation source follows the **US**
+  calendar, so if the parish observes a transfer differently, the citation for
+  that day will not match its own calendar. Guadalupe is kept optional pending
   the same check.
-- _Readings wording_ — confirm with the parish whether members expect the
-  exact liturgical text (this page does not show it) or are satisfied by the
-  public-domain WEB, and whether the readings section should link out to a
-  Cebuano Bible (BibleGateway APSD-CEB) for members who want one.
-- _Licenses_ — WEB is public domain, citations are facts, saint names and
-  lectionary structure are facts, USCCB is link-only, and the engine and prose
-  are ours. Re-check this paragraph before adding any other Bible text source.
+- _US-based calendar_ — the citation source is USCCB-aligned. Days whose US
+  observance differs from the CBCP (notably the Ascension and Corpus Christi
+  Sunday transfers) are the ones to check first.
+- _Licenses_ — citations are facts, saint names and lectionary structure are
+  facts, USCCB is link-only, and the engine and prose are ours. No copyrighted
+  text is fetched, stored or displayed anywhere in this app. Re-check this
+  paragraph before adding any Bible text source.
 
 ### 5.13 System Settings & PIN Management
 

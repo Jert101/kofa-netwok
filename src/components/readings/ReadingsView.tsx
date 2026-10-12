@@ -7,7 +7,7 @@ import { shiftDays } from "@/lib/time/church-time";
 import type { DayInfo } from "@/lib/readings/calendar";
 import { usccbLink } from "@/lib/readings/calendar";
 import { en } from "@/lib/readings/i18n/en";
-import { SECTION_ORDER, type DayTexts, type ReadingSection } from "@/lib/readings/text";
+import { SECTION_ORDER, type DayCitations, type ReadingSection } from "@/lib/readings/citations";
 
 /** Liturgical colors hold on any theme, so they are fixed hex, not tokens. */
 const COLOR_DOT: Record<string, string> = {
@@ -20,26 +20,25 @@ const COLOR_DOT: Record<string, string> = {
 
 const SECTION_LABEL: Record<ReadingSection, string> = {
   firstReading: en.firstReading,
-  psalm: en.psalm,
+  psalm: en.responsorialPsalm,
   secondReading: en.secondReading,
-  acclamation: en.acclamation,
   gospel: en.gospel,
 };
 
 /**
- * Everything the page shows for one civil date. The calendar and the readings
+ * Everything the page shows for one civil date. The calendar and the citations
  * were both resolved by the server before first paint (see `lib/readings`), so
  * this only formats what it is handed -- no fetch, no loading state, and a
- * missing passage degrades to a line under its own heading.
+ * missing citation degrades to a line under its own heading.
  */
 export function ReadingsView({
   date,
   info,
-  texts,
+  readings,
 }: {
   date: string;
   info: DayInfo;
-  texts: DayTexts;
+  readings: DayCitations;
 }) {
   const router = useRouter();
   const [y, m, d] = date.split("-").map(Number);
@@ -95,9 +94,9 @@ export function ReadingsView({
         </Link>
       </div>
 
-      {texts.notices.length > 0 ? (
+      {readings.notices.length > 0 ? (
         <div role="status" className="space-y-1 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
-          {texts.notices.map((notice) => (
+          {readings.notices.map((notice) => (
             <p key={notice} className="text-sm text-[var(--text-muted)]">
               {notice}
             </p>
@@ -161,37 +160,21 @@ export function ReadingsView({
           {en.readingsTitle}
         </h2>
         {SECTION_ORDER.map((section) => {
-          const passage = texts.passages[section];
+          const citation = readings.citations[section];
           return (
             <div key={section} className="border-t border-[var(--border)] py-3 first:mt-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                 {SECTION_LABEL[section]}
               </p>
-              {passage ? (
-                <>
-                  <p className="mt-1 text-sm font-medium">{passage.citation}</p>
-                  {passage.verses.length > 0 ? (
-                    <p className="mt-1 text-[15px] leading-relaxed">
-                      {passage.verses.map((verse, i) => (
-                        // Verse numbers are keyed by position: a citation that
-                        // crosses a chapter can repeat a verse number.
-                        <span key={`${verse.verse}-${i}`}>
-                          <sup className="mr-0.5 text-[0.7em] text-[var(--text-muted)]">{verse.verse}</sup>
-                          {verse.text}{" "}
-                        </span>
-                      ))}
-                    </p>
-                  ) : (
-                    <p className="mt-1 text-sm text-[var(--text-muted)]">{en.unavailableNote}</p>
-                  )}
-                </>
-              ) : (
-                <p className="mt-1 text-sm text-[var(--text-muted)]">
-                  {section === "secondReading" && !isSundayOrSolemnity
-                    ? en.secondReadingNote
-                    : en.unavailableNote}
-                </p>
-              )}
+              <p className="mt-1 text-[15px]">
+                {citation ?? (
+                  <span className="text-[var(--text-muted)]">
+                    {section === "secondReading" && !isSundayOrSolemnity
+                      ? en.secondReadingNote
+                      : en.citationUnavailable}
+                  </span>
+                )}
+              </p>
             </div>
           );
         })}
@@ -206,7 +189,6 @@ export function ReadingsView({
             {en.usccbButton} ↗
           </a>
           <p className="mt-2 text-xs text-[var(--text-muted)]">{en.usccbNote}</p>
-          <p className="mt-1 text-xs text-[var(--text-muted)]">{en.webNote}</p>
         </div>
       </section>
     </div>

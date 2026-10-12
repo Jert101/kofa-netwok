@@ -58,19 +58,17 @@ export type Dictionary = {
   /** Readings section. */
   readingsTitle: string;
   firstReading: string;
-  psalm: string;
+  /** The rubric name, kept as the Church writes it. */
+  responsorialPsalm: string;
   secondReading: string;
-  acclamation: string;
   gospel: string;
   /** Shown when the day has no Second Reading (ferials). */
   secondReadingNote: string;
-  /** Shown when a citation exists but its text could not be loaded. */
-  unavailableNote: string;
+  /** Shown when a citation could not be loaded. */
+  citationUnavailable: string;
   /** The USCCB button + the honesty note under it. */
   usccbButton: string;
   usccbNote: string;
-  /** Where the text came from, stated under the readings. */
-  webNote: string;
   /** Print button. */
   print: string;
 };
@@ -203,16 +201,13 @@ export const en: Dictionary = {
   orSaint: (name) => `or ${name}`,
   readingsTitle: "Readings",
   firstReading: "First Reading",
-  psalm: "Responsorial Psalm",
+  responsorialPsalm: "Responsorial Psalm",
   secondReading: "Second Reading",
-  acclamation: "Gospel Acclamation",
   gospel: "Gospel",
-  secondReadingNote: "The second reading is proclaimed on Sundays and solemnities.",
-  unavailableNote: "The text for this passage could not be loaded. Open the official readings below.",
+  secondReadingNote: "Proclaimed on Sundays and solemnities only.",
+  citationUnavailable: "Citation unavailable. Open the official readings below.",
   usccbButton: "Read the full texts on USCCB",
   usccbNote:
-    "The official texts open on the US bishops' site. Citations come from the Catholic Readings API; no lectionary text is stored here.",
-  webNote:
-    "Bible text from the World English Bible (public domain), not the liturgical text. The Responsorial Psalm as sung also carries an antiphon and refrain from the Lectionary for Mass, which are not reproduced here — open the official texts above for those.",
+    "The readings themselves are on the US bishops' site — the Lectionary for Mass is a copyrighted publication, so no text is stored or reproduced here. Citations come from the Catholic Readings API (free, no key).",
   print: "Print",
 };

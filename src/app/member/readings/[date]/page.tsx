@@ -1,18 +1,18 @@
 import { BadRouteParamNotice } from "@/features/attendance/ui/route-params";
 import { ReadingsView } from "@/components/readings/ReadingsView";
 import { describeDate } from "@/lib/readings/calendar";
-import { loadDayReadings } from "@/lib/readings/text";
+import { loadDayCitations } from "@/lib/readings/citations";
 import { isIsoDate } from "@/lib/time/church-time";
 
 export const metadata = { title: "Daily Readings" };
 
 /**
- * One civil date's liturgy, with the day's readings.
+ * One civil date's liturgy and the citations for its readings.
  *
- * A server component on purpose: the calendar is computed locally, and the
- * readings are resolved (and cached) before first paint, so a member on a slow
- * phone in the parish gets the readings or an honest notice -- never a spinner
- * waiting on two free third parties. Both loaders are written not to throw.
+ * A server component on purpose: the calendar is computed locally and the
+ * citations are resolved (and cached) before first paint, so a member on a slow
+ * phone in the parish gets the day's references or an honest notice -- never a
+ * spinner waiting on a third party. The loader is written not to throw.
  */
 export default async function MemberReadingsDatePage({
   params,
@@ -31,5 +31,5 @@ export default async function MemberReadingsDatePage({
     );
   }
 
-  return <ReadingsView date={date} info={describeDate(date)} texts={await loadDayReadings(date)} />;
+  return <ReadingsView date={date} info={describeDate(date)} readings={await loadDayCitations(date)} />;
 }
