@@ -108,6 +108,7 @@ export const NAV_BY_ROLE: Record<Role, readonly NavItem[]> = {
     { href: "/member/announcements", label: "Announcements", icon: "megaphone" },
     { href: "/member/payments", label: "Payments", icon: "wallet" },
     { href: "/member/receipts", label: "Receipts", icon: "fileText" },
+    { href: "/member/readings", label: "Daily Readings", icon: "scrollText" },
     { href: "/member/rosary", label: "Rosary Guide", icon: "church" },
   ],
   officer: [

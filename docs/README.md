@@ -383,6 +383,51 @@ Client redirects to ROLE_PATH[role]
 | **Appeal indicators** | Secretary calendar | `month-indicators` returns `pending_appeals` per day, drawn as a red dot for secretary and admin only — members and officers cannot act on an appeal, so showing it to them is noise |
 | **Report status strip** | Reports panel | Ready / Outside schedule / Pending approval / Already exists — driven by `can-generate` payload incl. `super_admin_configured` |
 | **Payments summary** | Treasurer home | Collected this month, outstanding per structure |
+| **Daily Readings** | Member nav (`/member/readings`) | Pure-TS liturgical engine, no API/database. Season, week, color, rank, celebration, both cycles, EN/CEB toggle (localStorage), USCCB link per date. See below. |
+
+#### Daily Readings (`/member/readings`, members only)
+
+Folders: `src/lib/readings/calendar.ts` (engine) + `calendar.test.ts`,
+`saints.json` (fixed feasts + Philippine section), `i18n/en.ts` + `i18n/ceb.ts`
+(every UI string; both satisfy one `Dictionary` type so a missing Cebuano key
+is a compile error), `src/components/readings/ReadingsView.tsx`,
+`src/app/member/readings/` (index redirects to Manila today; `[date]` renders).
+
+- The engine computes Easter (Anonymous Gregorian algorithm), Advent I,
+  Christ the King, the Triduum, Epiphany/Baptism/Holy Family (US rules),
+  Ascension Thursday, Pentecost, Trinity and Corpus Christi Sunday, plus
+  Joseph/Annunciation/Immaculate transfers. OT weeks count from the Baptism
+  week skipping Lent I–Easter VI (week 7 never occurs; verified against the
+  full 2026 calendar). Precedence: Triduum > Octave > Ash Wed/Holy Week >
+  Lord's solemnities > Advent/Lent/Easter Sundays > fixed solemnities >
+  All Souls > OT Sundays > feasts > memorials (reduced in Lent) > ferials.
+- Sunday cycle is remainder **0 = A, 1 = B, 2 = C** on the Advent's civil
+  year — not 1 = A as first written; Advent 2025 (2025 mod 3 = 0) opens Year
+  A and Advent 2026 (mod 3 = 1) opens Year B, and the tests pin both.
+- No lectionary text is stored or scraped anywhere: the page shows
+  citations-shaped labels plus one link per date to the official USCCB page.
+  No licensing assumptions are made by this feature. If citations are ever
+  supplied, the reserved shape is `reading_citations(date, first, psalm,
+  second, gospel)` with text fetched from a public-domain source labeled
+  "Bible text, not the liturgical translation" — ask before adding any text
+  source.
+- Sundays and solemnities show the Second Reading row; ferials show a note
+  instead. Print keeps the readings and hides the controls (`print:hidden`).
+
+**Verify before trusting (owner checklist):**
+- _Cebuano (needs-native-review)_ — every string in `i18n/ceb.ts` is a
+  non-native draft: season/color/rank names, weekday and month names,
+  celebration templates (`Ika-N nga Domingo…`), the six season meanings, five
+  color meanings, all labels and buttons. The page shows wrong words with
+  full confidence until these are reviewed.
+- _Philippine feasts_ — `saints.json` → `philippine` (Santo Niño 3rd Sunday
+  of January, Pedro Calungsod Apr 2, Lorenzo Ruiz Sep 28) and the Sunday
+  transfers for Ascension/Corpus Christi: confirm rank, dates and Sunday
+  observance against the CBCP calendar. Guadalupe is kept optional pending
+  the same check.
+- _Licenses_ — nothing bundled: engine and prose are ours, saint names and
+  lectionary structure are facts, USCCB is link-only. Re-check this paragraph
+  before adding any Bible text source.
 
 ### 5.13 System Settings & PIN Management
 
