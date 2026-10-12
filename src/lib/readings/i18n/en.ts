@@ -213,6 +213,6 @@ export const en: Dictionary = {
   usccbNote:
     "The official texts open on the US bishops' site. Citations come from the Catholic Readings API; no lectionary text is stored here.",
   webNote:
-    "Bible text from the World English Bible (public domain). This is not the liturgical translation proclaimed at Mass.",
+    "Bible text from the World English Bible (public domain), not the liturgical text. The Responsorial Psalm as sung also carries an antiphon and refrain from the Lectionary for Mass, which are not reproduced here — open the official texts above for those.",
   print: "Print",
 };
