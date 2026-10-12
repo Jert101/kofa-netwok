@@ -143,10 +143,55 @@ const BOOK_IDS = new Map<string, number>(
   BOOK_TABLE.map(([name, id]) => [normalizeBookName(name), id]),
 );
 
-/** The bolls.life book id for a citation's book name, or null if unknown. */
+/** Levenshtein distance, abandoned as soon as it passes `max`. */
+function editDistance(a: string, b: string, max: number): number | null {
+  if (Math.abs(a.length - b.length) > max) return null;
+  let previous = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i += 1) {
+    const current = [i];
+    let rowBest = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      current[j] = Math.min(current[j - 1] + 1, previous[j] + 1, previous[j - 1] + cost);
+      if (current[j] < rowBest) rowBest = current[j];
+    }
+    if (rowBest > max) return null;
+    previous = current;
+  }
+  return previous[b.length] <= max ? previous[b.length] : null;
+}
+
+/** Two typos, and the near-match has to be unambiguous. */
+const MAX_NAME_EDITS = 2;
+
+/**
+ * The bolls.life book id for a citation's book name, or null if unknown.
+ *
+ * The last resort is a near-match, because the citation source ships typos --
+ * "Phiippians 2:12-18" (2026-11-04) would otherwise lose the whole reading. A
+ * near-match must be unique and within two edits, so a genuinely unknown book
+ * still falls through to "citation only" rather than to the wrong book.
+ */
 export function resolveBookId(name: string): number | null {
   const key = normalizeBookName(name);
-  return BOOK_IDS.get(key) ?? BOOK_ALIASES[key] ?? null;
+  const exact = BOOK_IDS.get(key) ?? BOOK_ALIASES[key];
+  if (exact !== undefined) return exact;
+
+  let bestId: number | null = null;
+  let best = MAX_NAME_EDITS + 1;
+  let ambiguous = false;
+  for (const [candidate, id] of BOOK_IDS) {
+    const distance = editDistance(key, candidate, MAX_NAME_EDITS);
+    if (distance === null) continue;
+    if (distance < best) {
+      best = distance;
+      bestId = id;
+      ambiguous = false;
+    } else if (distance === best) {
+      ambiguous = true;
+    }
+  }
+  return ambiguous ? null : bestId;
 }
 
 // ---------------------------------------------------------------------------
@@ -220,44 +265,58 @@ function expandSpan(from: VerseRef, to: VerseRef): VerseRef[] | null {
 /**
  * One separated piece, resolved against the chapter in force.
  *
- * Handles the five shapes the citation source actually publishes: `6-10a` (a
- * verse range), `5a` (a verse with a subdivision letter), `31–5:1` (a range
- * crossing a chapter, written from the chapter in force), `4:31-5:1` (the same
- * written out in full) and `25:6` (an explicit chapter).
+ * Handles the shapes the citation source actually publishes: `6-10a` (a verse
+ * range), `5a` (a verse with a subdivision letter), `31–5:1` (a range crossing
+ * a chapter), `12:1-6A` (a piece that names its own chapter) and `25:6`.
+ *
+ * The chapter it leaves in force is returned with it: in "Revelation 11:19A;
+ * 12:1-6A, 10AB" the trailing "10AB" belongs to chapter 12, not to the chapter
+ * the citation opened with.
  */
-function expandPiece(piece: string, chapter: number): VerseRef[] | null {
+function expandPiece(
+  piece: string,
+  chapter: number,
+): { chapter: number; refs: VerseRef[] } | null {
   const text = piece.replace(DASHES, "-").replace(/\s+/g, "");
-
-  const crossChapter = /^(\d+):(\d+)[a-z]*-(\d+):(\d+)[a-z]*$/.exec(text);
+  // Subdivision letters are a/b/c on ferials and A/B/C on some solemnities.
+  // They are dropped either way: the verse is shown whole.
+  const crossChapter = /^(\d+):(\d+)[a-zA-Z]*-(\d+):(\d+)[a-zA-Z]*$/.exec(text);
   if (crossChapter) {
-    return expandSpan(
-      { chapter: Number(crossChapter[1]), verse: Number(crossChapter[2]) },
-      { chapter: Number(crossChapter[3]), verse: Number(crossChapter[4]) },
-    );
+    const to = { chapter: Number(crossChapter[3]), verse: Number(crossChapter[4]) };
+    const refs = expandSpan({ chapter: Number(crossChapter[1]), verse: Number(crossChapter[2]) }, to);
+    return refs ? { chapter: to.chapter, refs } : null;
+  }
+
+  const rangedChapter = /^(\d+):(\d+)[a-zA-Z]*-(\d+)[a-zA-Z]*$/.exec(text);
+  if (rangedChapter) {
+    const own = Number(rangedChapter[1]);
+    const refs = expandRange({ chapter: own, verse: Number(rangedChapter[2]) }, { chapter: own, verse: Number(rangedChapter[3]) });
+    return refs ? { chapter: own, refs } : null;
   }
 
   // "31-5:1": the head already consumed the first chapter, so only the far end
   // carries one.
-  const outOfChapter = /^(\d+)[a-z]*-(\d+):(\d+)[a-z]*$/.exec(text);
+  const outOfChapter = /^(\d+)[a-zA-Z]*-(\d+):(\d+)[a-zA-Z]*$/.exec(text);
   if (outOfChapter) {
-    return expandSpan(
-      { chapter, verse: Number(outOfChapter[1]) },
-      { chapter: Number(outOfChapter[2]), verse: Number(outOfChapter[3]) },
-    );
+    const to = { chapter: Number(outOfChapter[2]), verse: Number(outOfChapter[3]) };
+    const refs = expandSpan({ chapter, verse: Number(outOfChapter[1]) }, to);
+    return refs ? { chapter: to.chapter, refs } : null;
   }
 
-  const explicitChapter = /^(\d+):(\d+)[a-z]*$/.exec(text);
+  const explicitChapter = /^(\d+):(\d+)[a-zA-Z]*$/.exec(text);
   if (explicitChapter) {
-    return [{ chapter: Number(explicitChapter[1]), verse: Number(explicitChapter[2]) }];
+    const own = Number(explicitChapter[1]);
+    return { chapter: own, refs: [{ chapter: own, verse: Number(explicitChapter[2]) }] };
   }
 
-  const range = /^(\d+)[a-z]*-(\d+)[a-z]*$/.exec(text);
+  const range = /^(\d+)[a-zA-Z]*-(\d+)[a-zA-Z]*$/.exec(text);
   if (range) {
-    return expandRange({ chapter, verse: Number(range[1]) }, { chapter, verse: Number(range[2]) });
+    const refs = expandRange({ chapter, verse: Number(range[1]) }, { chapter, verse: Number(range[2]) });
+    return refs ? { chapter, refs } : null;
   }
 
-  const single = /^(\d+)[a-z]*$/.exec(text);
-  if (single) return [{ chapter, verse: Number(single[1]) }];
+  const single = /^(\d+)[a-zA-Z]*$/.exec(text);
+  if (single) return { chapter, refs: [{ chapter, verse: Number(single[1]) }] };
 
   return null;
 }
@@ -281,17 +340,23 @@ export function parseCitation(section: ReadingSection, citation: string): Parsed
   const tail = colon === -1 ? rest : rest.slice(colon + 1);
   if (!Number.isInteger(chapter) || chapter < 1) return null;
 
+  // The source publishes alternatives in one citation ("Luke 2:22-40 or
+  // 2:22-32"), semicolons ("Revelation 11:19A; 12:1-6A"), and "and"
+  // ("Psalm 90:3-4, 5-6, 12-13, 14 and 17"). Splitting on all of them keeps the
+  // first option of an "or", which is the longer lectionary form.
   const pieces = tail
-    .split(/\s*(?:,|;|\band\b|&)\s*/i)
+    .split(/\s*(?:,|;|\band\b|\bor\b|&)\s*/i)
     .map((p) => p.trim())
     .filter((p) => p.length > 0);
 
   const refs: VerseRef[] = [];
   const chapters = new Set<number>();
+  let current = chapter;
   for (const piece of pieces) {
-    const expanded = expandPiece(piece, chapter);
+    const expanded = expandPiece(piece, current);
     if (!expanded) continue;
-    for (const ref of expanded) {
+    current = expanded.chapter;
+    for (const ref of expanded.refs) {
       const key = `${ref.chapter}:${ref.verse}`;
       if (refs.some((r) => `${r.chapter}:${r.verse}` === key)) continue;
       refs.push(ref);
@@ -312,6 +377,21 @@ const verseSchema = z
     text: z.string(),
   })
   .passthrough();
+
+/** WEB's Psalms, the one book where a superscription sits inside verse 1. */
+const PSALMS_BOOK_ID = 19;
+
+/**
+ * WEB opens every psalm with an editorial heading -- "By David.", "A Prayer by
+ * Moses, the man of God.", "For the Chief Musician… A wedding song." -- wrapped
+ * in `<b>` at the start of verse 1. It is a title, not a line of the psalm, and
+ * nothing in the responsorial psalm is ever sung from it. Left in, the page
+ * opens "By David. Yahweh is my light and my salvation", which reads as the
+ * wrong psalm to anyone who knows the one they sing.
+ */
+export function stripSuperscription(raw: string): string {
+  return raw.replace(/^\s*<b>[\s\S]*?<\/b>\s*/, "");
+}
 
 /**
  * Upstream verse text carries light markup (`<b>` for supplied words). Strip
@@ -345,7 +425,8 @@ async function loadChapter(bookId: number, chapter: number): Promise<Map<number,
   );
   const out = new Map<number, string>();
   for (const row of rows) {
-    const text = plainText(row.text);
+    const source = bookId === PSALMS_BOOK_ID && row.verse === 1 ? stripSuperscription(row.text) : row.text;
+    const text = plainText(source);
     if (text) out.set(row.verse, text);
   }
   if (out.size === 0) throw new Error(`Chapter ${bookId}/${chapter} had no readable verses`);
@@ -403,12 +484,20 @@ export async function loadDayReadings(date: string): Promise<DayTexts> {
   }
 
   const parsed: ParsedCitation[] = [];
+  // A citation that cannot be resolved still goes on screen: knowing WHAT is
+  // read is worth more than a blank section, and the reference can be checked
+  // against the official texts. Empty `verses` is what says "no text here".
+  const passages: DayTexts["passages"] = {};
+  let unresolved = 0;
   for (const section of SECTION_ORDER) {
     const citation = citations[section];
     if (!citation) continue;
     const entry = parseCitation(section, citation);
-    if (!entry) notices.push(`${section} could not be read as a citation and was left out.`);
-    else parsed.push(entry);
+    if (entry) parsed.push(entry);
+    else {
+      passages[section] = { citation, verses: [] };
+      unresolved += 1;
+    }
   }
 
   // Every chapter the day needs, fetched once each and all at once.
@@ -430,14 +519,16 @@ export async function loadDayReadings(date: string): Promise<DayTexts> {
   );
   const chapters = new Map(loaded.filter((e): e is [string, Map<number, string>] => e[1] !== null));
 
-  const passages: DayTexts["passages"] = {};
   let missing = 0;
   for (const entry of parsed) {
     const passage = buildPassage(entry, chapters);
     if (passage) passages[entry.section] = passage;
-    else missing += 1;
+    else {
+      passages[entry.section] = { citation: entry.citation, verses: [] };
+      missing += 1;
+    }
   }
-  if (missing > 0 && missing < parsed.length) {
+  if (missing + unresolved > 0) {
     notices.push("Some passages could not be loaded. The rest of the readings are below.");
   }
 

@@ -418,11 +418,24 @@ both the calendar and the readings before first paint).
   only its own verses are missing; upstream `<b>` markup is stripped to plain
   text and anything still looking like markup is refused.
 - Known approximations, all deliberate: a verse-letter subdivision
-  ("Isaiah 25:6-10a") shows the whole verse; a citation written across a
-  chapter ("Galatians 4:31–5:1") resolves to the cited verse plus the next
-  chapter's opening run, because the first chapter's length is unknowable from
-  the citation alone; the **Gospel Acclamation** has no citation in the free
+  ("Isaiah 25:6-10a") shows the whole verse — those letters mark halves of a
+  verse in the *liturgical* translation and WEB does not carry them, so
+  "Psalm 113:1b-2" also shows 113:1a; a citation written across a chapter
+  ("Galatians 4:31–5:1") resolves to the cited verse plus the next chapter's
+  opening run, because the first chapter's length is unknowable from the
+  citation alone; the **Gospel Acclamation** has no citation in the free
   source, so that row carries the "open the official readings" note.
+- The citation source's quirks are handled and pinned by tests: `"or"`
+  alternatives (take the longer form), `;` separators, uppercase subdivision
+  letters on solemnities ("Revelation 11:19A; 12:1-6A, 10AB" — the trailing
+  "10AB" belongs to the chapter the previous piece named), and misspelled book
+  names ("Phiippians", recovered by a unique two-edit near-match). A citation
+  whose book WEB cannot supply — "Esther C:12" on 2026-02-26, whose WEB
+  chapters are numbered differently — still shows the reference with no text
+  rather than disappearing. All 365 days of 2026 were audited for this.
+- Psalm superscriptions ("By David.", "For the Chief Musician…") are removed:
+  WEB wraps each one in `<b>` at the start of verse 1, and it is a heading, not
+  a line anyone sings.
 - **USCCB is link-only.** Their pages sit behind a JavaScript bot challenge
   (a plain fetch and full browser headers both return the challenge page), so
   reading them server-side was not an option we could make reliable. If

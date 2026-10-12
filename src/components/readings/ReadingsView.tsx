@@ -170,16 +170,20 @@ export function ReadingsView({
               {passage ? (
                 <>
                   <p className="mt-1 text-sm font-medium">{passage.citation}</p>
-                  <p className="mt-1 text-[15px] leading-relaxed">
-                    {passage.verses.map((verse, i) => (
-                      // Verse numbers are keyed by position: a citation that
-                      // crosses a chapter can repeat a verse number.
-                      <span key={`${verse.verse}-${i}`}>
-                        <sup className="mr-0.5 text-[0.7em] text-[var(--text-muted)]">{verse.verse}</sup>
-                        {verse.text}{" "}
-                      </span>
-                    ))}
-                  </p>
+                  {passage.verses.length > 0 ? (
+                    <p className="mt-1 text-[15px] leading-relaxed">
+                      {passage.verses.map((verse, i) => (
+                        // Verse numbers are keyed by position: a citation that
+                        // crosses a chapter can repeat a verse number.
+                        <span key={`${verse.verse}-${i}`}>
+                          <sup className="mr-0.5 text-[0.7em] text-[var(--text-muted)]">{verse.verse}</sup>
+                          {verse.text}{" "}
+                        </span>
+                      ))}
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-sm text-[var(--text-muted)]">{en.unavailableNote}</p>
+                  )}
                 </>
               ) : (
                 <p className="mt-1 text-sm text-[var(--text-muted)]">

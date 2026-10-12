@@ -7,6 +7,7 @@ import {
   parseCitationsDay,
   plainText,
   resolveBookId,
+  stripSuperscription,
   type VerseRef,
 } from "./text";
 
@@ -37,6 +38,42 @@ describe("resolveBookId", () => {
   it("returns null for a book WEB does not carry", () => {
     expect(resolveBookId("The Book of Enoch")).toBeNull();
     expect(resolveBookId("")).toBeNull();
+  });
+
+  it("absorbs the typos the citation source actually ships", () => {
+    // 2026-11-04, first reading, misspelled upstream.
+    expect(resolveBookId("Phiippians")).toBe(50);
+  });
+
+  it("refuses an ambiguous near-match rather than guessing a book", () => {
+    // Two edits from all four Maccabees books at once.
+    expect(resolveBookId("Maccabee")).toBeNull();
+  });
+});
+
+describe("parseCitation: the awkward citations the 2026 source really publishes", () => {
+  it("takes the first option of an 'or' alternative", () => {
+    // 2026-01-25, Conversion of Saint Paul.
+    expect(parseCitation("gospel", "Matthew 4:12-23 or 4:12-17")?.refs).toEqual(
+      refs([[4, 12], [4, 13], [4, 14], [4, 15], [4, 16], [4, 17], [4, 18], [4, 19], [4, 20], [4, 21], [4, 22], [4, 23]]),
+    );
+    // 2026-02-02, Presentation of the Lord.
+    expect(parseCitation("gospel", "Luke 2:22-40 or 2:22-32")?.refs).toHaveLength(19);
+  });
+
+  it("accepts uppercase subdivision letters and semicolons", () => {
+    // 2026-08-15, Assumption.
+    const parsed = parseCitation("firstReading", "Revelation 11:19A; 12:1-6A, 10AB");
+    expect(parsed?.bookId).toBe(66);
+    expect(parsed?.refs).toEqual(
+      refs([[11, 19], [12, 1], [12, 2], [12, 3], [12, 4], [12, 5], [12, 6], [12, 10]]),
+    );
+  });
+
+  it("recovers a misspelled book name", () => {
+    const parsed = parseCitation("firstReading", "Phiippians 2:12-18");
+    expect(parsed?.bookId).toBe(50);
+    expect(parsed?.refs).toEqual(refs([[2, 12], [2, 13], [2, 14], [2, 15], [2, 16], [2, 17], [2, 18]]));
   });
 });
 
@@ -131,6 +168,23 @@ describe("parseCitationsDay", () => {
 });
 
 describe("plainText", () => {
+  it("removes the psalm superscription so the psalm opens on its first line", () => {
+    // Psalm 27:1 as bolls.life serves it: the heading is not a sung line.
+    expect(
+      plainText(stripSuperscription("<b>By David. </b>   Yahweh is my light and my salvation.")),
+    ).toBe("Yahweh is my light and my salvation.");
+    expect(
+      plainText(stripSuperscription("<b>For the Chief Musician. By the sons of Korah. </b>   We have heard with our ears, God;")),
+    ).toBe("We have heard with our ears, God;");
+  });
+
+  it("leaves a verse alone when the markup is not a leading heading", () => {
+    const verse = "Yahweh is my shepherd: <b>Yahweh</b> will not lack anything.";
+    expect(plainText(stripSuperscription(verse))).toBe(
+      "Yahweh is my shepherd: Yahweh will not lack anything.",
+    );
+  });
+
   it("strips the markup bolls.life ships and tidies the spacing", () => {
     expect(plainText("<b>A Prayer by Moses, the man of God. </b>   Lord, you have been our dwelling place.")).toBe(
       "A Prayer by Moses, the man of God. Lord, you have been our dwelling place.",
