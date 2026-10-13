@@ -2,10 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import {
   assembleGuide,
+  buildHeader,
+  mmddyy,
+  mysterySetFor,
   parseMysteries,
   parsePrayers,
   parseTodayReading,
+  sundaySet,
   weekdayMysterySet,
+  weekdayOf,
+  type TodayReading,
 } from "./guide";
 
 function todayRow(over: Record<string, unknown> = {}) {
@@ -17,11 +23,24 @@ function todayRow(over: Record<string, unknown> = {}) {
       mystery: "Joyful",
       season: "Ordinary Time",
       currentDate: "October 12, 2026",
+      dateMMDDYY: "101226",
       youtubeLink: "https://youtu.be/NC-laJrHcM4",
       mp3AudioUrl: "https://example.test/audio.mp3",
       ...over,
     },
   ];
+}
+
+function service(over: Partial<TodayReading> = {}): TodayReading {
+  return {
+    set: "Joyful",
+    season: "Ordinary Time",
+    dayLabel: "Monday",
+    serviceDate: "101226",
+    youtubeUrl: "https://youtu.be/NC-laJrHcM4",
+    audioUrl: "https://example.test/audio.mp3",
+    ...over,
+  };
 }
 
 describe("parseTodayReading", () => {
@@ -30,7 +49,7 @@ describe("parseTodayReading", () => {
       set: "Joyful",
       season: "Ordinary Time",
       dayLabel: "Monday",
-      dateLabel: "October 12, 2026",
+      serviceDate: "101226",
       youtubeUrl: "https://youtu.be/NC-laJrHcM4",
       audioUrl: "https://example.test/audio.mp3",
     });
@@ -45,22 +64,99 @@ describe("parseTodayReading", () => {
     expect(parseTodayReading(todayRow({ mystery: "sorrowful" })).set).toBe("Sorrowful");
   });
 
-  it("tolerates missing links and labels", () => {
-    const reading = parseTodayReading(todayRow({ youtubeLink: " ", mp3AudioUrl: undefined }));
+  it("tolerates missing links, labels and the date it answers for", () => {
+    const reading = parseTodayReading(
+      todayRow({ youtubeLink: " ", mp3AudioUrl: undefined, dateMMDDYY: undefined }),
+    );
     expect(reading.youtubeUrl).toBeNull();
     expect(reading.audioUrl).toBeNull();
+    // No date from the service means it can never be shown as agreeing with ours.
+    expect(reading.serviceDate).toBeNull();
   });
 });
 
-describe("weekdayMysterySet", () => {
-  it("follows the fixed tradition", () => {
-    // 2026-10-12 is a Monday; stepping day by day covers the week.
+describe("weekdayOf and mmddyy", () => {
+  it("reads a civil date without a timezone", () => {
+    expect(weekdayOf("2026-10-12")).toBe(1); // Monday
+    expect(weekdayOf("2026-10-13")).toBe(2); // Tuesday
+    expect(weekdayOf("2026-10-18")).toBe(0); // Sunday
+    expect(mmddyy("2026-10-12")).toBe("101226");
+  });
+});
+
+describe("mysterySetFor: the parish's date decides, not the service", () => {
+  it("follows the collection's weekday pairing", () => {
+    // Verified against the audio it publishes: monday_joyful, tuesday_sorrowful,
+    // wednesday_glorious, thursday_luminous, friday_sorrowful, saturday_joyful.
+    // Not the classic Dominican order (Tuesday Glorious, Wednesday Sorrowful) --
+    // this guide's texts come from this collection, so the collection wins.
+    expect(mysterySetFor("2026-10-12", "Ordinary Time")).toBe("Joyful"); // Monday
+    expect(mysterySetFor("2026-10-13", "Ordinary Time")).toBe("Sorrowful"); // Tuesday
+    expect(mysterySetFor("2026-10-14", "Ordinary Time")).toBe("Glorious"); // Wednesday
+    expect(mysterySetFor("2026-10-15", "Ordinary Time")).toBe("Luminous"); // Thursday
+    expect(mysterySetFor("2026-10-16", "Ordinary Time")).toBe("Sorrowful"); // Friday
+    expect(mysterySetFor("2026-10-17", "Ordinary Time")).toBe("Joyful"); // Saturday
+  });
+
+  it("moves Sunday with the season, as the collection's Sunday files do", () => {
+    expect(sundaySet("Ordinary Time")).toBe("Glorious");
+    expect(sundaySet("Advent")).toBe("Joyful");
+    expect(sundaySet("Christmas")).toBe("Joyful");
+    expect(sundaySet("Easter")).toBe("Joyful");
+    expect(sundaySet("Lent")).toBe("Sorrowful");
+    expect(sundaySet("Triduum")).toBe("Sorrowful");
+    // 2026-10-18 is a Sunday; the weekday rules do not apply to it.
+    expect(mysterySetFor("2026-10-18", "Ordinary Time")).toBe("Glorious");
+    expect(mysterySetFor("2026-02-22", "Lent")).toBe("Sorrowful"); // Lent I, 2026
+    expect(mysterySetFor("2026-11-29", "Advent")).toBe("Joyful"); // Advent I, 2026
+  });
+
+  it("keeps weekdayMysterySet for callers with no calendar", () => {
     const monday = new Date("2026-10-12T00:00:00Z");
-    const expected = ["Joyful", "Sorrowful", "Glorious", "Luminous", "Sorrowful", "Joyful", "Glorious"] as const;
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(monday.getTime() + i * 86400000);
-      expect(weekdayMysterySet(d)).toBe(expected[(d.getUTCDay() + 6) % 7] ?? expected[0]);
-    }
+    expect(weekdayMysterySet(monday)).toBe("Joyful");
+    expect(weekdayMysterySet(new Date("2026-10-18T00:00:00Z"))).toBe("Glorious");
+  });
+});
+
+describe("buildHeader", () => {
+  it("uses the parish's date and set, and the service's links when it agrees", () => {
+    const header = buildHeader("2026-10-12", "Ordinary Time", service());
+    expect(header).toMatchObject({
+      date: "2026-10-12",
+      dayLabel: "Monday",
+      set: "Joyful",
+      youtubeUrl: "https://youtu.be/NC-laJrHcM4",
+      audioUrl: "https://example.test/audio.mp3",
+      liveSeason: true,
+    });
+    expect(header.notices).toEqual([]);
+  });
+
+  it("drops yesterday's links when the service has not rolled over", () => {
+    // The bug this page had: the service answering "October 12" on the 13th.
+    const header = buildHeader("2026-10-13", "Ordinary Time", service());
+    expect(header.date).toBe("2026-10-13");
+    expect(header.dayLabel).toBe("Tuesday");
+    // Tuesday's own set, not the service's Monday.
+    expect(header.set).toBe("Sorrowful");
+    expect(header.youtubeUrl).toBeNull();
+    expect(header.audioUrl).toBeNull();
+    expect(header.liveSeason).toBe(false);
+    expect(header.notices[0]).toMatch(/not rolled over/i);
+  });
+
+  it("says so plainly when the service cannot be reached at all", () => {
+    const header = buildHeader("2026-10-13", "Ordinary Time", null);
+    expect(header.liveSeason).toBe(false);
+    expect(header.notices[0]).toMatch(/could not be reached/i);
+    // Still a complete header: the guide is correct on our calendar alone.
+    expect(header.set).toBe("Sorrowful");
+  });
+
+  it("does not count a service with no date as agreeing", () => {
+    const header = buildHeader("2026-10-12", "Ordinary Time", service({ serviceDate: null }));
+    expect(header.liveSeason).toBe(false);
+    expect(header.youtubeUrl).toBeNull();
   });
 });
 

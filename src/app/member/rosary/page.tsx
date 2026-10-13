@@ -1,23 +1,32 @@
 import { getSetting } from "@/lib/settings/store";
 import { churchToday } from "@/lib/time/church-time";
 import { loadRosaryGuide, type GuideStep } from "@/lib/rosary/guide";
+import { describeDate } from "@/lib/readings/calendar";
 
 export const metadata = { title: "Rosary Guide" };
 
 /**
  * The members' rosary guide.
  *
- * Content comes from the hosted Rosary API (see `lib/rosary/guide.ts` for
- * why nothing is installed or self-hosted). The page is a server component
- * so the upstream calls, validation and fallback all happen before first
- * paint: a member opening this on a slow phone gets the guide or an honest
- * notice, never a loading spinner that depends on a third party answering.
+ * A server component, rendered per request and never prerendered: the page is
+ * about *today*, so a copy frozen at build time would answer "Tuesday" with
+ * Monday's mysteries. `force-dynamic` is the belt to that braces -- the page
+ * reads a setting and calls two third parties, and nothing here should ever be
+ * something a build can compute once and forget.
+ *
+ * The date comes from the parish's own calendar rather than the rosary service's
+ * `/v1/today` (see `lib/rosary/guide.ts` for the day it got that wrong), and
+ * everything upstream happens before first paint: a member opening this on a
+ * slow phone gets the guide or an honest notice, never a spinner that depends
+ * on a third party answering.
  */
+export const dynamic = "force-dynamic";
+
 export default async function RosaryGuidePage() {
   const tz = await getSetting("report_timezone").catch(() => null);
-  // Noon, so the weekday cannot shift under daylight-saving edges. Only the
-  // fallback path reads the weekday; the live path answers for its own date.
-  const guide = await loadRosaryGuide(new Date(`${churchToday(tz)}T12:00:00`));
+  const date = churchToday(tz);
+  const info = describeDate(date);
+  const guide = await loadRosaryGuide(date, info.season);
 
   return (
     <div className="space-y-4">
@@ -38,19 +47,17 @@ export default async function RosaryGuidePage() {
           Today&apos;s mysteries
         </h2>
         <p className="mt-2 text-lg font-semibold">
-          The {guide.reading.set} Mysteries
+          The {guide.set} Mysteries
         </p>
         <p className="mt-1 text-sm text-[var(--text-muted)]">
-          {[guide.reading.dateLabel, guide.reading.dayLabel, guide.reading.season]
-            .filter((s) => s.trim().length > 0)
-            .join(" · ")}
-          {!guide.liveSeason ? " · weekday tradition" : ""}
+          {guide.dayLabel}
+          {!guide.liveSeason ? " · " + info.season : ""}
         </p>
-        {guide.reading.youtubeUrl || guide.reading.audioUrl ? (
+        {guide.youtubeUrl || guide.audioUrl ? (
           <div className="mt-3 flex flex-wrap gap-2">
-            {guide.reading.youtubeUrl ? (
+            {guide.youtubeUrl ? (
               <a
-                href={guide.reading.youtubeUrl}
+                href={guide.youtubeUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex min-h-11 items-center rounded-xl border border-[var(--border)] px-3 text-sm font-medium"
@@ -58,9 +65,9 @@ export default async function RosaryGuidePage() {
                 Watch along
               </a>
             ) : null}
-            {guide.reading.audioUrl ? (
+            {guide.audioUrl ? (
               <a
-                href={guide.reading.audioUrl}
+                href={guide.audioUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex min-h-11 items-center rounded-xl border border-[var(--border)] px-3 text-sm font-medium"
