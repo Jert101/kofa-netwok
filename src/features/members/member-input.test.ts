@@ -46,10 +46,33 @@ describe("createMemberSchema", () => {
     expect(createMemberSchema.safeParse({ first_name: "Jerson" }).success).toBe(false);
   });
 
+  it("requires a date of birth", () => {
+    // The birthday job filters on this column, so a member without one is a
+    // member the parish can never greet. See src/lib/members/birthday.ts.
+    expect(
+      createMemberSchema.safeParse({ first_name: "Jerson", last_name: "Catadman" }).success,
+    ).toBe(false);
+    expect(
+      createMemberSchema.safeParse({
+        first_name: "Jerson",
+        last_name: "Catadman",
+        date_of_birth: "",
+      }).success,
+    ).toBe(false);
+    expect(
+      createMemberSchema.safeParse({
+        first_name: "Jerson",
+        last_name: "Catadman",
+        date_of_birth: "2010-05-04",
+      }).success,
+    ).toBe(true);
+  });
+
   it("trims the names", () => {
     const parsed = createMemberSchema.parse({
       first_name: "  Jerson  ",
       last_name: "  Catadman ",
+      date_of_birth: "2010-05-04",
     });
     expect(parsed.first_name).toBe("Jerson");
     expect(parsed.last_name).toBe("Catadman");
@@ -60,6 +83,7 @@ describe("createMemberSchema", () => {
       first_name: "Jerson",
       middle_initial: "l.",
       last_name: "Catadman",
+      date_of_birth: "2010-05-04",
     });
     expect(parsed.middle_initial).toBe("L");
   });
@@ -70,6 +94,7 @@ describe("createMemberSchema", () => {
         first_name: "Jerson",
         middle_initial: "Luc",
         last_name: "Catadman",
+        date_of_birth: "2010-05-04",
       }).success,
     ).toBe(false);
   });
@@ -79,21 +104,27 @@ describe("createMemberSchema", () => {
       createMemberSchema.safeParse({
         first_name: "Jerson",
         last_name: "Catadman",
+        date_of_birth: "2010-05-04",
         gender: "other",
       }).success,
     ).toBe(false);
   });
 
   it("rejects a batch that is not a four digit year", () => {
-    const base = { first_name: "Jerson", last_name: "Catadman" };
+    const base = { first_name: "Jerson", last_name: "Catadman", date_of_birth: "2010-05-04" };
     expect(createMemberSchema.safeParse({ ...base, batch: "25" }).success).toBe(false);
     expect(createMemberSchema.safeParse({ ...base, batch: "2025" }).success).toBe(true);
   });
 
-  it("allows every optional field to be omitted", () => {
-    const parsed = createMemberSchema.parse({ first_name: "Jerson", last_name: "Catadman" });
-    expect(parsed.date_of_birth).toBeUndefined();
-    expect(toCreateMemberInput(parsed).dateOfBirth).toBeNull();
+  it("allows the optional fields to be omitted", () => {
+    const parsed = createMemberSchema.parse({
+      first_name: "Jerson",
+      last_name: "Catadman",
+      date_of_birth: "2010-05-04",
+    });
+    expect(parsed.middle_initial).toBeUndefined();
+    expect(parsed.batch).toBeUndefined();
+    expect(toCreateMemberInput(parsed).dateOfBirth).toBe("2010-05-04");
   });
 });
 
@@ -126,6 +157,7 @@ describe("toCreateMemberInput", () => {
     const parsed = createMemberSchema.parse({
       first_name: "Jerson",
       last_name: "Catadman",
+      date_of_birth: "2010-05-04",
       middle_initial: null,
       batch: null,
     });

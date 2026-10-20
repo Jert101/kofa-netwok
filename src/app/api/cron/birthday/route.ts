@@ -3,6 +3,9 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { notify } from "@/lib/notify/notify";
 import { insertOnceByDedupeKey } from "@/lib/announcements/upsert-by-key";
 import { recordCronRun } from "@/lib/system/cron-run";
+import { tryGetSetting } from "@/lib/settings/store";
+import { churchToday } from "@/lib/time/church-time";
+import { isBirthdayEligible } from "@/lib/members/birthday";
 
 const BIRTHDAY_MESSAGES = [
   "Happy Birthday, %s! May your day be filled with joy and blessings from the Lord.",
@@ -20,19 +23,46 @@ function randomMessage(fullName: string): string {
   return msg.replace("%s", fullName);
 }
 
-/** `birthday:2026-10-02`. The date is in UTC because that is what the birthday comparison uses. */
-function dedupeKeyFor(now: Date): string {
-  return `birthday:${now.toISOString().slice(0, 10)}`;
+/** `birthday:2026-10-02`, keyed on the parish's own date so a greeting is one per parish day. */
+function dedupeKeyFor(date: string): string {
+  return `birthday:${date}`;
+}
+
+/** The month and day of a `YYYY-MM-DD` date, as numbers, with no timezone in the arithmetic. */
+function monthDay(iso: string): { month: number; day: number } | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return null;
+  return { month: Number(m[2]), day: Number(m[3]) };
 }
 
 /**
- * COM-1: one birthday post per day, one push per day.
+ * COM-1: one birthday post per parish day, one push per parish day.
  *
  * Before this, the job inserted a separate announcement per person and pushed once per person, so a
  * parish of thirty phones received thirty notifications for one day's worth of birthdays and each
  * one named somebody who had nothing to do with the reader. Now it posts once, lists everybody, and
  * pushes once. `dedupe_key` makes a rerun update the same row: the scheduler retries these jobs and
  * the second copy would be the one the parish notices.
+ *
+ * Two things this job got wrong, both of them the kind that look like "notifications are broken":
+ *
+ * 1. **It ran on UTC's calendar, not the parish's.** The cron in `vercel.json` fires at 00:00 UTC,
+ *    which is 08:00 in Manila, and the comparison below used `getUTCMonth()`/`getUTCDate()` against
+ *    a UTC `date_of_birth`. So on the parish's 14 October the job was asked about 13 October in UTC
+ *    and congratulated the people born on the 13th, while the app's own pages -- which read
+ *    `churchToday` -- said the 14th. A member whose birthday it was on the 13th got the greeting, and
+ *    on the 14th the app screen and the greeting disagreed by a day. The date now comes from the
+ *    parish's timezone, the same source every other page uses, and the `dedupe_key` is keyed on that
+ *    parish date so one parish day is still exactly one greeting.
+ *
+ * 2. **It congratulated every member with a date of birth, not the servers.** This is the Knights of
+ *    the Altar's birthday job: the feed is for the ministry, and the oldest members -- some of them
+ *    adults recorded when the ministry carried a wider roster -- were being congratulated on every
+ *    phone in a group of children. The filter is `isBirthdayEligible`, which treats a cleared `batch`
+ *    and an implausible age as "no longer serving", so "who is a server" has one answer.
+ *
+ * The window is the same either way: the row is created once for the day and deleted after 24 hours,
+ * and the push is only sent on the run that inserted it.
  */
 async function run(req: NextRequest): Promise<NextResponse> {
   const auth = req.headers.get("authorization");
@@ -42,17 +72,19 @@ async function run(req: NextRequest): Promise<NextResponse> {
   }
 
   const sb = getSupabaseAdmin();
-  const today = new Date();
-  // UTC on both sides. The comparison below reads UTC fields, and a date-of-birth column is meant as
-  // a calendar date, not an instant: "March 3" is March 3 no matter where the server runs. Dates
-  // parsed as local midnight then read back as UTC shift a day for any timezone ahead of UTC, so a
-  // server west of Greenwich could wish somebody happy birthday the day before it happened.
-  const month = today.getUTCMonth() + 1;
-  const day = today.getUTCDate();
+
+  // SYS-8: the parish's own calendar decides the day, exactly as it does on every page. `tryGetSetting`
+  // rather than `getSetting` because a settings outage must not silently skip a birthday.
+  const tz = await tryGetSetting("report_timezone");
+  const today = churchToday(tz);
+  const md = monthDay(today);
+  if (!md) {
+    return NextResponse.json({ ok: false, error: `Unreadable parish date: ${today}` }, { status: 500 });
+  }
 
   const { data: members, error } = await sb
     .from("members")
-    .select("id, full_name, date_of_birth")
+    .select("id, full_name, date_of_birth, batch, is_active")
     .not("date_of_birth", "is", null)
     .eq("is_active", true);
 
@@ -60,19 +92,25 @@ async function run(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  if (!members || members.length === 0) {
-    return NextResponse.json({ ok: true, message: "No birthdays today." });
-  }
+  const all = members ?? [];
 
-  const birthdayMembers = members.filter((m) => {
+  const birthdayMembers = all.filter((m) => {
+    if (!isBirthdayEligible(m)) return false;
     const dob = m.date_of_birth as string | null;
     if (!dob) return false;
-    const d = new Date(dob + "T00:00:00Z");
-    return d.getUTCMonth() + 1 === month && d.getUTCDate() === day;
+    const dobMd = monthDay(String(dob).slice(0, 10));
+    return dobMd !== null && dobMd.month === md.month && dobMd.day === md.day;
   });
 
   if (birthdayMembers.length === 0) {
-    return NextResponse.json({ ok: true, message: "No birthdays today." });
+    // The counts go in the answer so the health page can tell "checked 142 members, 0 birthdays" from
+    // "checked 0 members" without anyone having to add logging to find out.
+    return NextResponse.json({
+      ok: true,
+      date: today,
+      message: "No birthdays today.",
+      members_with_dob: all.length,
+    });
   }
 
   const names = birthdayMembers.map((m) => String(m.full_name));
@@ -110,6 +148,7 @@ async function run(req: NextRequest): Promise<NextResponse> {
 
   return NextResponse.json({
     ok: true,
+    date: today,
     birthdays: birthdayMembers.length,
     announcement_id: announcementId,
     inserted,

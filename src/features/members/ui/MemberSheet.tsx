@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { GENDER_OPTIONS } from "@/features/registrations/schemas";
 import { splitName } from "@/lib/members/normalize-name";
+import { BIRTHDAY_RULE_HELP } from "@/lib/members/birthday";
 import type { MemberRow } from "@/features/members/member-query";
 
 const NO_BATCH = "__none__";
@@ -90,6 +91,11 @@ export function MemberSheet({
     if (!form.first_name.trim() || !form.last_name.trim()) {
       return;
     }
+    // The date of birth is required when adding (see `birthday.ts`); an edit of
+    // an older row that never had one is allowed to keep leaving it blank.
+    if (!member && !form.date_of_birth) {
+      return;
+    }
     onSubmit({
       first_name: form.first_name.trim(),
       middle_initial: form.middle_initial.replace(".", "").trim().toUpperCase() || null,
@@ -146,13 +152,17 @@ export function MemberSheet({
           </div>
 
           <div className="space-y-1">
-            <Label htmlFor="m-dob">Date of birth</Label>
+            <Label htmlFor="m-dob">
+              Date of birth <span className="text-[var(--danger)]">*</span>
+            </Label>
             <Input
               id="m-dob"
               type="date"
+              required
               value={form.date_of_birth}
               onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })}
             />
+            <p className="text-xs text-[var(--text-muted)]">{BIRTHDAY_RULE_HELP}</p>
           </div>
 
           <div className="space-y-1">

@@ -115,7 +115,7 @@ describe("checkImportRows", () => {
   });
 
   it("rejects a middle initial of more than one letter", () => {
-    const rows = checkImportRows(rowsFrom(`${HEADER}\r\nJerson,Catadman,Luc,,,,`), []);
+    const rows = checkImportRows(rowsFrom(`${HEADER}\r\nJerson,Catadman,Luc,2014-05-04,,,`), []);
     expect(rows[0].status).toBe("error");
   });
 
@@ -130,7 +130,7 @@ describe("checkImportRows", () => {
 
   it("matches a duplicate when the stored name omits the period after an initial", () => {
     const rows = checkImportRows(
-      rowsFrom(`${HEADER}\r\nJerson,Catadman,L,,,,`),
+      rowsFrom(`${HEADER}\r\nJerson,Catadman,L,2014-05-04,,,`),
       [{ id: "m1", fullName: "Jerson L Catadman" }],
     );
     expect(rows[0].status).toBe("duplicate");
@@ -138,7 +138,7 @@ describe("checkImportRows", () => {
 
   it("matches a duplicate written in a different case", () => {
     const rows = checkImportRows(
-      rowsFrom(`${HEADER}\r\njerson,catadman,,,,,`),
+      rowsFrom(`${HEADER}\r\njerson,catadman,,2014-05-04,,,`),
       [{ id: "m1", fullName: "Jerson Catadman" }],
     );
     expect(rows[0].status).toBe("duplicate");
@@ -146,7 +146,7 @@ describe("checkImportRows", () => {
 
   it("does not merge two people whose middle initials differ", () => {
     const rows = checkImportRows(
-      rowsFrom(`${HEADER}\r\nJerson,Catadman,,,,,`),
+      rowsFrom(`${HEADER}\r\nJerson,Catadman,,2014-05-04,,,`),
       [{ id: "m1", fullName: "Jerson L. Catadman" }],
     );
     expect(rows[0].status).toBe("ok");
@@ -154,7 +154,9 @@ describe("checkImportRows", () => {
 
   it("catches the same name twice inside one file", () => {
     const rows = checkImportRows(
-      rowsFrom(`${HEADER}\r\nJerson,Catadman,,,,,\r\njerson,CATADMAN,,,,,`),
+      rowsFrom(
+        `${HEADER}\r\nJerson,Catadman,,2014-05-04,,,\r\njerson,CATADMAN,,2014-05-04,,,`,
+      ),
       [],
     );
     expect(rows[0].status).toBe("ok");
@@ -162,8 +164,16 @@ describe("checkImportRows", () => {
     expect(rows[1].message).toContain("line 2");
   });
 
-  it("treats an empty optional cell as not given", () => {
+  it("requires a date of birth, and says so plainly", () => {
+    // A member with no date of birth can never be greeted by the birthday job,
+    // so the column is required here too (see src/lib/members/birthday.ts).
     const rows = checkImportRows(rowsFrom(`${HEADER}\r\nJerson,Catadman,,,,,`), []);
+    expect(rows[0].status).toBe("error");
+    expect(rows[0].message).toBe("Date of birth is required.");
+  });
+
+  it("treats the other empty optional cells as not given", () => {
+    const rows = checkImportRows(rowsFrom(`${HEADER}\r\nJerson,Catadman,,2014-05-04,,,`), []);
     expect(rows[0].status).toBe("ok");
   });
 
@@ -269,7 +279,7 @@ describe("template and error report", () => {
 
   it("reports only the rows that failed, with the reason", () => {
     const rows = checkImportRows(
-      rowsFrom(`${HEADER}\r\nJerson,Catadman,,,male,,\r\nBad,,,,male,,`),
+      rowsFrom(`${HEADER}\r\nJerson,Catadman,,2014-05-04,male,,\r\nBad,,,,male,,`),
       [],
     );
     const report = errorReportCsv(rows);

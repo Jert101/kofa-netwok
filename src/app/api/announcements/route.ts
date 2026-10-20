@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { notify } from "@/lib/notify/notify";
 import { logAudit } from "@/lib/audit/log-audit";
 import type { Role } from "@/lib/auth/roles";
+import { authorForConstraint, isAuthorCheckViolation } from "@/lib/announcements/author-check";
 import {
   audienceOf,
   canModify,
@@ -172,11 +173,33 @@ export async function POST(req: NextRequest) {
   // partial, and asking PostgREST to infer it as the arbiter is a thing that works until it does
   // not. The generators use `insertOnceByDedupeKey`, which handles the collision explicitly, and
   // this route is for humans who do not supply a key.
-  const { data, error } = await sb
+  let { data, error } = await sb
     .from("announcements")
     .insert(row)
     .select("id, created_at")
     .maybeSingle();
+
+  // The `created_by` check has been migrated twice in SQL (008 for the officer, 015 for `system`)
+  // while the app kept inserting the session's own role, so a live database can still hold the
+  // narrow 002 list. A `super_admin` reaches the admin section (`ROLE_REACH`) and so passes the
+  // guard above, but the value that lands in the column is refused -- which is what the parish saw.
+  //
+  // 044 widens the constraint properly. Until a deployment runs against a database where it has
+  // been applied, refuse-to-post is not an acceptable answer for a secretary: retry once with the
+  // author folded into the closest role the constraint accepts. The true author survives in the
+  // audit below, which logs `session.role`, not the folded value.
+  if (error && isAuthorCheckViolation(error)) {
+    const fallback = authorForConstraint(g.session.role);
+    if (fallback !== g.session.role) {
+      const retry = await sb
+        .from("announcements")
+        .insert({ ...row, created_by: fallback })
+        .select("id, created_at")
+        .maybeSingle();
+      data = retry.data;
+      error = retry.error;
+    }
+  }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

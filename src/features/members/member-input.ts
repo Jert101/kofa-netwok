@@ -69,11 +69,25 @@ export const contactNumberSchema = z
 /** The shared optional fields, so add, edit and import cannot drift apart. */
 const sharedFields = {
   middle_initial: middleInitialSchema.optional().nullable(),
-  date_of_birth: dateOfBirthSchema.optional().nullable(),
   gender: genderSchema.optional().nullable(),
   contact_number: contactNumberSchema.optional().nullable(),
   batch: batchSchema.optional().nullable(),
 };
+
+/**
+ * The date of birth, required on the add path. The empty string is turned into
+ * "missing" before the shape check, so a person who left the field blank reads
+ * "Required" rather than "Use YYYY-MM-DD".
+ *
+ * Why it is required at all: see `birthday.ts`. The parish announces birthdays
+ * and a member with no date of birth can never be greeted. The public
+ * registration form has always required one, so the only members missing one
+ * are the ones an admin typed in by hand.
+ */
+export const requiredDateOfBirthSchema = z.preprocess(
+  (v) => (v === "" || v === undefined ? undefined : v),
+  dateOfBirthSchema,
+);
 
 /**
  * Adding a member. First and last name are required, because `full_name` is
@@ -82,6 +96,7 @@ const sharedFields = {
 export const createMemberSchema = z.object({
   first_name: z.string().trim().min(1, "A first name is required.").max(100),
   last_name: z.string().trim().min(1, "A last name is required.").max(100),
+  date_of_birth: requiredDateOfBirthSchema,
   ...sharedFields,
 });
 
@@ -92,6 +107,9 @@ export const createMemberSchema = z.object({
 export const memberEditSchema = z.object({
   first_name: z.string().trim().min(1).max(100).optional(),
   last_name: z.string().trim().min(1).max(100).optional(),
+  // Nullable so an edit can still touch a row that predates the required rule;
+  // the add path is where a missing date of birth is refused.
+  date_of_birth: dateOfBirthSchema.optional().nullable(),
   ...sharedFields,
 });
 

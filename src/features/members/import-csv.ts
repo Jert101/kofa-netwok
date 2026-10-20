@@ -264,6 +264,23 @@ export function checkImportRows(
     // than the schema's own complaint would be.
     const rawDate = row.values.date_of_birth;
     const dateOfBirth = formatImportDate(rawDate);
+    if (rawDate === "") {
+      // A blank cell is the common mistake, and "Use YYYY-MM-DD" is the wrong
+      // answer to it: the column is required, and the fix is to fill it in.
+      out.push({
+        ...row,
+        full_name: composeFullName({
+          firstName: row.values.first_name,
+          middleInitial: row.values.middle_initial,
+          lastName: row.values.last_name,
+        }),
+        status: "error",
+        message: "Date of birth is required.",
+        conflictId: null,
+        dateOfBirth: null,
+      });
+      continue;
+    }
     if (rawDate !== "" && dateOfBirth === null) {
       out.push({
         ...row,
