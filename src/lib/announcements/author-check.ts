@@ -47,13 +47,15 @@ export function isAuthorCheckViolation(error: {
  * The role an old constraint will accept for this author, or the author
  * unchanged when it already fits.
  *
- * Only `super_admin` needs folding: it is the one role that reaches the posting
- * guard (`ROLE_REACH.admin`) without being named in it, so it is the value a
- * narrow constraint refuses. Everything else that can post -- `admin`,
- * `secretary`, `officer` -- is already in the widest list the app has ever
- * written, and 044 keeps it there.
+ * The live database can still hold 002's narrow list ('admin', 'secretary'),
+ * while the app lets admin, secretary and officer post -- and super_admin,
+ * which reaches the admin section (`ROLE_REACH.admin`) -- passes the guard.
+ * So officer and super_admin need folding into a role the narrow constraint
+ * accepts; admin is the natural bucket. admin and secretary pass through
+ * unchanged. Once 044 widens the constraint, no folding is needed and this is
+ * never reached.
  */
 export function authorForConstraint(role: Role): Role {
-  if (role === "super_admin") return "admin";
-  return role;
+  if (role === "admin" || role === "secretary") return role;
+  return "admin";
 }

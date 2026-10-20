@@ -44,6 +44,10 @@ describe("authorForConstraint", () => {
   it("leaves every role that can actually post unchanged", () => {
     expect(authorForConstraint("admin")).toBe("admin");
     expect(authorForConstraint("secretary")).toBe("secretary");
-    expect(authorForConstraint("officer")).toBe("officer");
+  });
+
+  it("folds officer and super admin into admin, the roles the narrow constraint accepts", () => {
+    expect(authorForConstraint("officer")).toBe("admin");
+    expect(authorForConstraint("super_admin")).toBe("admin");
   });
 });
