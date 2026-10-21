@@ -35,7 +35,8 @@ export type NavIconName =
   | "templates"
   | "assign"
   | "church"
-  | "messageCircle";
+  | "messageCircle"
+  | "messages";
 
 /** Resolved inside client components only. Server code imports the types with `import type`. */
 export const NAV_ICONS: Record<NavIconName, LucideIcon> = {
@@ -55,6 +56,7 @@ export const NAV_ICONS: Record<NavIconName, LucideIcon> = {
   assign: UserCheck,
   church: Church,
   messageCircle: MessageCircle,
+  messages: MessageCircle,
 };
 
 export type NavItem = {
@@ -95,6 +97,7 @@ export const NAV_BY_ROLE: Record<Role, readonly NavItem[]> = {
     { href: "/admin/inbox", label: "Inbox", icon: "inbox", badgeKey: "notifications" },
     { href: "/admin/audit", label: "Audit", icon: "scrollText", also: ["/admin/audit"] },
     { href: "/admin/settings", label: "Settings", icon: "settings", also: ["/admin/security", "/admin/settings/system", "/admin/settings/backup"] },
+    { href: "/admin/sms/queue", label: "Text Messages", icon: "messages" },
   ],
   secretary: [
     { href: "/secretary", label: "Calendar", icon: "calendar", exact: true, also: ["/secretary/day", "/secretary/session"] },
