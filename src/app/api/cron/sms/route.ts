@@ -5,17 +5,6 @@ import { sendSms } from "@/lib/sms/send";
 import { churchToday } from "@/lib/time/church-time";
 
 const CRON_SECRET = process.env.CRON_SECRET;
-const MAX_PER_RUN = 12; // Stay well under the function timeout on the hobby plan.
-
-/** Sleep for a number of milliseconds. */
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/** A random delay between 3 and 5 seconds, so texts are not sent in a burst. */
-async function throttle(): Promise<void> {
-  await sleep(3000 + Math.floor(Math.random() * 2000));
-}
 
 /** Today in the parish's own timezone, used for the inactivity window. */
 function todayIso(): string {
@@ -23,14 +12,20 @@ function todayIso(): string {
   return churchToday(tz);
 }
 
-/** Send up to the daily limit of pending messages, oldest first by priority. */
+/**
+ * Send up to the daily limit of pending messages, oldest first by priority.
+ *
+ * Runs once per day on the Vercel hobby plan (daily cron only), so it processes
+ * the whole remaining allowance in one go. textbee.dev queues the messages and
+ * paces the actual delivery through the paired phone, so we send as fast as
+ * textbee accepts them rather than adding our own delay.
+ */
 async function sendDueMessages(sb: ReturnType<typeof getSupabaseAdmin>): Promise<{
   sent: number;
   failed: number;
-  skipped: number;
   remainingToday: number;
 }> {
-  const dailyLimit = getIntegerSetting("sms_daily_limit");
+  const dailyLimit = Number(getIntegerSetting("sms_daily_limit"));
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
 
@@ -41,11 +36,10 @@ async function sendDueMessages(sb: ReturnType<typeof getSupabaseAdmin>): Promise
     .gte("created_at", `${today}T00:00:00Z`)
     .lt("created_at", `${today}T23:59:59Z`);
 
-  const alreadySent = Number(sentToday ?? 0);
-  const remaining = Math.max(Number(dailyLimit) - alreadySent, 0);
-  const toSend = Math.min(remaining, MAX_PER_RUN);
-  if (toSend === 0) {
-    return { sent: 0, failed: 0, skipped: 0, remainingToday: remaining };
+  const alreadySent = sentToday ?? 0;
+  const remaining = Math.max(dailyLimit - alreadySent, 0);
+  if (remaining === 0) {
+    return { sent: 0, failed: 0, remainingToday: remaining };
   }
 
   const { data: pending, error } = await sb
@@ -54,7 +48,7 @@ async function sendDueMessages(sb: ReturnType<typeof getSupabaseAdmin>): Promise
     .eq("status", "pending")
     .order("priority", { ascending: true })
     .order("created_at", { ascending: true })
-    .limit(toSend);
+    .limit(remaining);
 
   if (error) throw error;
 
@@ -76,11 +70,9 @@ async function sendDueMessages(sb: ReturnType<typeof getSupabaseAdmin>): Promise
         .eq("id", row.id);
       failed += 1;
     }
-    // One at a time, with a delay so we do not hammer the phone or textbee.
-    await throttle();
   }
 
-  return { sent, failed, skipped: 0, remainingToday: remaining };
+  return { sent, failed, remainingToday: remaining };
 }
 
 /**
