@@ -8,20 +8,24 @@
  * The free plan allows 50 messages per day, so the cron runner decides how
  * many to send each time. This module only knows how to send one message and
  * how to turn a Philippine phone number into the +63 format textbee expects.
+ *
+ * Endpoint: POST https://api.textbee.dev/api/v1/gateway/send-sms
+ * Header:   x-api-key: TEXTBEE_API_KEY
+ * Body:     { recipients: ["+639xxxxxxxx"], message: "..." }
+ *           deviceId is optional; textbee uses the default device when absent.
  */
 
-const API_BASE = "https://api.textbee.dev/api/devices";
-
-function deviceId(): string {
-  const id = process.env.TEXTBEE_DEVICE_ID;
-  if (!id) throw new Error("TEXTBEE_DEVICE_ID is not set");
-  return id;
-}
+const API_BASE = "https://api.textbee.dev/api/v1";
 
 function apiKey(): string {
   const key = process.env.TEXTBEE_API_KEY;
   if (!key) throw new Error("TEXTBEE_API_KEY is not set");
   return key;
+}
+
+function deviceId(): string | undefined {
+  const id = process.env.TEXTBEE_DEVICE_ID;
+  return id || undefined;
 }
 
 /**
@@ -56,7 +60,7 @@ export function normalizePhone(raw: string | null | undefined): string | null {
 
 /** The result of trying to send one text message. */
 export type SendSmsResult =
-  | { ok: true; messageId: string }
+  | { ok: true; batchId: string }
   | { ok: false; error: string };
 
 /**
@@ -71,30 +75,45 @@ export async function sendSms(to: string, message: string): Promise<SendSmsResul
     return { ok: false, error: `Invalid Philippine number: ${to}` };
   }
 
+  const body: { recipients: string[]; message: string; deviceId?: string } = {
+    recipients: [normalized],
+    message,
+  };
+  const id = deviceId();
+  if (id) body.deviceId = id;
+
   let res: Response;
   try {
-    res = await fetch(`${API_BASE}/${deviceId()}/send`, {
+    res = await fetch(`${API_BASE}/gateway/send-sms`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-token": apiKey(),
+        "x-api-key": apiKey(),
       },
-      body: JSON.stringify({ recipients: [normalized], message }),
+      body: JSON.stringify(body),
     });
   } catch (e) {
     const message2 = e instanceof Error ? e.message : String(e);
     return { ok: false, error: `Could not reach textbee: ${message2}` };
   }
 
-  const body = (await res.json().catch(() => ({}))) as {
-    data?: { message_id?: string };
+  const bodyParsed = (await res.json().catch(() => ({}))) as {
+    data?: { success?: boolean; smsBatchId?: string; message?: string; error?: string };
     error?: string;
     message?: string;
   };
 
-  if (res.ok) {
-    return { ok: true, messageId: body.data?.message_id ?? "unknown" };
+  if (res.ok && bodyParsed.data?.success) {
+    return { ok: true, batchId: bodyParsed.data.smsBatchId ?? "unknown" };
   }
 
-  return { ok: false, error: body.error ?? body.message ?? `textbee responded ${res.status}` };
+  return {
+    ok: false,
+    error:
+      bodyParsed.data?.error ??
+      bodyParsed.data?.message ??
+      bodyParsed.error ??
+      bodyParsed.message ??
+      `textbee responded ${res.status}`,
+  };
 }
