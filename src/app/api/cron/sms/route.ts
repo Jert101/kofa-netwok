@@ -25,7 +25,7 @@ async function sendDueMessages(sb: ReturnType<typeof getSupabaseAdmin>): Promise
   failed: number;
   remainingToday: number;
 }> {
-  const dailyLimit = Number(getIntegerSetting("sms_daily_limit"));
+  const dailyLimit = await getIntegerSetting("sms_daily_limit");
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
 

@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
     .gte("created_at", `${today}T00:00:00Z`)
     .lt("created_at", `${today}T23:59:59Z`);
 
-  const dailyLimit = getIntegerSetting("sms_daily_limit");
+  const dailyLimit = await getIntegerSetting("sms_daily_limit");
 
   return NextResponse.json({
     ok: true,
