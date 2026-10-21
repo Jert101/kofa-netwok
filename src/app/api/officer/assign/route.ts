@@ -24,6 +24,7 @@ import {
 } from "@/lib/attendance/liturgy-announcement";
 import { churchTodayLabel } from "@/lib/time/church-time-labels";
 import { churchToday, shiftDays } from "@/lib/time/church-time";
+import { normalizePhone } from "@/lib/sms/send";
 
 /**
  * Save a queue of assignments the officer built on /officer/assign.
@@ -437,10 +438,11 @@ export async function POST(req: NextRequest) {
     templateIds.length > 0
       ? sb.from("liturgy_templates").select("id, name").in("id", templateIds)
       : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
-    // Names only, so the announcement can print who is on it. The ids themselves were chosen on
+    // Names and phone numbers, so the announcement can print who is on it and
+    // each assigned server can be texted. The ids themselves were chosen on
     // screen, and `saveEntry` re-checks that each one is still an active member.
     sb.from("members")
-      .select("id, full_name, is_active")
+      .select("id, full_name, contact_number, is_active")
       .in("id", [...new Set(drafts.flatMap((d) => d.slots.map((s) => s.member_id)))]),
   ]);
 
@@ -454,13 +456,19 @@ export async function POST(req: NextRequest) {
     ((templateRows ?? []) as Array<{ id: string; name: string }>).map((t) => [t.id, t.name]),
   );
   const nameById = new Map(
-    ((memberRows ?? []) as Array<{ id: string; full_name: string; is_active: boolean }>).map((m) => [
+    ((memberRows ?? []) as Array<{ id: string; full_name: string; is_active: boolean; contact_number: string | null }>).map((m) => [
       m.id,
       m.full_name,
     ]),
   );
+  const contactById = new Map(
+    ((memberRows ?? []) as Array<{ id: string; contact_number: string | null }>).map((m) => [
+      m.id,
+      m.contact_number,
+    ]),
+  );
   const inactiveIds = new Set(
-    ((memberRows ?? []) as Array<{ id: string; is_active: boolean }>)
+    ((memberRows ?? []) as unknown as Array<{ id: string; is_active: boolean }>)
       .filter((m) => !m.is_active)
       .map((m) => m.id),
   );
@@ -475,6 +483,7 @@ export async function POST(req: NextRequest) {
         massById,
         templateNameById,
         nameById,
+        contactById,
         inactiveIds,
         timezone,
         fromRole: g.session.role,
@@ -506,6 +515,7 @@ async function saveEntry(input: {
   massById: Map<string, { id: string; name: string; is_active: boolean }>;
   templateNameById: Map<string, string>;
   nameById: Map<string, string>;
+  contactById: Map<string, string | null>;
   inactiveIds: Set<string>;
   timezone: string;
   fromRole: string;
@@ -628,6 +638,32 @@ async function saveEntry(input: {
       sendPush: true,
       roster: lines,
     });
+
+    // Text each assigned server so they know when and where to serve.
+    const dateLabel = churchTodayLabel(draft.session_date);
+    const now = new Date().toISOString();
+    for (const s of slots) {
+      const phone = normalizePhone(input.contactById.get(s.member_id) ?? null);
+      if (!phone) continue;
+      const name = input.nameById.get(s.member_id) ?? "there";
+      const dedupeKey = `assignment:${draft.session_date}:${draft.mass_id}:${s.member_id}:${s.position_label}`;
+      const { data: already } = await sb
+        .from("sms_queue")
+        .select("id")
+        .eq("dedupe_key", dedupeKey)
+        .eq("status", "sent")
+        .maybeSingle();
+      if (already) continue;
+      await sb.from("sms_queue").insert({
+        recipient: phone,
+        member_id: s.member_id,
+        message: `Hi ${name}, you are assigned as ${s.position_label} for ${result.mass_name} on ${dateLabel}.`,
+        type: "assignment",
+        priority: 1,
+        dedupe_key: dedupeKey,
+        created_at: now,
+      });
+    }
   }
 
   const template = draft.template_id

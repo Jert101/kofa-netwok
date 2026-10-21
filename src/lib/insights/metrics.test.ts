@@ -264,7 +264,7 @@ describe("inactiveMembers", () => {
   /** m1's last service, shared by every test so it is always "has history". */
   const m1Old = mark("m1", "old", "2026-07-12");
 
-  it("flags an active member with no attendance in two complete months", () => {
+  it("flags an active member with no attendance in one complete month", () => {
     const out = inactiveMembers(members, [m1Old], SUN);
     expect(out.map((m) => m.id)).toEqual(["m1"]);
   });
@@ -282,7 +282,7 @@ describe("inactiveMembers", () => {
   });
 
   it("excludes a member who has never served at all", () => {
-    // Same rule as today: somebody who joined last week has no two-month silence to report.
+    // Same rule as today: somebody who joined last week has no one-month silence to report.
     expect(inactiveMembers([member("m4")], [m1Old], SUN)).toEqual([]);
   });
 

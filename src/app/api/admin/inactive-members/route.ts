@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   const m = now.getMonth();
 
   const endDate = new Date(y, m, 0);
-  const startDate = new Date(y, m - 2, 1);
+  const startDate = new Date(y, m - 1, 1);
 
   const startStr = startDate.toISOString().slice(0, 10);
   const endStr = endDate.toISOString().slice(0, 10);

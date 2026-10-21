@@ -140,6 +140,12 @@ export const SETTING_DEFINITIONS: readonly SettingDefinition[] = [
   def("appeal_retention_months", "integer", "12", "data",
     "How many months of resolved appeals to keep. Pending appeals are never swept.",
     "Sweep (APL-3)", { min: 1, max: 120 }),
+  def("sms_daily_limit", "integer", "50", "data",
+    "How many text messages the parish may send in one day. The textbee free plan allows 50.",
+    "SMS", { min: 1, max: 1000 }),
+  def("sms_max_retries", "integer", "3", "data",
+    "How many times a failed text is retried before it is marked failed.",
+    "SMS", { min: 1, max: 10 }),
 
   // ---- Internal, module 02 only -----------------------------------------------------------
   ...ROLES.map((role) => internal(`pin_${role}_hash`, `The ${role} sign-in PIN, as a bcrypt hash.`,

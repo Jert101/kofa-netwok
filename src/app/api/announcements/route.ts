@@ -6,6 +6,7 @@ import { notify } from "@/lib/notify/notify";
 import { logAudit } from "@/lib/audit/log-audit";
 import type { Role } from "@/lib/auth/roles";
 import { authorForConstraint, isAuthorCheckViolation } from "@/lib/announcements/author-check";
+import { normalizePhone } from "@/lib/sms/send";
 import {
   audienceOf,
   canModify,
@@ -244,6 +245,47 @@ export async function POST(req: NextRequest) {
       push: parsed.data.send_push !== false,
     },
   });
+
+  // Text the announcement to every active member who has a phone number, up to
+  // the daily limit. The cron sends the rest the following day until everyone
+  // has received it. The same person never gets the same announcement twice.
+  try {
+    const announcementId = String(data?.id ?? "");
+    const { data: members, error: membersErr } = await sb
+      .from("members")
+      .select("id, full_name, contact_number")
+      .eq("is_active", true)
+      .not("contact_number", "is", null);
+
+    if (!membersErr && members) {
+      const now = new Date();
+      for (const m of members) {
+        const phone = normalizePhone(m.contact_number);
+        if (!phone) continue;
+
+        const dedupeKey = `announcement:${announcementId}:${m.id}`;
+        const { data: already } = await sb
+          .from("sms_queue")
+          .select("id")
+          .eq("dedupe_key", dedupeKey)
+          .eq("status", "sent")
+          .maybeSingle();
+        if (already) continue;
+
+        await sb.from("sms_queue").insert({
+          recipient: phone,
+          member_id: m.id,
+          message: `Hi ${m.full_name ?? "there"}, ${title}`,
+          type: "announcement",
+          priority: 2,
+          dedupe_key: dedupeKey,
+          created_at: now.toISOString(),
+        });
+      }
+    }
+  } catch {
+    // Never fail the announcement because the text queue could not be written.
+  }
 
   return NextResponse.json({
     ok: true,

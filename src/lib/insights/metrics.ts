@@ -297,19 +297,19 @@ export function weekendStreak(
 // Inactive
 // ======================================================================================
 
-export const INACTIVE_MONTHS = 2;
+export const INACTIVE_MONTHS = 1;
 
 /**
- * DSH-6: "Active member with zero attendance in the last 2 complete months."
+ * DSH-6: "Active member with zero attendance in the last 1 complete month."
  *
- * The window runs from the start of the month two months back through today. The spec's wording is "the
- * last 2 complete months", and the old implementation used precisely August and September when today is
+ * The window runs from the start of the month one month back through today. The spec's wording is "the
+ * last 1 complete month", and the old implementation used precisely the prior month when today is
  * 4 October -- which means a member who served *yesterday* appeared on the inactive list, because
  * yesterday is in October. That is not what anybody means by "has drifted away", so the window ends at
  * today rather than at the end of last month.
  *
  * Members who never had any attendance are excluded, as today. Somebody who joined last week has no
- * two-month silence to report, and listing them beside a member who served for twenty years and stopped
+ * one-month silence to report, and listing them beside a member who served for twenty years and stopped
  * is unfair.
  */
 export function inactiveMembers(
