@@ -6,12 +6,17 @@ import { sendSlack } from "@/lib/slack/send";
  *
  * Receives Vercel deployment webhooks and forwards them to Slack.
  *
- * Register this URL in your Vercel project: Settings → Deploy Hooks →
- * "Add hook" → select this URL. Vercel will POST here on every deployment,
- * and this route forwards success/failure to Slack.
+ * Register this URL in your Vercel project: Settings → Git → Deployment
+ * Webhooks → Add webhook → URL:
+ *   https://kofa-network.vercel.app/api/slack/deployment
+ *
+ * Vercel will POST here on every deployment, and this route forwards
+ * success/failure to Slack, including the git commit when available.
  *
  * Body (Vercel deployment webhook):
- *   { event: "deployment", payload: { uid, name, state, url, target, creator, createdAt, updatedAt } }
+ *   { event: "deployment", payload: { uid, name, state, url, target,
+ *     creator, createdAt, updatedAt, meta: { github?: { commitSha?,
+ *     commitMessage?, repo? } } } }
  */
 export async function POST(req: NextRequest): Promise<NextResponse> {
   let json: unknown;
@@ -32,6 +37,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       creator?: { username?: string };
       createdAt?: string;
       updatedAt?: string;
+      meta?: {
+        github?: {
+          commitSha?: string;
+          commitMessage?: string;
+          repo?: string;
+        };
+      };
     };
   };
 
@@ -44,6 +56,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const target = payload.target ?? "production";
   const url = payload.url ?? "";
   const creator = payload.creator?.username ?? "unknown";
+
+  // Short SHA (first 7 chars) and commit message when available.
+  const commitSha = payload.meta?.github?.commitSha;
+  const shortSha = commitSha ? commitSha.slice(0, 7) : "unknown";
+  const commitMsg = payload.meta?.github?.commitMessage
+    ? ` — ${payload.meta.github.commitMessage}`
+    : "";
 
   let emoji: string;
   let statusText: string;
@@ -70,7 +89,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   await sendSlack(
-    `${emoji} *${statusText}*\nProject: ${payload.name ?? "kofa-network"}\nTarget: ${target}\nBy: ${creator}\n${url}`,
+    `${emoji} *${statusText}*\nProject: ${payload.name ?? "kofa-network"}\nCommit: \`${shortSha}\`${commitMsg}\nTarget: ${target}\nBy: ${creator}\n${url}`,
     { event: "deployment" },
   );
 
