@@ -14,7 +14,7 @@
                     "e2e":  "playwright test",
                     "e2e:install":  "playwright install chromium",
                     "test:all":  "npm run test \u0026\u0026 npm run e2e",
-                    "notify-deploy":  "pwsh -Command \"$sha = (git rev-parse --short HEAD); $msg = (git log -1 --format=%s); $body = @{ event = 'deployment'; payload = @{ name = 'kofa-network'; state = 'READY'; url = 'https://kofa-network.vercel.app'; target = 'production'; creator = @{ username = 'jert101' }; meta = @{ github = @{ commitSha = $sha; commitMessage = $msg } } } }; Invoke-RestMethod -Uri 'https://kofa-network.vercel.app/api/slack/deployment' -Method Post -ContentType 'application/json' -Body ($body | ConvertTo-Json) -UseBasicParsing\""
+                    "notify-deploy":  "node scripts/notify-deploy.mjs"
                 },
     "dependencies":  {
                          "@hookform/resolvers":  "^5.9.1",
