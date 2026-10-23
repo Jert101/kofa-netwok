@@ -3,24 +3,24 @@ import { requireRole } from "@/lib/api/guard";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { normalizePhone } from "@/lib/sms/send";
 
+type InactiveMember = {
+  id: string;
+  full_name: string;
+  contact_number: string | null;
+  recipient: string | null;
+};
+
 /**
- * POST /api/sms/inactivity
+ * Find active members with a phone who have served before but have no
+ * attendance in the last 2 complete months.
  *
- * Admin-only. Queues a one-time inactivity notice for every active member who
- * has served at Mass before but has no attendance in the last 2 complete months.
- *
- * This is triggered manually from the SMS queue page -- it is NOT run by the
- * cron, so no member is ever texted without the admin choosing to.
- *
- * One notice per member per month (dedupe key), so re-running does not nag the
- * same person twice in a month.
+ * Returns the list without queueing anything. The caller decides whether to
+ * preview or actually send.
  */
-export async function POST(req: NextRequest): Promise<NextResponse> {
-  const g = await requireRole(req.headers.get("cookie"), ["admin"]);
-  if (!g.ok) return g.response;
-
-  const sb = getSupabaseAdmin();
-
+async function getInactiveMembers(sb: ReturnType<typeof getSupabaseAdmin>): Promise<{
+  members: InactiveMember[];
+  period: { start: string; end: string };
+}> {
   // Two complete months back from today.
   const now = new Date();
   const y = now.getFullYear();
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     .lt("created_at", `${nextMonth}-01T00:00:00Z`);
   const noticed = new Set((alreadyNoticed ?? []).map((r) => r.member_id as string));
 
-  let queued = 0;
+  const result: InactiveMember[] = [];
   for (const m of (members ?? [])) {
     const memberId = m.id as string;
     if (servedInWindow.has(memberId)) continue;
@@ -94,21 +94,99 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const phone = normalizePhone(m.contact_number);
     if (!phone) continue;
 
-    const dedupeKey = `inactivity_notice:${memberId}:${monthTag}`;
-    await sb.from("sms_queue").insert({
+    result.push({
+      id: memberId,
+      full_name: m.full_name ?? "there",
+      contact_number: m.contact_number,
       recipient: phone,
-      member_id: memberId,
-      message: `Hi ${m.full_name ?? "there"}, we noticed you have not served at Mass in the past two months. We would love to see you back.`,
-      type: "inactivity_notice",
-      priority: 1,
-      dedupe_key: dedupeKey,
     });
-    queued += 1;
   }
 
-  return NextResponse.json({
-    ok: true,
-    queued,
+  return {
+    members: result,
     period: { start: startStr, end: endStr },
-  });
+  };
+}
+
+/**
+ * GET /api/sms/inactivity?preview=1
+ *
+ * Preview the inactive members who would receive a notice, without queueing
+ * anything. Admin-only.
+ */
+export async function GET(req: NextRequest): Promise<NextResponse> {
+  const g = await requireRole(req.headers.get("cookie"), ["admin"]);
+  if (!g.ok) return g.response;
+
+  const url = new URL(req.url);
+  if (url.searchParams.get("preview") !== "1") {
+    return NextResponse.json({ error: "Add ?preview=1 to preview inactive members." }, { status: 400 });
+  }
+
+  const sb = getSupabaseAdmin();
+  try {
+    const { members, period } = await getInactiveMembers(sb);
+    return NextResponse.json({
+      ok: true,
+      count: members.length,
+      period,
+      members: members.map((m) => ({
+        id: m.id,
+        name: m.full_name,
+        phone: m.recipient,
+      })),
+    });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+  }
+}
+
+/**
+ * POST /api/sms/inactivity
+ *
+ * Admin-only. Queues a one-time inactivity notice for every active member who
+ * has served at Mass before but has no attendance in the last 2 complete months.
+ *
+ * This is triggered manually from the SMS queue page -- it is NOT run by the
+ * cron, so no member is ever texted without the admin choosing to.
+ *
+ * One notice per member per month (dedupe key), so re-running does not nag the
+ * same person twice in a month.
+ */
+export async function POST(req: NextRequest): Promise<NextResponse> {
+  const g = await requireRole(req.headers.get("cookie"), ["admin"]);
+  if (!g.ok) return g.response;
+
+  const sb = getSupabaseAdmin();
+
+  try {
+    const { members, period } = await getInactiveMembers(sb);
+
+    const now = new Date();
+    const monthTag = now.toISOString().slice(0, 7);
+
+    let queued = 0;
+    for (const m of members) {
+      const dedupeKey = `inactivity_notice:${m.id}:${monthTag}`;
+      await sb.from("sms_queue").insert({
+        recipient: m.recipient,
+        member_id: m.id,
+        message: `Hi ${m.full_name}, we noticed you have not served at Mass in the past two months. We would love to see you back.`,
+        type: "inactivity_notice",
+        priority: 1,
+        dedupe_key: dedupeKey,
+      });
+      queued += 1;
+    }
+
+    return NextResponse.json({
+      ok: true,
+      queued,
+      period,
+    });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+  }
 }

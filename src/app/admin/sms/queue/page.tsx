@@ -34,6 +34,19 @@ type SmsResponse = {
   dailyLimit: number;
 };
 
+type InactiveMember = {
+  id: string;
+  name: string;
+  phone: string | null;
+};
+
+type InactivePreview = {
+  ok: boolean;
+  count: number;
+  period: { start: string; end: string };
+  members: InactiveMember[];
+};
+
 function when(iso: string): string {
   const then = new Date(iso).getTime();
   const mins = Math.round((Date.now() - then) / 60000);
@@ -61,6 +74,10 @@ export default function SmsQueuePage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [inactivityBusy, setInactivityBusy] = useState(false);
+
+  // Preview state for inactivity notices
+  const [previewMembers, setPreviewMembers] = useState<InactiveMember[] | null>(null);
+  const [previewPeriod, setPreviewPeriod] = useState<{ start: string; end: string } | null>(null);
 
   const load = useCallback(
     async (f: "all" | "pending" | "sent" | "failed" = "all") => {
@@ -119,6 +136,26 @@ export default function SmsQueuePage() {
     }
   };
 
+  /** Preview inactive members who would receive a notice. No messages are queued. */
+  const previewInactiveMembers = async () => {
+    setError(null);
+    setPreviewMembers(null);
+    setPreviewPeriod(null);
+    try {
+      const res = await fetch("/api/sms/inactivity?preview=1", {
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error("Could not load inactive members.");
+      const j = (await res.json()) as InactivePreview;
+      setPreviewMembers(j.members);
+      setPreviewPeriod(j.period);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not load inactive members.");
+    }
+  };
+
+  /** Queue inactivity notices for the previewed members. */
   const sendInactivityNotices = async () => {
     setInactivityBusy(true);
     setError(null);
@@ -134,6 +171,8 @@ export default function SmsQueuePage() {
       }
       const j = (await res.json()) as { queued: number; period?: { start: string; end: string } };
       void load(filter);
+      setPreviewMembers(null);
+      setPreviewPeriod(null);
       setError(
         `Queued ${j.queued} inactivity notice${
           j.queued === 1 ? "" : "s"
@@ -190,14 +229,66 @@ export default function SmsQueuePage() {
           type="button"
           size="sm"
           variant="outline"
-          onClick={sendInactivityNotices}
+          onClick={previewInactiveMembers}
           disabled={inactivityBusy}
+        >
+          Preview inactive members
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={sendInactivityNotices}
+          disabled={inactivityBusy || !previewMembers?.length}
         >
           {inactivityBusy ? "Queueing…" : "Send inactivity notices"}
         </Button>
       </div>
 
-      <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+      <>
+        {previewMembers && previewPeriod && (
+          <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+            <h2 className="text-sm font-semibold">Inactive members (no service in 2 months)</h2>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              Period: {previewPeriod.start} to {previewPeriod.end}
+            </p>
+            {previewMembers.length === 0 ? (
+              <p className="mt-2 text-sm text-[var(--text-muted)]">
+                No inactive members to notify.
+              </p>
+            ) : (
+              <>
+                <div className="mt-2 overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-1/3">Name</TableHead>
+                        <TableHead className="w-1/3">Phone</TableHead>
+                        <TableHead className="w-1/3">Message</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {previewMembers.map((m) => (
+                        <TableRow key={m.id}>
+                          <TableCell className="font-medium">{m.name}</TableCell>
+                          <TableCell className="font-mono text-xs tabular-nums">{m.phone ?? "—"}</TableCell>
+                          <TableCell className="text-xs text-[var(--text-muted)] truncate max-w-[30rem]">
+                            Hi {m.name}, we noticed you have not served at Mass in the past two months. We would love to see you back.
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <p className="mt-2 text-sm text-[var(--text-muted)]">
+                  {previewMembers.length} member{previewMembers.length === 1 ? "" : "s"} will receive a
+                  text message. Click &quot;Send inactivity notices&quot; to queue them.
+                </p>
+              </>
+            )}
+        </section>
+        )}
+        <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
         {filtered.length === 0 ? (
           <p className="text-sm text-[var(--text-muted)]">
             No text messages {filter === "all" ? "" : filter}.{" "}
@@ -251,6 +342,7 @@ export default function SmsQueuePage() {
           </Table>
         ) : null}
       </section>
+      </>
     </div>
   );
 }
