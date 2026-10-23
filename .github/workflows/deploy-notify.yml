@@ -1,0 +1,42 @@
+name: Deploy Slack Notification
+
+on:
+  deployment_status:
+    types: [queued, in_progress, success, failure]
+
+jobs:
+  notify:
+    if: github.event.deployment.environment == 'production'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Slack notification
+        run: |
+          STATUS="${{ github.event.deployment_status.state }}"
+          COMMIT_SHA="${{ github.event.deployment.statuses[0].sha }}"
+          COMMIT_MSG="${{ github.event.deployment.statuses[0].description }}"
+          DEPLOYER="${{ github.event.deployment_status.creator.login }}"
+          ENVIRONMENT="${{ github.event.deployment.environment }}"
+          URL="${{ github.event.deployment_status.target_url }}"
+
+          case "$STATUS" in
+            success) EMOJI="✅"; STATUS_TEXT="Deployed successfully" ;;
+            failure) EMOJI="❌"; STATUS_TEXT="Deployment failed" ;;
+            error) EMOJI="❌"; STATUS_TEXT="Deployment errored" ;;
+            cancelled) EMOJI="⚠️"; STATUS_TEXT="Deployment cancelled" ;;
+            in_progress) EMOJI="🔄"; STATUS_TEXT="Deployment in progress" ;;
+            queued) EMOJI="⏳"; STATUS_TEXT="Deployment queued" ;;
+            *) EMOJI="ℹ️"; STATUS_TEXT="Deployment $STATUS" ;;
+          esac
+
+          SHORT_SHA="${COMMIT_SHA:0:7}"
+
+          PAYLOAD=$(cat <<EOF
+          {
+            "text": "${EMOJI} *${STATUS_TEXT}*\nProject: kofa-network\nCommit: \`${SHORT_SHA}\`${COMMIT_MSG}\nEnvironment: ${ENVIRONMENT}\nBy: ${DEPLOYER}\n${URL}"
+          }
+EOF
+          )
+
+          curl -X POST -H 'Content-type: application/json' \
+            --data "${PAYLOAD}" \
+            "${{ secrets.SLACK_WEBHOOK_DEPLOYMENT }}"
