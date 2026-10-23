@@ -60,6 +60,7 @@ export default function SmsQueuePage() {
   const [filter, setFilter] = useState<"all" | "pending" | "sent" | "failed">("all");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [inactivityBusy, setInactivityBusy] = useState(false);
 
   const load = useCallback(
     async (f: "all" | "pending" | "sent" | "failed" = "all") => {
@@ -118,6 +119,33 @@ export default function SmsQueuePage() {
     }
   };
 
+  const sendInactivityNotices = async () => {
+    setInactivityBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/sms/inactivity", {
+        method: "POST",
+        credentials: "same-origin",
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(j.error ?? "Could not queue inactivity notices.");
+        return;
+      }
+      const j = (await res.json()) as { queued: number; period?: { start: string; end: string } };
+      void load(filter);
+      setError(
+        `Queued ${j.queued} inactivity notice${
+          j.queued === 1 ? "" : "s"
+        } for members with no service in the last two months.`,
+      );
+    } catch {
+      setError("Could not reach the server, so nothing was queued.");
+    } finally {
+      setInactivityBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-6 pb-10">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -158,6 +186,15 @@ export default function SmsQueuePage() {
             </Button>
           );
         })}
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={sendInactivityNotices}
+          disabled={inactivityBusy}
+        >
+          {inactivityBusy ? "Queueing…" : "Send inactivity notices"}
+        </Button>
       </div>
 
       <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">

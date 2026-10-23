@@ -226,7 +226,7 @@ export function addMonthsClamped(date: string, count: number): string {
  * The N whole calendar months before `date`.
  *
  * Clamped, never overflowing: adding a month to 31 January must land on 28 or 29 February rather than
- * rolling into March, because "the one complete month before now" is what the inactive-members rule
+ * rolling into March, because "the two complete months before now" is what the inactive-members rule
  * means and 2 March is neither of those months.
  */
 export function monthsBeforeClamped(date: string, count: number): string {
