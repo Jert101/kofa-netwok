@@ -25,6 +25,7 @@ import {
 import { churchTodayLabel } from "@/lib/time/church-time-labels";
 import { churchToday, shiftDays } from "@/lib/time/church-time";
 import { normalizePhone } from "@/lib/sms/send";
+import { sendSlack } from "@/lib/slack/send";
 
 /**
  * Save a queue of assignments the officer built on /officer/assign.
@@ -639,8 +640,14 @@ async function saveEntry(input: {
       roster: lines,
     });
 
-    // Text each assigned server so they know when and where to serve.
+    // Tell Slack about the announced assignment.
     const dateLabel = churchTodayLabel(draft.session_date);
+    const rosterList = lines.join("\n");
+    await sendSlack(
+      `📋 *Assignment announced*\n${result.mass_name} on ${dateLabel}\n${rosterList}`,
+    );
+
+    // Text each assigned server so they know when and where to serve.
     const now = new Date().toISOString();
     for (const s of slots) {
       const phone = normalizePhone(input.contactById.get(s.member_id) ?? null);

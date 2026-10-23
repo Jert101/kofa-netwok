@@ -6,6 +6,7 @@ import { recordCronRun } from "@/lib/system/cron-run";
 import { tryGetSetting } from "@/lib/settings/store";
 import { churchToday } from "@/lib/time/church-time";
 import { isBirthdayEligible } from "@/lib/members/birthday";
+import { sendSlack } from "@/lib/slack/send";
 
 const BIRTHDAY_MESSAGES = [
   "Happy Birthday, %s! May your day be filled with joy and blessings from the Lord.",
@@ -144,6 +145,12 @@ async function run(req: NextRequest): Promise<NextResponse> {
   // parish about a post it already saw.
   if (inserted) {
     await notify("birthday_today", { names });
+
+    // Tell Slack too, so the coordinator sees it even without opening the app.
+    const namesList = birthdayMembers.map((m) => String(m.full_name)).join(", ");
+    await sendSlack(
+      `🎂 *Birthday greetings sent for ${today}*\n${namesList}`,
+    );
   }
 
   return NextResponse.json({
