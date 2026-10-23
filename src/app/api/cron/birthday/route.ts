@@ -150,6 +150,7 @@ async function run(req: NextRequest): Promise<NextResponse> {
     const namesList = birthdayMembers.map((m) => String(m.full_name)).join(", ");
     await sendSlack(
       `🎂 *Birthday greetings sent for ${today}*\n${namesList}`,
+      { event: "birthday" },
     );
   }
 

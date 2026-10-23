@@ -250,6 +250,7 @@ export async function POST(req: NextRequest) {
   // Tell Slack about the posted announcement.
   await sendSlack(
     `📢 *Announcement posted*\n*${title}*\n${parsed.data.body}`,
+    { event: "announcement" },
   );
 
   // Text the announcement to every active member who has a phone number, up to

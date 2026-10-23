@@ -71,6 +71,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   await sendSlack(
     `${emoji} *${statusText}*\nProject: ${payload.name ?? "kofa-network"}\nTarget: ${target}\nBy: ${creator}\n${url}`,
+    { event: "deployment" },
   );
 
   return NextResponse.json({ ok: true });

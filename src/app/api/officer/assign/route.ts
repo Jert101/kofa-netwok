@@ -645,6 +645,7 @@ async function saveEntry(input: {
     const rosterList = lines.join("\n");
     await sendSlack(
       `📋 *Assignment announced*\n${result.mass_name} on ${dateLabel}\n${rosterList}`,
+      { event: "assignment" },
     );
 
     // Text each assigned server so they know when and where to serve.
