@@ -11,7 +11,7 @@ export async function fetchTopServersData(): Promise<TopServerCount[]> {
   const sb = getSupabaseAdmin();
 
   const [liveResult, archiveResult] = await Promise.all([
-    sb.from("attendance_records").select("member_id, members!inner(full_name)"),
+    sb.from("attendance_records").select("member_id, members!left(full_name)"),
     sb.from("attendance_records_archive").select("member_id, member_name"),
   ]);
 
