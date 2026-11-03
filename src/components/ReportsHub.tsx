@@ -80,6 +80,7 @@ export function ReportsHub({ isAdmin }: Props) {
   const [archiveConfirm, setArchiveConfirm] = useState<ReportRowView | null>(null);
   // RPT-2: the generate wizard, opened from the status strip.
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardMonthStart, setWizardMonthStart] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -137,6 +138,12 @@ export function ReportsHub({ isAdmin }: Props) {
       canBypass: isAdmin,
     });
   }, [gate, isAdmin]);
+
+  /** Open the generation wizard for a specific month. */
+  async function openWizard(monthStart: string) {
+    setWizardMonthStart(monthStart);
+    setWizardOpen(true);
+  }
 
   async function openDetail(id: string) {
     setDetailLoading(true);
@@ -215,11 +222,13 @@ export function ReportsHub({ isAdmin }: Props) {
             <p className="text-sm text-[var(--text-muted)]">Loading…</p>
           )}
 
-          {strip && !gate?.report_exists ? (
+          {strip && gate && !gate.report_exists ? (
             <button
               type="button"
               disabled={strip.tone !== "ready"}
-              onClick={() => setWizardOpen(true)}
+              onClick={() => {
+                if (gate.month_start) openWizard(gate.month_start);
+              }}
               className={`min-h-12 w-full rounded-xl text-sm font-semibold ${
                 strip.tone === "ready"
                   ? "bg-[var(--brand)] text-white shadow-sm"
@@ -227,6 +236,21 @@ export function ReportsHub({ isAdmin }: Props) {
               }`}
             >
               {strip.tone === "ready" ? "Generate report" : "Generate unavailable"}
+            </button>
+          ) : null}
+          {gate &&
+            gate.can_generate_previous_month &&
+            gate.previous_month_start &&
+            !gate.previous_report_exists ? (
+            <button
+              type="button"
+              disabled={strip?.tone !== "ready"}
+              onClick={() => {
+                if (gate.previous_month_start) openWizard(gate.previous_month_start);
+              }}
+              className="min-h-12 w-full rounded-xl text-sm font-semibold border border-[var(--border)] px-4 py-2 text-[var(--text)] hover:bg-[var(--surface-2)]"
+            >
+              Generate previous month report
             </button>
           ) : null}
         </div>
@@ -369,9 +393,9 @@ export function ReportsHub({ isAdmin }: Props) {
         )}
       </section>
 
-      {wizardOpen && gate?.month_start ? (
+      {wizardOpen && wizardMonthStart ? (
         <ReportWizard
-          monthStart={gate.month_start}
+          monthStart={wizardMonthStart}
           isAdmin={isAdmin}
           onClose={() => setWizardOpen(false)}
           onGenerated={() => {
