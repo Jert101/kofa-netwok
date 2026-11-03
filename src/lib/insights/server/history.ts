@@ -21,6 +21,7 @@
  */
 
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { formatNameLastFirst } from "@/lib/members/name-format";
 import { getSetting } from "@/lib/settings/store";
 import { churchToday, daysBetween, shiftDays } from "@/lib/time/church-time";
@@ -103,23 +104,53 @@ export async function loadDashboardHistory(
     const sessionFrom = shiftDays(asOf, -(weeks * 7));
     const markFrom = shiftDays(asOf, -(months * 30));
 
-    const [membersResult, liveSessions, archivedSessions, liveMarks, archivedMarks] = await Promise.all([
-      sb.from("members").select("id, full_name, batch, is_active, date_of_birth"),
-      sb
-        .from("attendance_sessions")
-        .select("id, session_date, mass_id, masses(name)")
-        .gte("session_date", sessionFrom)
-        .lte("session_date", asOf),
-      sb
-        .from("attendance_sessions_archive")
-        .select("id, session_date, mass_id, mass_name, archived_at")
-        .gte("session_date", sessionFrom)
-        .lte("session_date", asOf),
-      sb.from("attendance_records").select("session_id, member_id, recorded_at"),
-      sb.from("attendance_records_archive").select("session_id, member_id, recorded_at, archived_at"),
-    ]);
+    // Every read is paged. The two mark reads are unfiltered by date -- the window is applied below --
+    // which makes them the largest, and an unpaged select would silently stop at 1000 rows and shorten
+    // every metric built from `marks`, including at-risk and inactive verdicts.
+    const [memberRows, liveSessionRows, archivedSessionRows, liveMarkRows, archivedMarkRows] =
+      await Promise.all([
+        fetchAllRows((from, to) =>
+          sb
+            .from("members")
+            .select("id, full_name, batch, is_active, date_of_birth")
+            .order("id", { ascending: true })
+            .range(from, to),
+        ),
+        fetchAllRows((from, to) =>
+          sb
+            .from("attendance_sessions")
+            .select("id, session_date, mass_id, masses(name)")
+            .gte("session_date", sessionFrom)
+            .lte("session_date", asOf)
+            .order("id", { ascending: true })
+            .range(from, to),
+        ),
+        fetchAllRows((from, to) =>
+          sb
+            .from("attendance_sessions_archive")
+            .select("id, session_date, mass_id, mass_name, archived_at")
+            .gte("session_date", sessionFrom)
+            .lte("session_date", asOf)
+            .order("id", { ascending: true })
+            .range(from, to),
+        ),
+        fetchAllRows((from, to) =>
+          sb
+            .from("attendance_records")
+            .select("session_id, member_id, recorded_at")
+            .order("id", { ascending: true })
+            .range(from, to),
+        ),
+        fetchAllRows((from, to) =>
+          sb
+            .from("attendance_records_archive")
+            .select("session_id, member_id, recorded_at, archived_at")
+            .order("id", { ascending: true })
+            .range(from, to),
+        ),
+      ]);
 
-    const members: MemberRow[] = (membersResult.data ?? []).map((m) => ({
+    const members: MemberRow[] = memberRows.map((m) => ({
       id: String(m.id),
       fullName: formatNameLastFirst(String(m.full_name ?? "")),
       batch: (m.batch as string | null) ?? null,
@@ -131,7 +162,7 @@ export async function loadDashboardHistory(
     const massNameBySession = new Map<string, string | null>();
     const massIdBySession = new Map<string, string | null>();
 
-    for (const s of liveSessions.data ?? []) {
+    for (const s of liveSessionRows) {
       // A meeting is recorded but it is not serving, so it stays out of every number built below --
       // attendanceRate, sessionsHeld, turnout, marks. Otherwise attending a meeting would count as having
       // served a Mass, and somebody's streak would be reachable from a committee room.
@@ -144,7 +175,7 @@ export async function loadDashboardHistory(
         (s.masses as { name?: string } | null)?.name ?? null,
       );
     }
-    for (const s of archivedSessions.data ?? []) {
+    for (const s of archivedSessionRows) {
       if (s.mass_id == null) continue;
       const id = String(s.id);
       // The archived row's denormalised name wins: the Mass may have been deleted since.
@@ -156,7 +187,7 @@ export async function loadDashboardHistory(
     const marks: AttendanceMark[] = [];
     const countBySession = new Map<string, number>();
 
-    for (const r of liveMarks.data ?? []) {
+    for (const r of liveMarkRows) {
       const sessionId = String(r.session_id);
       const date = dateBySession.get(sessionId);
       if (date === undefined || date < markFrom) continue;
@@ -168,7 +199,7 @@ export async function loadDashboardHistory(
       countBySession.set(sessionId, (countBySession.get(sessionId) ?? 0) + 1);
     }
 
-    for (const r of archivedMarks.data ?? []) {
+    for (const r of archivedMarkRows) {
       const sessionId = String(r.session_id);
       const date = dateBySession.get(sessionId);
       if (date === undefined || date < markFrom) continue;
